@@ -1,0 +1,19 @@
+{{define "content"}}
+<h1>Songs</h1>
+<p><a class="button" href="/songs/new">Add song</a></p>
+<table>
+    <thead><tr><th>Title</th><th>Author</th><th>Key</th><th></th></tr></thead>
+    <tbody>
+    {{range .Songs}}
+        <tr>
+            <td>{{.Title}}</td>
+            <td>{{.Author}}</td>
+            <td>{{.Key}}</td>
+            <td><a href="/songs/{{.ID}}/edit">Edit</a></td>
+        </tr>
+    {{else}}
+        <tr><td colspan="4">No songs yet.</td></tr>
+    {{end}}
+    </tbody>
+</table>
+{{end}}
