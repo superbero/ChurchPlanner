@@ -302,9 +302,9 @@ func (r *AssignmentRepository) ListPositions(ctx context.Context) ([]Position, e
 }
 
 
-// ListAllUsers returns everyone who can be assigned (alphabetical).
+// ListAllUsers returns everyone who can be assigned, with their profile info.
 func (r *AssignmentRepository) ListAllUsers(ctx context.Context) ([]auth.User, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, name, email, role FROM users ORDER BY name`)
+	rows, err := r.db.Query(ctx, `SELECT id, name, email, role, phone, vocal_low, vocal_high FROM users ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func (r *AssignmentRepository) ListAllUsers(ctx context.Context) ([]auth.User, e
 	var out []auth.User
 	for rows.Next() {
 		var u auth.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Phone, &u.VocalLow, &u.VocalHigh); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -546,4 +546,51 @@ func (r *AssignmentRepository) RemoveNeededPosition(ctx context.Context, planID,
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+
+// PendingNotification carries the data needed to send an email.
+type PendingNotification struct {
+	PlanPersonID string
+	Email        string
+	Name         string
+	PositionName string
+	PlanTitle    string
+	ServiceAt    time.Time
+}
+
+// GetPendingNotifications finds assignments that are unconfirmed and have not
+// been emailed yet. Only looks up to 14 days in advance.
+func (r *AssignmentRepository) GetPendingNotifications(ctx context.Context) ([]PendingNotification, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT pp.id, u.email, u.name, pos.name, pl.title, pl.service_at
+		FROM plan_people pp
+		JOIN users u ON u.id = pp.person_id
+		JOIN plans pl ON pl.id = pp.plan_id
+		JOIN positions pos ON pos.id = pp.position_id
+		WHERE pp.status = 'U'
+		  AND pp.notified_at IS NULL
+		  AND pl.service_at > now()
+		  AND pl.service_at < now() + interval '14 days'
+		ORDER BY pl.service_at ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []PendingNotification
+	for rows.Next() {
+		var n PendingNotification
+		if err := rows.Scan(&n.PlanPersonID, &n.Email, &n.Name, &n.PositionName, &n.PlanTitle, &n.ServiceAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+func (r *AssignmentRepository) MarkNotified(ctx context.Context, planPersonID string) error {
+	_, err := r.db.Exec(ctx, `UPDATE plan_people SET notified_at = now() WHERE id = $1`, planPersonID)
+	return err
 }

@@ -1,0 +1,37 @@
+{{define "content"}}
+<header class="calendar-header">
+    <h1>{{.MonthName}}</h1>
+    <div class="calendar-nav">
+        <a href="/calendar?year={{.PrevMonth.Year}}&month={{.PrevMonth.Month}}" class="button-secondary">← Prev</a>
+        <a href="/calendar" class="button-secondary">Today</a>
+        <a href="/calendar?year={{.NextMonth.Year}}&month={{.NextMonth.Month}}" class="button-secondary">Next →</a>
+    </div>
+</header>
+
+<div class="calendar-grid">
+    <div class="cal-dow">Sun</div>
+    <div class="cal-dow">Mon</div>
+    <div class="cal-dow">Tue</div>
+    <div class="cal-dow">Wed</div>
+    <div class="cal-dow">Thu</div>
+    <div class="cal-dow">Fri</div>
+    <div class="cal-dow">Sat</div>
+
+    {{range .Days}}
+    <div class="cal-day {{if .IsOther}}cal-other{{end}} {{if .IsToday}}cal-today{{end}}">
+        <div class="cal-date">
+            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan for this day">+</a>
+            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-day-num">{{.Date.Format "2"}}</a>
+        </div>
+        <div class="cal-plans">
+            {{range .Plans}}
+            <a href="/plans/{{.ID}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
+                <span class="cal-time">{{.TimeStr}}</span>
+                <span class="cal-title">{{.Title}}</span>
+            </a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{end}}

@@ -31,6 +31,6 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/communications", func(w http.ResponseWriter, req *http.Request) {
-		m.renderer.Render(w, http.StatusOK, "communications_list", nil)
+		m.renderer.Render(w, req, http.StatusOK, "communications_list", nil)
 	})
 }

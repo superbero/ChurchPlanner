@@ -262,3 +262,63 @@ document.querySelectorAll('.item-row').forEach(function (row) {
         row.classList.remove('drag-over-top', 'drag-over-bottom');
     });
 });
+
+
+// ---- People: Skill Add/Remove ----
+(function () {
+    const picker = document.getElementById('skill-picker');
+    const addBtn = document.getElementById('add-skill-btn');
+    const panel = document.getElementById('active-skills');
+    if (!picker || !addBtn || !panel) return;
+
+    addBtn.addEventListener('click', function () {
+        const opt = picker.options[picker.selectedIndex];
+        if (!opt || !opt.value) return;
+
+        const id = opt.value;
+        const team = opt.dataset.team;
+        const name = opt.dataset.name;
+
+        // Create chip
+        const chip = document.createElement('div');
+        chip.className = 'skill-chip';
+        chip.dataset.id = id;
+        chip.innerHTML = `
+            <span><strong>${team}</strong> · ${name}</span>
+            <button type="button" class="remove-skill" title="Remove">×</button>
+            <input type="hidden" name="position_ids" value="${id}">
+        `;
+
+        panel.appendChild(chip);
+        picker.remove(picker.selectedIndex);
+        picker.selectedIndex = 0;
+    });
+
+    panel.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('remove-skill')) return;
+        const chip = e.target.closest('.skill-chip');
+        if (!chip) return;
+
+        const id = chip.dataset.id;
+        const team = chip.dataset.team;
+        const name = chip.dataset.name;
+
+        // Add option back to dropdown
+        const newOpt = document.createElement('option');
+        newOpt.value = id;
+        newOpt.dataset.team = team;
+        newOpt.dataset.name = name;
+        newOpt.textContent = `${team} · ${name}`;
+        picker.appendChild(newOpt);
+
+        // Sort options alphabetically (optional, but nice)
+        const opts = Array.from(picker.options).slice(1); // skip placeholder
+        opts.sort((a, b) => a.textContent.localeCompare(b.textContent));
+
+        // Rebuild dropdown
+        picker.innerHTML = '<option value="">— Select a skill to add —</option>';
+        opts.forEach(o => picker.appendChild(o));
+
+        chip.remove();
+    });
+})();

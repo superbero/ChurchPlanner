@@ -14,6 +14,7 @@ import (
 	"github.com/yourchurch/churchplanner/internal/checkin"
 	"github.com/yourchurch/churchplanner/internal/communications"
 	"github.com/yourchurch/churchplanner/internal/people"
+	"github.com/yourchurch/churchplanner/internal/reports"
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/config"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
@@ -80,7 +81,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 
 	// --- public: login ---
 	r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
-		renderer.Render(w, http.StatusOK, "web_login", nil)
+		renderer.Render(w, r, http.StatusOK, "web_login", nil)
 	})
 	r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
@@ -91,11 +92,11 @@ func NewRouter(d Deps) (http.Handler, error) {
 			`SELECT id, password_hash FROM users WHERE email = $1`, email,
 		).Scan(&id, &hash)
 		if err != nil || !auth.CheckPassword(hash, password) {
-			renderer.Render(w, http.StatusUnauthorized, "web_login", map[string]any{"Error": "Invalid credentials"})
+			renderer.Render(w, r, http.StatusUnauthorized, "web_login", map[string]any{"Error": "Invalid credentials"})
 			return
 		}
 		d.Sessions.Put(r.Context(), "user_id", id)
-		http.Redirect(w, r, "/songs", http.StatusSeeOther)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 	r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 		d.Sessions.Destroy(r.Context())
@@ -111,24 +112,36 @@ func NewRouter(d Deps) (http.Handler, error) {
 	})
 	schedulingModule := scheduling.New(d.DB, renderer)
 
-	// Practice links are mounted outside the auth group so volunteers
-	// don't need an account.
 	songsModule.PublicRoutes(r)
 
-	// --- protected modules ---
 	r.Group(func(r chi.Router) {
 		r.Use(authn.RequireUser)
 
+		// Dashboard (redirects based on role)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/songs", http.StatusSeeOther)
+			u, _ := auth.UserFrom(r.Context())
+			if u.Role == "admin" {
+				http.Redirect(w, r, "/plans", http.StatusSeeOther)
+			} else {
+				http.Redirect(w, r, "/my-schedule", http.StatusSeeOther)
+			}
 		})
 
-		songsModule.Routes(r)
-		schedulingModule.Routes(r)
-		people.New(d.DB, renderer).Routes(r)
+		// --- Shared (Volunteer + Admin) ---
+		schedulingModule.MyScheduleRoutes(r)
 		calendar.New(d.DB, renderer).Routes(r)
-		checkin.New(d.DB, renderer).Routes(r)
-		communications.New(d.DB, renderer).Routes(r)
+
+		// Songs (Volunteers can view/list, but Edit buttons will be handled in templates)
+		songsModule.Routes(r)
+
+		// --- Admin Only ---
+		r.Group(func(r chi.Router) {
+			r.Use(authn.RequireRole("admin"))
+
+			schedulingModule.Routes(r) // Plans, Times, Items, Assignments
+			people.New(d.DB, renderer).Routes(r)
+			reports.New(d.DB, renderer).Routes(r)
+		})
 	})
 
 	return r, nil

@@ -1,9 +1,11 @@
 {{define "content"}}
 <h1>Songs</h1>
 <p>
+    {{if eq .CurrentUser.Role "admin"}}
     <a class="button" href="/songs/new">Add song</a>
     <a class="button" href="/songs/import">Import</a>
     <a class="button-secondary" href="/songs/tags">Manage tags</a>
+    {{end}}
     <a class="button-secondary" href="/songs/reports/health">Health</a>
     <a class="button-secondary" href="/songs/suggest">Suggest</a>
 </p>

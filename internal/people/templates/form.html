@@ -1,0 +1,22 @@
+{{define "content"}}
+<p><a href="/people">← All people</a></p>
+<h1>Add new person</h1>
+{{with .Error}}<p class="error">{{.}}</p>{{end}}
+
+<form method="post" action="/people" class="profile-form">
+    <label>Full Name <input name="name" value="{{.Name}}" required placeholder="Jane Doe"></label>
+    <label>Email <input type="email" name="email" value="{{.Email}}" required placeholder="jane@example.com"></label>
+    <label>Initial Password <input type="password" name="password" required minlength="6" placeholder="••••••••"></label>
+
+    <label>Role
+        <select name="role">
+            <option value="volunteer" {{if eq .Role "volunteer"}}selected{{end}}>Volunteer</option>
+            <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+        </select>
+    </label>
+
+    <p style="margin-top:1.5rem">
+        <button type="submit">Create Person</button>
+    </p>
+</form>
+{{end}}

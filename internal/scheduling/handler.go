@@ -40,7 +40,7 @@ func (h *Handler) PlansIndex(w http.ResponseWriter, r *http.Request) {
 			typeName = t.Name
 		}
 	}
-	h.renderer.Render(w, http.StatusOK, "scheduling_plans", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_plans", map[string]any{
 		"ServiceTypes": types,
 		"Plans":        plans,
 		"SelectedType": selectedType,
@@ -54,14 +54,20 @@ func (h *Handler) NewPlan(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	start := nextSunday10AM()
-	h.renderer.Render(w, http.StatusOK, "scheduling_plan_form", map[string]any{
+
+	defaultStart := time.Now().AddDate(0, 0, 7).Truncate(time.Hour)
+
+	// If the calendar passed ?date=YYYY-MM-DD, use it and default to 10:00 AM
+	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
+		if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+			defaultStart = t.Add(10 * time.Hour) // 10:00 AM default
+		}
+	}
+
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
 		"ServiceTypes": types,
 		"IsNew":        true,
-		"Plan": Plan{
-			ServiceAt:     start,
-			ServiceEndsAt: start.Add(90 * time.Minute),
-		},
+		"Plan":         Plan{ServiceAt: defaultStart, ServiceEndsAt: defaultStart.Add(90 * time.Minute)},
 	})
 }
 
@@ -139,12 +145,34 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 	// not later, so defaulting to "end of the latest time" was confusing.
 	nextStart := plan.ServiceAt
 
-	h.renderer.Render(w, http.StatusOK, "scheduling_plan_view", map[string]any{
+	// Build a map of PositionID -> []User (only those with the skill)
+	usersByPos := make(map[string][]auth.User)
+	for _, pos := range allPositions {
+		var eligible []auth.User
+		for _, u := range users {
+			// Check if user has this skill
+			var hasSkill bool
+			err := h.plans.DB().QueryRow(r.Context(),
+				`SELECT EXISTS(SELECT 1 FROM user_positions WHERE user_id = $1 AND position_id = $2)`,
+				u.ID, pos.ID).Scan(&hasSkill)
+			if err == nil && hasSkill {
+				eligible = append(eligible, u)
+			}
+		}
+		// If no one has the skill, fall back to all users (so you aren't blocked)
+		if len(eligible) == 0 {
+			eligible = users
+		}
+		usersByPos[pos.ID] = eligible
+	}
+
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_view", map[string]any{
 		"Plan":         plan,
 		"Times":        timeGroups,
 		"Unassigned":   unassigned,
 		"Teams":        tree,
 		"Users":        users,
+		"UsersByPos":   usersByPos,
 		"AllPositions": allPositions,
 		"NextStart":    nextStart,
 		"HasMultiple":  len(times) > 1,
@@ -158,7 +186,7 @@ func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	types, _ := h.svcTypes.List(r.Context())
-	h.renderer.Render(w, http.StatusOK, "scheduling_plan_form", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
 		"ServiceTypes": types,
 		"IsNew":        false,
 		"Plan":         plan,
@@ -318,7 +346,7 @@ func (h *Handler) MySchedule(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "scheduling_my_schedule", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_my_schedule", map[string]any{
 		"User":        u,
 		"Assignments": assignments,
 	})
@@ -432,7 +460,7 @@ func (h *Handler) EditItemForm(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "scheduling_item_form", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_item_form", map[string]any{
 		"Plan":  plan,
 		"Item":  item,
 		"Times": times,

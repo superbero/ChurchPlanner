@@ -60,7 +60,12 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/{id}/positions/{posid}/delete", m.handler.RemoveNeededPosition)
 	})
 
-	// Volunteer self-service
+
+}
+
+
+// MyScheduleRoutes are accessible to everyone.
+func (m *Module) MyScheduleRoutes(r chi.Router) {
 	r.Get("/my-schedule", m.handler.MySchedule)
 	r.Post("/my-schedule/{ppid}/respond", m.handler.RespondToAssignment)
 }

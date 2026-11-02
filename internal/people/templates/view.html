@@ -1,0 +1,50 @@
+{{define "content"}}
+<p><a href="/people">← All people</a></p>
+<h1>{{.User.Name}}</h1>
+
+<div class="profile-grid">
+    <form method="post" action="/people/{{.User.ID}}" class="profile-form">
+        <h2>Contact &amp; Vocal Info</h2>
+        <label>Email <input value="{{.User.Email}}" disabled></label>
+        <label>Phone <input name="phone" value="{{.User.Phone}}" placeholder="555-0100"></label>
+
+        <div class="row">
+            <label>Vocal Low <input name="vocal_low" value="{{.User.VocalLow}}" size="4" placeholder="A3"></label>
+            <label>Vocal High <input name="vocal_high" value="{{.User.VocalHigh}}" size="4" placeholder="E5"></label>
+        </div>
+
+        <h2>Skills / Instruments</h2>
+        <p class="muted">Add the positions this person is comfortable filling.</p>
+
+        <!-- Panel of active skills -->
+        <div id="active-skills" class="active-skills-panel">
+            {{range .Positions}}
+                {{if index $.SkillMap .ID}}
+                <div class="skill-chip" data-id="{{.ID}}" data-team="{{.TeamName}}" data-name="{{.Name}}">
+                    <span><strong>{{.TeamName}}</strong> · {{.Name}}</span>
+                    <button type="button" class="remove-skill" title="Remove">×</button>
+                    <input type="hidden" name="position_ids" value="{{.ID}}">
+                </div>
+                {{end}}
+            {{end}}
+        </div>
+
+        <!-- Dropdown to add new skill -->
+        <div class="add-skill-row">
+            <select id="skill-picker">
+                <option value="">— Select a skill to add —</option>
+                {{range .Positions}}
+                    {{if not (index $.SkillMap .ID)}}
+                    <option value="{{.ID}}" data-team="{{.TeamName}}" data-name="{{.Name}}">{{.TeamName}} · {{.Name}}</option>
+                    {{end}}
+                {{end}}
+            </select>
+            <button type="button" id="add-skill-btn" class="button-secondary">Add</button>
+        </div>
+
+        <p style="margin-top:1.5rem">
+            <button type="submit">Save Profile</button>
+        </p>
+    </form>
+</div>
+{{end}}

@@ -1,0 +1,38 @@
+{{define "content"}}
+<h1>CCLI Copy Report</h1>
+<p class="muted">Aggregated song usage for license reporting.</p>
+
+<form method="get" action="/reports/ccli" class="filter-bar">
+    <label>Start Date <input type="date" name="start" value="{{.Start}}"></label>
+    <label>End Date <input type="date" name="end" value="{{.End}}"></label>
+    <button type="submit">Run Report</button>
+    <a class="button-secondary" href="/reports/ccli.csv?start={{.Start}}&end={{.End}}">Download CSV</a>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>Song</th>
+            <th>Author</th>
+            <th>CCLI #</th>
+            <th>Times Used</th>
+            <th>First Used</th>
+            <th>Last Used</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{range .Rows}}
+        <tr>
+            <td>{{.Title}}</td>
+            <td>{{.Author}}</td>
+            <td>{{.CCLI}}</td>
+            <td><strong>{{.UsageCount}}</strong></td>
+            <td>{{.FirstUsed.Format "Jan 2, 2006"}}</td>
+            <td>{{.LastUsed.Format "Jan 2, 2006"}}</td>
+        </tr>
+    {{else}}
+        <tr><td colspan="6">No usage found in this date range. (Make sure songs have a CCLI number filled in!)</td></tr>
+    {{end}}
+    </tbody>
+</table>
+{{end}}

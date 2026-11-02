@@ -210,7 +210,8 @@
                             <input type="hidden" name="position_id" value="{{.PositionID}}">
                             <select name="person_id" required>
                                 <option value="">Assign…</option>
-                                {{range $.Users}}
+                                {{$eligible := index $.UsersByPos .PositionID}}
+                                {{range $eligible}}
                                 <option value="{{.ID}}">{{.Name}}</option>
                                 {{end}}
                             </select>

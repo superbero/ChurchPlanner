@@ -3,12 +3,12 @@ package people
 import (
 	"embed"
 	"io/fs"
-	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
+	"github.com/yourchurch/churchplanner/internal/scheduling"
 )
 
 //go:embed templates/*.html
@@ -22,15 +22,22 @@ func Templates() fs.FS {
 	return sub
 }
 
-type Module struct{ renderer *httpx.Renderer }
+type Module struct{ handler *Handler }
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
-	_ = db // replace with repository wiring as you grow this module
-	return &Module{renderer: renderer}
+	return &Module{handler: &Handler{
+		repo:      NewRepository(db),
+		schedRepo: scheduling.NewAssignmentRepository(db),
+		renderer:  renderer,
+	}}
 }
 
 func (m *Module) Routes(r chi.Router) {
-	r.Get("/people", func(w http.ResponseWriter, req *http.Request) {
-		m.renderer.Render(w, http.StatusOK, "people_list", nil)
+	r.Route("/people", func(r chi.Router) {
+		r.Get("/", m.handler.List)
+		r.Get("/new", m.handler.New)
+		r.Post("/", m.handler.Create)
+		r.Get("/{id}", m.handler.View)
+		r.Post("/{id}", m.handler.Update)
 	})
 }

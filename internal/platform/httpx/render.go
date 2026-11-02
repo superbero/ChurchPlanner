@@ -8,7 +8,25 @@ import (
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 )
+
+func funcMap() template.FuncMap {
+	return template.FuncMap{
+		"contains":   strings.Contains,
+		"hasPrefix":  strings.HasPrefix,
+		"hasSuffix":  strings.HasSuffix,
+		"split":      strings.Split,
+		"splitAfter": strings.SplitAfter,
+		"trimPrefix": strings.TrimPrefix,
+		"trimSuffix": strings.TrimSuffix,
+		"lower":      strings.ToLower,
+		"upper":      strings.ToUpper,
+		"languageLabel":   languageLabel,
+		"languageOptions": languageOptions,
+	}
+}
 
 type LanguageOption struct {
 	Code  string
@@ -16,27 +34,15 @@ type LanguageOption struct {
 }
 
 var languageLabels = map[string]string{
-	"en": "English",
-	"fr": "Français",
-	"es": "Español",
-	"pt": "Português",
-	"de": "Deutsch",
-	"it": "Italiano",
-	"nl": "Nederlands",
-	"sw": "Kiswahili",
-	"zh": "中文",
-	"ko": "한국어",
+	"en": "English", "fr": "Français", "es": "Español", "pt": "Português",
+	"de": "Deutsch", "it": "Italiano", "nl": "Nederlands", "sw": "Kiswahili",
+	"zh": "中文", "ko": "한국어",
 }
-
 var languageOrder = []string{"en", "fr", "es", "pt", "de", "it", "nl", "sw", "zh", "ko"}
 
 func languageLabel(code string) string {
-	if code == "" {
-		return ""
-	}
-	if l, ok := languageLabels[code]; ok {
-		return l
-	}
+	if code == "" { return "" }
+	if l, ok := languageLabels[code]; ok { return l }
 	return strings.ToUpper(code)
 }
 
@@ -48,33 +54,12 @@ func languageOptions() []LanguageOption {
 	return out
 }
 
-// funcMap provides helper functions available in all templates.
-// Registering them centrally means any template can use them without
-// the file that declares it being aware.
-func funcMap() template.FuncMap {
-	return template.FuncMap{
-		"contains":   strings.Contains,
-		"hasPrefix":  strings.HasPrefix,
-		"hasSuffix":  strings.HasSuffix,
-		"split":      strings.Split,
-		"splitAfter": strings.SplitAfter,
-		"trimPrefix": strings.TrimPrefix,
-		"trimSuffix": strings.TrimSuffix,
-		"lower":         strings.ToLower,
-		"upper":         strings.ToUpper,
-		"languageLabel": languageLabel,
-		"languageOptions": languageOptions,
-	}
-}
-
 type Renderer struct {
 	layout *template.Template
 	pages  map[string]*template.Template
 }
 
 func NewRenderer(layoutFS fs.FS) (*Renderer, error) {
-	// Funcs must be attached to the layout template BEFORE ParseFS, so that
-	// every page parsed from a Clone of it inherits them.
 	layout, err := template.New("layout.html").Funcs(funcMap()).ParseFS(layoutFS, "layout.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse layout: %w", err)
@@ -84,14 +69,10 @@ func NewRenderer(layoutFS fs.FS) (*Renderer, error) {
 
 func (r *Renderer) Add(prefix string, fsys fs.FS, glob string) error {
 	matches, err := fs.Glob(fsys, glob)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	for _, m := range matches {
-		t, err := r.layout.Clone() // inherits funcs from layout
-		if err != nil {
-			return err
-		}
+		t, err := r.layout.Clone()
+		if err != nil { return err }
 		if _, err := t.ParseFS(fsys, m); err != nil {
 			return fmt.Errorf("parse %s: %w", m, err)
 		}
@@ -101,15 +82,34 @@ func (r *Renderer) Add(prefix string, fsys fs.FS, glob string) error {
 	return nil
 }
 
-func (r *Renderer) Render(w http.ResponseWriter, status int, page string, data any) {
+// Render now requires the request so it can inject CurrentUser into the template.
+func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, status int, page string, data any) {
 	t, ok := r.pages[page]
 	if !ok {
 		http.Error(w, "template not found: "+page, http.StatusInternalServerError)
 		return
 	}
+
+	// Ensure data is a map so we can inject the user
+	var dataMap map[string]any
+	if data == nil {
+		dataMap = make(map[string]any)
+	} else if m, ok := data.(map[string]any); ok {
+		dataMap = m
+	} else {
+		http.Error(w, "renderer requires map[string]any", http.StatusInternalServerError)
+		return
+	}
+
+	if u, ok := auth.UserFrom(req.Context()); ok {
+		dataMap["CurrentUser"] = u
+	} else {
+		dataMap["CurrentUser"] = nil
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := t.ExecuteTemplate(w, "layout.html", data); err != nil {
+	if err := t.ExecuteTemplate(w, "layout.html", dataMap); err != nil {
 		slog.Error("render", "page", page, "err", err)
 	}
 }

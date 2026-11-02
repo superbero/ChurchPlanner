@@ -9,6 +9,7 @@ RUN go mod download || true
 
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata \
@@ -16,5 +17,6 @@ RUN apk add --no-cache ca-certificates tzdata \
 USER app
 WORKDIR /app
 COPY --from=build /out/server /app/server
+COPY --from=build /out/worker /app/worker
 EXPOSE 8080
 ENTRYPOINT ["/app/server"]

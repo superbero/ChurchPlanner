@@ -60,7 +60,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	for _, s := range f.TagSlugs {
 		selected[s] = true
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_list", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_list", map[string]any{
 		"Songs":            items,
 		"Filter":           f,
 		"TagGroups":        groups,
@@ -69,14 +69,14 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, http.StatusOK, "songs_form", map[string]any{"Song": Song{}})
+	h.renderer.Render(w, r, http.StatusOK, "songs_form", map[string]any{"Song": Song{}})
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	in := parseSongInput(r)
 	song, err := h.svc.Create(r.Context(), in)
 	if err != nil {
-		h.renderer.Render(w, http.StatusUnprocessableEntity, "songs_form", map[string]any{
+		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_form", map[string]any{
 			"Song": song, "Error": err.Error(),
 		})
 		return
@@ -118,7 +118,7 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, arrRow{Arrangement: a, Keys: keys})
 	}
 
-	h.renderer.Render(w, http.StatusOK, "songs_detail", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_detail", map[string]any{
 		"Song":          song,
 		"Arrangements":  rows,
 		"History":       history,
@@ -133,7 +133,7 @@ func (h *Handler) Edit(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_form", map[string]any{"Song": song})
+	h.renderer.Render(w, r, http.StatusOK, "songs_form", map[string]any{"Song": song})
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +177,7 @@ func (h *Handler) NewArrangement(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_arrangement_form", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_arrangement_form", map[string]any{
 		"Song":        song,
 		"Arrangement": Arrangement{Name: "Original"},
 		"IsNew":       true,
@@ -192,7 +192,7 @@ func (h *Handler) CreateArrangement(w http.ResponseWriter, r *http.Request) {
 	a, err := h.arr.Create(r.Context(), songID, in, makeDefault)
 	if err != nil {
 		song, _ := h.svc.Get(r.Context(), songID)
-		h.renderer.Render(w, http.StatusUnprocessableEntity, "songs_arrangement_form", map[string]any{
+		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_arrangement_form", map[string]any{
 			"Song": song, "Arrangement": Arrangement{Name: in.Name},
 			"Error": err.Error(), "IsNew": true,
 		})
@@ -252,7 +252,7 @@ func (h *Handler) ViewArrangement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderer.Render(w, http.StatusOK, "songs_arrangement_view", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_arrangement_view", map[string]any{
 		"Song":               song,
 		"Arrangement":        a,
 		"Keys":               keys,
@@ -279,7 +279,7 @@ func (h *Handler) EditArrangement(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_arrangement_form", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_arrangement_form", map[string]any{
 		"Song": song, "Arrangement": a, "IsNew": false,
 	})
 }
@@ -382,7 +382,7 @@ func (h *Handler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 // ---- Import ----
 
 func (h *Handler) ShowImport(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, http.StatusOK, "songs_import", nil)
+	h.renderer.Render(w, r, http.StatusOK, "songs_import", nil)
 }
 
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
@@ -414,14 +414,14 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	case "opensong":
 		p, err := ParseOpenSong(content)
 		if err != nil {
-			h.renderer.Render(w, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "OpenSong parse error: " + err.Error()})
+			h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "OpenSong parse error: " + err.Error()})
 			return
 		}
 		parsed = p
 	case "openlyrics":
 		p, err := ParseOpenLyrics(content)
 		if err != nil {
-			h.renderer.Render(w, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "OpenLyrics parse error: " + err.Error()})
+			h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "OpenLyrics parse error: " + err.Error()})
 			return
 		}
 		parsed = p
@@ -434,7 +434,7 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 
 	song, err := h.svc.Create(r.Context(), CreateSongInput{Title: parsed.Title, Author: parsed.Author})
 	if err != nil {
-		h.renderer.Render(w, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": err.Error()})
+		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": err.Error()})
 		return
 	}
 	_, err = h.arr.Create(r.Context(), song.ID, CreateArrangementInput{
@@ -459,7 +459,7 @@ func (h *Handler) TagsIndex(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_tags", map[string]any{"TagGroups": groups})
+	h.renderer.Render(w, r, http.StatusOK, "songs_tags", map[string]any{"TagGroups": groups})
 }
 
 func (h *Handler) CreateTagGroup(w http.ResponseWriter, r *http.Request) {
@@ -597,7 +597,7 @@ func (h *Handler) ViewPractice(w http.ResponseWriter, r *http.Request) {
 
 	translations, _ := h.arr.ListTranslations(r.Context(), arrID)
 
-	h.renderer.Render(w, http.StatusOK, "songs_practice", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_practice", map[string]any{
 		"Token":              token,
 		"Song":               song,
 		"Arrangement":        arr,
@@ -677,7 +677,7 @@ func (h *Handler) ArrangementHistory(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_revisions", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_revisions", map[string]any{
 		"Song":        song,
 		"Arrangement": arr,
 		"Revisions":   revs,
@@ -722,7 +722,7 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 	counts["all"] = len(all)
 
-	h.renderer.Render(w, http.StatusOK, "songs_health", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_health", map[string]any{
 		"Songs":  items,
 		"Counts": counts,
 		"Filter": cat,
@@ -852,7 +852,7 @@ func (h *Handler) renderTranslationForm(w http.ResponseWriter, r *http.Request, 
 			format = "chordpro"
 		}
 	}
-	h.renderer.Render(w, http.StatusOK, "songs_translation_form", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_translation_form", map[string]any{
 		"Song":             song,
 		"Arrangement":      a,
 		"Language":         lang,
@@ -896,7 +896,7 @@ func (h *Handler) Suggestions(w http.ResponseWriter, r *http.Request) {
 		selected[s] = true
 	}
 
-	h.renderer.Render(w, http.StatusOK, "songs_suggestions", map[string]any{
+	h.renderer.Render(w, r, http.StatusOK, "songs_suggestions", map[string]any{
 		"Songs":            suggestions,
 		"TagGroups":        groups,
 		"SelectedTagSlugs": selected,

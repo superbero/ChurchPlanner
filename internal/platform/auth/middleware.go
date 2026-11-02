@@ -15,10 +15,13 @@ type ctxKey int
 const userKey ctxKey = iota
 
 type User struct {
-	ID    string
-	Name  string
-	Email string
-	Role  string
+	ID        string
+	Name      string
+	Email     string
+	Role      string
+	Phone     string
+	VocalLow  string
+	VocalHigh string
 }
 
 type Authenticator struct {
@@ -55,15 +58,17 @@ func (a *Authenticator) RequireUser(next http.Handler) http.Handler {
 	})
 }
 
-func (a *Authenticator) RequireRole(role string, next http.Handler) http.Handler {
-	return a.RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, _ := UserFrom(r.Context())
-		if u.Role != role && u.Role != "admin" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	}))
+func (a *Authenticator) RequireRole(role string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return a.RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, _ := UserFrom(r.Context())
+			if u.Role != role && u.Role != "admin" {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		}))
+	}
 }
 
 func UserFrom(ctx context.Context) (User, bool) {

@@ -334,3 +334,108 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 /* Presentation / media styles */
 .item-presentation { color: #8b5cf6; font-weight: 600; }
 .item-media { color: #0ea5e9; font-weight: 600; }
+
+/* People module */
+.profile-grid { max-width: 700px; }
+.profile-form h2 { margin-top: 1.5rem; }
+
+
+
+
+
+/* Active Skills Panel */
+.active-skills-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: #fff;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    min-height: 50px;
+}
+.active-skills-panel:empty::before {
+    content: "No skills added yet.";
+    color: #888;
+    font-style: italic;
+}
+.skill-chip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    background: #eef2f7;
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+.skill-chip .remove-skill {
+    background: transparent;
+    border: 0;
+    font-size: 1.2em;
+    line-height: 1;
+    color: #b42318;
+    cursor: pointer;
+    padding: 0 0.25rem;
+}
+.add-skill-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.add-skill-row select {
+    flex: 1;
+    padding: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font: inherit;
+}
+
+/* People list skills */
+.skills-cell {
+    font-size: 0.9em;
+    color: #475467;
+    max-width: 250px;
+    line-height: 1.4;
+}
+
+/* Calendar */
+.calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.calendar-nav { display: flex; gap: .5rem; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); }
+.cal-dow { background: #f7f9fc; padding: .5rem; text-align: center; font-weight: 600; font-size: .85em; color: #666; }
+.cal-day { background: #fff; min-height: 100px; padding: .25rem; display: flex; flex-direction: column; }
+.cal-other { background: #fafafa; opacity: 0.5; }
+.cal-today { background: #eff6ff; }
+.cal-date {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .85em;
+    color: #888;
+    padding: 0 .25rem .25rem 0;
+}
+.cal-day-num { text-decoration: none; color: inherit; }
+.cal-day-num:hover { text-decoration: underline; color: var(--accent); }
+.cal-add-hint {
+    opacity: 0;
+    font-weight: bold;
+    text-decoration: none;
+    color: var(--accent);
+    padding: 0 .25rem;
+    transition: opacity 0.1s;
+}
+.cal-day:hover .cal-add-hint { opacity: 1; }
+.cal-today .cal-date { font-weight: 700; color: var(--accent); }
+.cal-plans { display: flex; flex-direction: column; gap: .2rem; overflow-y: auto; flex: 1; }
+.cal-event { display: block; padding: .25rem; background: #e0e7ff; border-radius: 4px; font-size: .75em; text-decoration: none; color: #3538cd; }
+.cal-event:hover { background: #c7d2fe; }
+.cal-event.cal-draft { opacity: 0.7; border: 1px dashed #a5b4fc; background: transparent; }
+.cal-time { font-weight: 700; margin-right: .25rem; }
+.cal-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* User Menu */
+.user-menu { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+.user-name { font-size: 0.9em; color: #666; font-weight: 500; }
+.nav nav a { color: #475467; font-weight: 500; }
+.nav nav a:hover { color: var(--accent); }

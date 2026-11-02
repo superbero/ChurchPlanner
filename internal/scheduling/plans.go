@@ -176,3 +176,7 @@ func (r *PlanRepository) ReorderTimes(ctx context.Context, planID string, timeID
 	}
 	return tx.Commit(ctx)
 }
+
+
+// DB returns the underlying pool (used by the handler for skill lookups).
+func (r *PlanRepository) DB() *pgxpool.Pool { return r.db }
