@@ -1,6 +1,7 @@
 package songs
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -903,6 +904,23 @@ func (h *Handler) Suggestions(w http.ResponseWriter, r *http.Request) {
 		"Limit":            limit,
 		"Ran":              run,
 	})
+}
+
+// SearchArrangementsJSON returns (song, arrangement) pairs as JSON.
+func (h *Handler) SearchArrangementsJSON(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	results, err := h.arr.SearchArrangements(r.Context(), q, 60)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	if results == nil {
+		results = []ArrangementSearchResult{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(results)
 }
 
 // youtubeID extracts the video ID from common YouTube URL forms.

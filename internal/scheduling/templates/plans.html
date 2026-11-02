@@ -1,0 +1,39 @@
+{{define "content"}}
+<h1>Plans</h1>
+<p>
+    <a class="button" href="/plans/new">New plan</a>
+    <a class="button-secondary" href="/my-schedule">My schedule</a>
+</p>
+
+<form method="get" action="/plans" class="filter-bar">
+    <select name="type">
+        <option value="">All service types</option>
+        {{range .ServiceTypes}}
+        <option value="{{.ID}}" {{if eq .ID $.SelectedType}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+    </select>
+    <button type="submit">Filter</button>
+    <a href="/plans" class="button-secondary">Clear</a>
+</form>
+
+{{if .TypeName}}<p class="muted">Showing: {{.TypeName}}</p>{{end}}
+
+<table>
+    <thead><tr><th>Date</th><th>Title</th><th>Published</th><th></th></tr></thead>
+    <tbody>
+    {{range .Plans}}
+        <tr>
+            <td>{{.ServiceAt.Format "Mon 2 Jan 2006 15:04"}}</td>
+            <td><a href="/plans/{{.ID}}">{{.Title}}</a></td>
+            <td>{{if .Published}}✓{{else}}—{{end}}</td>
+            <td>
+                <a href="/plans/{{.ID}}">Open</a> ·
+                <a href="/plans/{{.ID}}/edit">Edit</a>
+            </td>
+        </tr>
+    {{else}}
+        <tr><td colspan="4">No plans yet. <a href="/plans/new">Create one</a>.</td></tr>
+    {{end}}
+    </tbody>
+</table>
+{{end}}

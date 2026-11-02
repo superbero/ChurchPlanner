@@ -46,13 +46,14 @@ func NewRouter(d Deps) (http.Handler, error) {
 	if err := renderer.Add("web", sub, "login.html"); err != nil {
 		return nil, err
 	}
+	// Every module appears exactly once here.
 	for _, add := range []struct {
 		prefix string
 		fsys   fs.FS
 	}{
 		{"songs", songs.Templates()},
-		{"people", people.Templates()},
 		{"scheduling", scheduling.Templates()},
+		{"people", people.Templates()},
 		{"calendar", calendar.Templates()},
 		{"checkin", checkin.Templates()},
 		{"communications", communications.Templates()},
@@ -101,17 +102,20 @@ func NewRouter(d Deps) (http.Handler, error) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
 
-	// --- protected modules ---
+	// --- modules: construct once, mount once ---
 	songsModule := songs.New(d.DB, renderer, songs.HandlerConfig{
 		PublicBaseURL:   d.Config.PublicBaseURL,
 		TranslateAPIURL: d.Config.TranslateAPIURL,
 		TranslateAPIKey: d.Config.TranslateAPIKey,
 		PrimaryLanguage: d.Config.PrimaryLanguage,
 	})
+	schedulingModule := scheduling.New(d.DB, renderer)
 
-	// Public routes mount outside the auth group.
+	// Practice links are mounted outside the auth group so volunteers
+	// don't need an account.
 	songsModule.PublicRoutes(r)
 
+	// --- protected modules ---
 	r.Group(func(r chi.Router) {
 		r.Use(authn.RequireUser)
 
@@ -120,8 +124,8 @@ func NewRouter(d Deps) (http.Handler, error) {
 		})
 
 		songsModule.Routes(r)
+		schedulingModule.Routes(r)
 		people.New(d.DB, renderer).Routes(r)
-		scheduling.New(d.DB, renderer).Routes(r)
 		calendar.New(d.DB, renderer).Routes(r)
 		checkin.New(d.DB, renderer).Routes(r)
 		communications.New(d.DB, renderer).Routes(r)

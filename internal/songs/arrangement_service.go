@@ -151,3 +151,10 @@ func sanitizeFilename(s string) string {
 	}
 	return b.String()
 }
+
+
+// SearchArrangements returns (song, arrangement) pairs matching q.
+// Empty q returns the first `limit` pairs alphabetically.
+func (s *ArrangementService) SearchArrangements(ctx context.Context, q string, limit int) ([]ArrangementSearchResult, error) {
+	return s.repo.SearchArrangements(ctx, q, limit)
+}

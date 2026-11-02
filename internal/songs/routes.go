@@ -61,6 +61,7 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/tags/tags", m.handler.CreateTag)
 		r.Post("/tags/{id}/delete", m.handler.DeleteTag)
 
+		r.Get("/search", m.handler.SearchArrangementsJSON)
 		r.Get("/{id}", m.handler.View)
 		r.Get("/{id}/pdf", m.handler.DownloadPDF)
 		r.Get("/{id}/edit", m.handler.Edit)

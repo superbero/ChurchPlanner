@@ -1,0 +1,28 @@
+{{define "content"}}
+<p><a href="/plans/{{.Plan.ID}}">← {{.Plan.Title}}</a></p>
+<h1>Edit item</h1>
+<form method="post" action="/plans/{{.Plan.ID}}/items/{{.Item.ID}}">
+    <label>Title <input name="title" value="{{.Item.Title}}" required></label>
+    <div class="row">
+        <label>Key <input name="key" value="{{.Item.Key}}" size="4"></label>
+        <label>Length (min) <input type="number" name="duration_minutes" value="{{if .Item.DurationMinutes}}{{.Item.DurationMinutes}}{{end}}" size="4"></label>
+    </div>
+    <label>Notes <textarea name="notes" rows="2">{{.Item.Notes}}</textarea></label>
+
+    <label>Time slot
+        <select name="plan_time_id">
+            <option value="">— unassigned —</option>
+            {{range .Times}}
+            <option value="{{.ID}}" {{if eq .ID $.Item.PlanTimeID}}selected{{end}}>
+                {{.Name}} · {{.StartsAt.Format "15:04"}} → {{.EndsAt.Format "15:04"}}
+            </option>
+            {{end}}
+        </select>
+    </label>
+
+    <p>
+        <button type="submit">Save</button>
+        <a href="/plans/{{.Plan.ID}}" class="button-secondary">Cancel</a>
+    </p>
+</form>
+{{end}}

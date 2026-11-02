@@ -1,0 +1,259 @@
+{{define "content"}}
+<p><a href="/plans">← All plans</a></p>
+
+<header class="plan-header">
+    <div>
+        <h1>{{.Plan.Title}}</h1>
+        <p class="meta">
+            <span class="plan-when">
+                <strong>{{.Plan.ServiceAt.Format "Mon 2 Jan 2006"}}</strong>
+                · {{.Plan.ServiceAt.Format "15:04"}} → {{.Plan.ServiceEndsAt.Format "15:04"}}
+            </span>
+            <span class="chip {{if .Plan.Published}}chip-published{{else}}chip-draft{{end}}">
+                {{if .Plan.Published}}Published{{else}}Draft{{end}}
+            </span>
+        </p>
+    </div>
+    <div>
+        <a class="button-secondary" href="/plans/{{.Plan.ID}}/edit">Edit plan</a>
+    </div>
+</header>
+
+<h2>Add a time</h2>
+<form method="post" action="/plans/{{.Plan.ID}}/times" class="time-form">
+    <div class="row">
+        <label>Name <input type="text" name="name" placeholder="Rehearsal / Service / Soundcheck" required></label>
+        <label>Kind
+            <select name="kind">
+                <option value="rehearsal">Rehearsal</option>
+                <option value="other">Other</option>
+            </select>
+        </label>
+        <label>Start <input type="datetime-local" name="starts_at" id="time-starts"
+                          value="{{.NextStart.Format "2006-01-02T15:04"}}" required></label>
+        <label>Duration
+            <select name="duration_minutes" id="time-duration">
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60" selected>1 hour</option>
+                <option value="75">1h 15m</option>
+                <option value="90">1h 30m</option>
+                <option value="120">2 hours</option>
+                <option value="180">3 hours</option>
+            </select>
+        </label>
+    </div>
+    <div class="time-preview" id="time-preview"></div>
+    <button type="submit">Add time</button>
+</form>
+<p class="muted">Start defaults to the end of the latest time. The plan's overall service time is {{.Plan.ServiceAt.Format "15:04"}} → {{.Plan.ServiceEndsAt.Format "15:04"}} on {{.Plan.ServiceAt.Format "2 Jan"}}.</p>
+
+<h2>Times &amp; order of service</h2>
+{{if .Times}}
+    {{range .Times}}
+    <section class="time-section" data-time-id="{{.Time.ID}}">
+        <header class="time-header">
+            <div class="time-title-group">
+                <span class="drag-handle time-drag-handle" title="Drag to reorder times">⋮⋮</span>
+                <h3>
+                    <span class="time-kind">{{.Time.Kind}}</span>
+                    {{.Time.Name}}
+                    <span class="muted">· {{.Time.StartsAt.Format "15:04" }} → {{.Time.EndsAt.Format "15:04"}}</span>
+                </h3>
+            </div>
+            <form method="post" action="/plans/{{$.Plan.ID}}/times/{{.Time.ID}}/delete"
+                  onsubmit="return confirm('Delete this time and all its items?')" style="display:inline">
+                <button class="link-btn" type="submit" title="Delete time">×</button>
+            </form>
+        </header>
+
+        <ul class="item-list" id="list-{{.Time.ID}}">
+            {{range .Items}}
+            <li class="item-row" draggable="true" data-item-id="{{.ID}}">
+                <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+                <span class="item-position">{{.Position}}</span>
+                <span class="item-main">
+                    {{if eq .Kind "song"}}
+                        {{if .SongTitle}}
+                            <a href="/songs/{{.SongID}}">{{.SongTitle}}</a>
+                            <span class="muted">— {{.ArrangementName}}</span>
+                        {{else}}
+                            {{.Title}}
+                        {{end}}
+                    {{else}}
+                        <span class="item-{{.Kind}}">{{.Title}}</span>
+                    {{end}}
+                </span>
+                <span class="item-key">{{.Key}}</span>
+                <span class="item-length">{{if .DurationMinutes}}{{.DurationMinutes}}m{{end}}</span>
+                <span class="item-actions">
+                    <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" title="Edit">✎</a>
+                    <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline"
+                          onsubmit="return confirm('Remove this item?')">
+                        <button class="link-btn" type="submit" title="Remove">×</button>
+                    </form>
+                </span>
+            </li>
+            {{else}}
+            <li class="item-empty">No items yet — add one below.</li>
+            {{end}}
+        </ul>
+
+        <details class="add-item">
+            <summary>+ Add a song to {{.Time.Name}}</summary>
+            <form method="post" action="/plans/{{$.Plan.ID}}/items" class="song-picker-form">
+                <input type="hidden" name="kind" value="song">
+                <input type="hidden" name="plan_time_id" value="{{.Time.ID}}">
+                <input type="hidden" name="title" class="song-title-hidden">
+
+                <label>Search library
+                    <input type="text" class="song-search" placeholder="Title, author, lyric…" autocomplete="off">
+                </label>
+                <label>Pick an arrangement
+                    <select name="arrangement_id" class="song-picker" size="5" required>
+                        <option value="">— results appear as you type —</option>
+                    </select>
+                </label>
+                <div class="row">
+                    <label>Key <input name="key" class="song-key" size="4"></label>
+                    <label>Length (min) <input type="number" name="duration_minutes" size="4"></label>
+                    <label>Notes <input name="notes"></label>
+                </div>
+                <button type="submit">Add song</button>
+            </form>
+
+            <details style="margin-top:.75rem">
+                <summary>+ Add a header / note instead</summary>
+                <form method="post" action="/plans/{{$.Plan.ID}}/items" style="margin-top:.75rem">
+                    <input type="hidden" name="plan_time_id" value="{{.Time.ID}}">
+                    <div class="row">
+                        <label>Kind
+                            <select name="kind">
+                                <option value="header">Header</option>
+                                <option value="note">Note</option>
+                                <option value="presentation">Presentation (PPT/ProPresenter)</option>
+                                <option value="media">Media / Video</option>
+                            </select>
+                        </label>
+                        <label>Title <input name="title" required></label>
+                    </div>
+                    <button type="submit">Add</button>
+                </form>
+            </details>
+        </details>
+    </section>
+    {{end}}
+{{else}}
+<p class="muted">No times yet — add one above to start building the order of service.</p>
+{{end}}
+
+{{if .Unassigned}}
+<section class="time-section unassigned-section">
+    <header class="time-header">
+        <h3>Unassigned items <span class="muted">· edit to assign to a time</span></h3>
+    </header>
+    <ul class="item-list">
+        {{range .Unassigned}}
+        <li class="item-row">
+            <span class="item-main">{{.Title}}</span>
+            <span class="item-key">{{.Key}}</span>
+            <span class="item-actions">
+                <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit">✎</a>
+            </span>
+        </li>
+        {{end}}
+    </ul>
+</section>
+{{end}}
+
+<h2>People Serving</h2>
+{{if .Teams}}
+    {{range .Teams}}
+    <section class="team-section">
+        <h3 class="team-header">{{.TeamName}}</h3>
+        <table class="positions-table">
+            <tbody>
+            {{range .Positions}}
+                <tr>
+                    <td class="pos-name">{{.PositionName}}</td>
+                    <td class="pos-people">
+                        {{if .Assignees}}
+                            {{range .Assignees}}
+                            <div class="assignee">
+                                <span class="status-dot status-{{.Status}}"></span>
+                                <strong>{{.PersonName}}</strong>
+                                <span class="muted">
+                                    {{if eq .Status "C"}}· confirmed
+                                    {{else if eq .Status "D"}}· declined
+                                    {{else}}· awaiting reply{{end}}
+                                </span>
+                                {{if .LastServed}}
+                                    <span class="muted">· last served {{.LastServed.Format "2 Jan 2006"}}</span>
+                                {{else}}
+                                    <span class="muted">· never served</span>
+                                {{end}}
+                                <form method="post" action="/plans/{{$.Plan.ID}}/people/{{.PlanPersonID}}/delete" style="display:inline">
+                                    <button class="link-btn" type="submit" title="Remove">×</button>
+                                </form>
+                            </div>
+                            {{end}}
+                        {{else}}
+                            <span class="muted">
+                                Open
+                                {{if .LastFilled}}· last filled {{.LastFilled.Format "2 Jan 2006"}}{{end}}
+                            </span>
+                        {{end}}
+                    </td>
+                    <td class="pos-assign">
+                        <form method="post" action="/plans/{{$.Plan.ID}}/people" class="inline-form">
+                            <input type="hidden" name="position_id" value="{{.PositionID}}">
+                            <select name="person_id" required>
+                                <option value="">Assign…</option>
+                                {{range $.Users}}
+                                <option value="{{.ID}}">{{.Name}}</option>
+                                {{end}}
+                            </select>
+                            <button type="submit" class="link-btn" title="Assign">+</button>
+                        </form>
+                    </td>
+                    <td class="pos-remove">
+                        <form method="post" action="/plans/{{$.Plan.ID}}/positions/{{.PositionID}}/delete"
+                              onsubmit="return confirm('Remove this position from the plan? Any assigned people will be unassigned.')">
+                            <button class="link-btn" type="submit" title="Remove position">×</button>
+                        </form>
+                    </td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </section>
+    {{end}}
+{{else}}
+<p class="muted">No positions required yet. Add the instruments and vocalists you need for this service.</p>
+{{end}}
+
+<h3>Add a needed position</h3>
+<form method="post" action="/plans/{{.Plan.ID}}/positions" class="inline-form">
+    <select name="position_id" required>
+        <option value="">— pick a position —</option>
+        {{range .AllPositions}}
+        <option value="{{.ID}}">{{.TeamName}} · {{.Name}}</option>
+        {{end}}
+    </select>
+    <button type="submit">Add</button>
+</form>
+
+<footer class="plan-footer">
+    <form method="post" action="/plans/{{.Plan.ID}}/publish" class="publish-form">
+        <input type="hidden" name="published" value="{{if .Plan.Published}}0{{else}}1{{end}}">
+        <button type="submit" class="button-secondary">
+            {{if .Plan.Published}}Unpublish{{else}}Publish plan{{end}}
+        </button>
+    </form>
+    <form method="post" action="/plans/{{.Plan.ID}}/delete" class="delete-form"
+          onsubmit="return confirm('Delete this plan and everything in it? This cannot be undone.')">
+        <button type="submit" class="link-btn danger">Delete plan</button>
+    </form>
+</footer>
+{{end}}

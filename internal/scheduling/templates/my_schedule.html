@@ -1,0 +1,41 @@
+{{define "content"}}
+<h1>My schedule</h1>
+<p class="muted">{{.User.Name}}</p>
+
+{{if .Assignments}}
+<table>
+    <thead><tr><th>When</th><th>Plan</th><th>Team · Position</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {{range .Assignments}}
+        <tr>
+            <td>{{.ServiceAt.Format "Mon 2 Jan 15:04"}}</td>
+            <td><a href="/plans/{{.PlanID}}">{{.PlanTitle}}</a><br><span class="muted">{{.ServiceType}}</span></td>
+            <td>{{.TeamName}} · {{.PositionName}}</td>
+            <td>
+                {{if eq .Status "C"}}✓ confirmed
+                {{else if eq .Status "D"}}✗ declined
+                {{else}}… awaiting your reply{{end}}
+            </td>
+            <td>
+                {{if ne .Status "C"}}
+                <form method="post" action="/my-schedule/{{.PlanPersonID}}/respond" style="display:inline">
+                    <input type="hidden" name="status" value="C">
+                    <button type="submit">Accept</button>
+                </form>
+                {{end}}
+                {{if ne .Status "D"}}
+                <form method="post" action="/my-schedule/{{.PlanPersonID}}/respond" style="display:inline">
+                    <input type="hidden" name="status" value="D">
+                    <input name="decline_note" placeholder="reason (optional)" size="15">
+                    <button type="submit" class="link-btn">Decline</button>
+                </form>
+                {{end}}
+            </td>
+        </tr>
+    {{end}}
+    </tbody>
+</table>
+{{else}}
+<p class="muted">You have no upcoming assignments.</p>
+{{end}}
+{{end}}

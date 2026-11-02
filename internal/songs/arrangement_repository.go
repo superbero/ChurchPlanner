@@ -235,6 +235,55 @@ func (r *ArrangementRepository) SetDefault(ctx context.Context, songID, arrangem
 	return tx.Commit(ctx)
 }
 
+// ArrangementSearchResult is a flattened (song, arrangement) row for pickers.
+type ArrangementSearchResult struct {
+	SongID          string `json:"song_id"`
+	SongTitle       string `json:"song_title"`
+	SongAuthor      string `json:"song_author"`
+	ArrangementID   string `json:"arrangement_id"`
+	ArrangementName string `json:"arrangement_name"`
+	OriginalKey     string `json:"original_key"`
+	PrimaryLanguage string `json:"primary_language"`
+}
+
+// SearchArrangements returns (song, arrangement) pairs matching q.
+// Empty q returns the first `limit` pairs alphabetically.
+func (r *ArrangementRepository) SearchArrangements(ctx context.Context, q string, limit int) ([]ArrangementSearchResult, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT s.id::text, s.title, s.author,
+		       a.id::text, a.name, a.original_key, a.primary_language
+		FROM songs s
+		JOIN song_arrangements a ON a.song_id = s.id
+		WHERE s.archived = FALSE AND a.archived = FALSE
+		  AND (
+		    $1 = ''
+		    OR s.title  ILIKE '%' || $1 || '%'
+		    OR s.author ILIKE '%' || $1 || '%'
+		    OR s.search_vector @@ plainto_tsquery('english', $1)
+		  )
+		ORDER BY s.title, a.is_default DESC, a.name
+		LIMIT $2
+	`, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ArrangementSearchResult
+	for rows.Next() {
+		var x ArrangementSearchResult
+		if err := rows.Scan(&x.SongID, &x.SongTitle, &x.SongAuthor,
+			&x.ArrangementID, &x.ArrangementName, &x.OriginalKey, &x.PrimaryLanguage); err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
 // --- Keys ---
 
 const keyColumns = `id, arrangement_id, name, key, is_default, created_at, updated_at`

@@ -6,15 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{block "title" .}}Church Planner{{end}}</title>
     <link rel="stylesheet" href="/static/css/app.css">
-    <script src="/static/js/app.js" defer></script>
+    <script src="/static/js/app.js?v=7" defer></script>
 </head>
 <body>
     <header class="nav">
         <a href="/" class="brand">Church Planner</a>
         <nav>
             <a href="/songs">Songs</a>
+            <a href="/plans">Plans</a>
+            <a href="/my-schedule">My schedule</a>
             <a href="/people">People</a>
-            <a href="/scheduling">Scheduling</a>
             <a href="/calendar">Calendar</a>
         </nav>
         <form method="post" action="/logout" class="logout"><button>Sign out</button></form>

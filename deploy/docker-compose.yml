@@ -31,7 +31,7 @@ services:
     container_name: churchplanner-libretranslate
     restart: unless-stopped
     ports:
-      - "5000:5000"            # remove this line if you never want it reachable from the host
+      - "5050:5000"            # remove this line if you never want it reachable from the host
     volumes:
       - libretranslate_models:/home/libretranslate/.local:rw
       - libretranslate_db:/app/db
