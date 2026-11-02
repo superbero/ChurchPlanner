@@ -14,8 +14,8 @@
 {{if .Song.YouTubeURL}}<p><a href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">▶ Watch on YouTube</a></p>{{end}}
 
 <p>
-    {{if eq .CurrentUser.Role "admin"}}<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>{{end}}
-    {{if eq .CurrentUser.Role "admin"}}<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>{{end}}
+    {{if isEditorOrAdmin .CurrentUser.Role}}<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>{{end}}
+    {{if isEditorOrAdmin .CurrentUser.Role}}<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>{{end}}
     <a class="button-secondary" href="/songs/{{.Song.ID}}/pdf">Download PDF (default)</a>
 </p>
 

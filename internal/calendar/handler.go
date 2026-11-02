@@ -3,10 +3,12 @@ package calendar
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
@@ -18,8 +20,9 @@ type Handler struct {
 type Day struct {
 	Date     time.Time
 	IsToday  bool
-	IsOther  bool // padding days before/after the month
+	IsOther  bool
 	Plans    []Plan
+	Blockouts []Blockout
 }
 
 type Plan struct {
@@ -27,6 +30,12 @@ type Plan struct {
 	Title     string
 	TimeStr   string
 	Published bool
+}
+
+type Blockout struct {
+	ID       string
+	UserName string
+	Reason   string
 }
 
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +52,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	firstOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 	firstOfNext := firstOfMonth.AddDate(0, 1, 0)
 
-	// Fetch plans for the month
+	// 1. Fetch plans
 	rows, err := h.db.Query(r.Context(), `
 		SELECT id, title, service_at, published
 		FROM plans
@@ -54,41 +63,79 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	defer rows.Close()
 
 	plansByDay := make(map[int][]Plan)
 	for rows.Next() {
 		var p Plan
 		var date time.Time
 		if err := rows.Scan(&p.ID, &p.Title, &date, &p.Published); err != nil {
+			rows.Close()
 			httpx.ServerError(w, err)
 			return
 		}
 		p.TimeStr = date.Format("15:04")
-		day := date.Day()
-		plansByDay[day] = append(plansByDay[day], p)
+		plansByDay[date.Day()] = append(plansByDay[date.Day()], p)
+	}
+	rows.Close()
+
+	// 2. Fetch blockouts that overlap this month
+	// Overlap logic: starts_on <= endOfMonth AND ends_on >= startOfMonth
+	brows, err := h.db.Query(r.Context(), `
+		SELECT b.id, u.name, b.starts_on, b.ends_on, b.reason
+		FROM user_blockouts b
+		JOIN users u ON u.id = b.user_id
+		WHERE b.starts_on < $2 AND b.ends_on >= $1
+	`, firstOfMonth, firstOfNext)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
 	}
 
-	// Build the grid (start on Sunday)
-	// Go's Weekday(): Sunday=0, Monday=1...
+	blockoutsByDay := make(map[int][]Blockout)
+	for brows.Next() {
+		var id, name, reason string
+		var start, end time.Time
+		if err := brows.Scan(&id, &name, &start, &end, &reason); err != nil {
+			brows.Close()
+			httpx.ServerError(w, err)
+			return
+		}
+
+		// Add this blockout to every day in its range that falls in this month
+		curr := start
+		for !curr.After(end) {
+			if curr.Month() == firstOfMonth.Month() && curr.Year() == firstOfMonth.Year() {
+				blockoutsByDay[curr.Day()] = append(blockoutsByDay[curr.Day()], Blockout{
+					ID: id, UserName: name, Reason: reason,
+				})
+			}
+			curr = curr.AddDate(0, 0, 1)
+		}
+	}
+	brows.Close()
+
+	// 3. Build the grid
 	padding := int(firstOfMonth.Weekday())
 	gridStart := firstOfMonth.AddDate(0, 0, -padding)
 
 	var days []Day
-	for i := 0; i < 42; i++ { // 6 weeks to cover all months
+	for i := 0; i < 42; i++ {
 		d := gridStart.AddDate(0, 0, i)
 		isOther := d.Month() != firstOfMonth.Month()
 
 		var plans []Plan
+		var blockouts []Blockout
 		if !isOther {
 			plans = plansByDay[d.Day()]
+			blockouts = blockoutsByDay[d.Day()]
 		}
 
 		days = append(days, Day{
-			Date:    d,
-			IsToday: d.Format("2006-01-02") == now.Format("2006-01-02"),
-			IsOther: isOther,
-			Plans:   plans,
+			Date:      d,
+			IsToday:   d.Format("2006-01-02") == now.Format("2006-01-02"),
+			IsOther:   isOther,
+			Plans:     plans,
+			Blockouts: blockouts,
 		})
 	}
 
@@ -98,4 +145,35 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		"NextMonth": firstOfMonth.AddDate(0, 1, 0),
 		"Days":      days,
 	})
+}
+
+func (h *Handler) AddBlockout(w http.ResponseWriter, r *http.Request) {
+	u, _ := auth.UserFrom(r.Context())
+	startStr := r.FormValue("starts_on")
+	endStr := r.FormValue("ends_on")
+	reason := strings.TrimSpace(r.FormValue("reason"))
+
+	if startStr == "" || endStr == "" {
+		http.Error(w, "Start and end dates required", http.StatusBadRequest)
+		return
+	}
+
+	start, err1 := time.Parse("2006-01-02", startStr)
+	end, err2 := time.Parse("2006-01-02", endStr)
+	if err1 != nil || err2 != nil || end.Before(start) {
+		http.Error(w, "Invalid dates", http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.db.Exec(r.Context(), `
+		INSERT INTO user_blockouts (user_id, starts_on, ends_on, reason)
+		VALUES ($1, $2, $3, $4)
+	`, u.ID, start, end, reason)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
+	// Redirect back to the same month
+	http.Redirect(w, r, "/calendar?year="+start.Format("2006")+"&month="+start.Format("1"), http.StatusSeeOther)
 }

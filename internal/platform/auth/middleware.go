@@ -58,15 +58,23 @@ func (a *Authenticator) RequireUser(next http.Handler) http.Handler {
 	})
 }
 
-func (a *Authenticator) RequireRole(role string) func(http.Handler) http.Handler {
+// RequireRoles ensures the logged-in user has one of the allowed roles.
+// Admin always passes, regardless of the requested roles.
+func (a *Authenticator) RequireRoles(allowedRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return a.RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u, _ := UserFrom(r.Context())
-			if u.Role != role && u.Role != "admin" {
-				http.Error(w, "forbidden", http.StatusForbidden)
+			if u.Role == "admin" {
+				next.ServeHTTP(w, r)
 				return
 			}
-			next.ServeHTTP(w, r)
+			for _, role := range allowedRoles {
+				if u.Role == role {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			http.Error(w, "forbidden", http.StatusForbidden)
 		}))
 	}
 }

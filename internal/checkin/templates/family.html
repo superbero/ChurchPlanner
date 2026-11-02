@@ -1,0 +1,25 @@
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Check-in</h1>
+    <p class="muted">Phone: {{.Phone}}</p>
+
+    {{if .Children}}
+    <form method="post" action="/checkin/submit" class="kiosk-form">
+        <div class="kid-list">
+            {{range .Children}}
+            <label class="kid-checkbox">
+                <input type="checkbox" name="child_ids" value="{{.ID}}" checked>
+                <span>{{.FirstName}} {{.LastName}}</span>
+            </label>
+            {{end}}
+        </div>
+        <button type="submit" class="kiosk-btn">Check In Selected</button>
+    </form>
+    {{else}}
+    <p>No children found for this number.</p>
+    <a href="/checkin/add?phone={{.Phone}}" class="kiosk-btn" style="text-decoration:none">Add a Child</a>
+    {{end}}
+
+    <p style="margin-top:2rem"><a href="/checkin">Cancel</a></p>
+</div>
+{{end}}

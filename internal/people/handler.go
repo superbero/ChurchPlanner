@@ -62,8 +62,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	phone := strings.TrimSpace(r.FormValue("phone"))
 	vLow := strings.TrimSpace(r.FormValue("vocal_low"))
 	vHigh := strings.TrimSpace(r.FormValue("vocal_high"))
+	role := strings.TrimSpace(r.FormValue("role"))
 
-	if err := h.repo.Update(r.Context(), id, phone, vLow, vHigh); err != nil {
+	if err := h.repo.Update(r.Context(), id, phone, vLow, vHigh, role); err != nil {
 		httpx.ServerError(w, err)
 		return
 	}

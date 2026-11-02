@@ -1,0 +1,10 @@
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Kids Check-in</h1>
+    <p class="muted">Enter your phone number to begin.</p>
+    <form method="get" action="/checkin" class="kiosk-form">
+        <input type="tel" name="phone" placeholder="555-0100" required autofocus>
+        <button type="submit">Find Family</button>
+    </form>
+</div>
+{{end}}

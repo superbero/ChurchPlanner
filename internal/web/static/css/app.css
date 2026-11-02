@@ -439,3 +439,81 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 .user-name { font-size: 0.9em; color: #666; font-weight: 500; }
 .nav nav a { color: #475467; font-weight: 500; }
 .nav nav a:hover { color: var(--accent); }
+
+/* Blockouts */
+.cal-blockout {
+    display: block;
+    padding: .15rem .25rem;
+    background: #fee4e2;
+    color: #b42318;
+    border-radius: 4px;
+    font-size: .75em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.add-blockout-panel {
+    margin-top: 2rem;
+    background: #fff;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.add-blockout-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #b42318;
+}
+.add-blockout-panel form { margin-top: 1rem; }
+
+/* Kiosk Check-in */
+.kiosk-container {
+    max-width: 600px;
+    margin: 3rem auto;
+    background: #fff;
+    padding: 3rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+.kiosk-container h1 { font-size: 2.5rem; margin-top: 0; text-align: center; }
+.kiosk-form { display: flex; flex-direction: column; gap: 1.5rem; margin-top: 2rem; }
+.kiosk-form input[type="tel"],
+.kiosk-form input[type="text"] {
+    font-size: 1.5rem;
+    padding: 1rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+}
+.kiosk-btn {
+    display: block;
+    width: 100%;
+    font-size: 1.5rem;
+    padding: 1rem;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+}
+.kid-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.5rem;
+    padding: 1rem;
+    background: #f7f9fc;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.kid-checkbox input { width: 2rem; height: 2rem; }
+.security-code {
+    font-family: ui-monospace, monospace;
+    font-size: 4rem;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin: 2rem 0;
+}
+.tag-kid { font-size: 1.25rem; font-weight: bold; }

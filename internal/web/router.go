@@ -130,13 +130,14 @@ func NewRouter(d Deps) (http.Handler, error) {
 		// --- Shared (Volunteer + Admin) ---
 		schedulingModule.MyScheduleRoutes(r)
 		calendar.New(d.DB, renderer).Routes(r)
+		checkin.New(d.DB, renderer).Routes(r)
 
 		// Songs (Volunteers can view/list, but Edit buttons will be handled in templates)
-		songsModule.Routes(r)
+		songsModule.Routes(r, authn)
 
 		// --- Admin Only ---
 		r.Group(func(r chi.Router) {
-			r.Use(authn.RequireRole("admin"))
+			r.Use(authn.RequireRoles("admin"))
 
 			schedulingModule.Routes(r) // Plans, Times, Items, Assignments
 			people.New(d.DB, renderer).Routes(r)

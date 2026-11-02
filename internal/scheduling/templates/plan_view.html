@@ -212,7 +212,9 @@
                                 <option value="">Assign…</option>
                                 {{$eligible := index $.UsersByPos .PositionID}}
                                 {{range $eligible}}
-                                <option value="{{.ID}}">{{.Name}}</option>
+                                <option value="{{.ID}}">
+                                    {{.Name}}{{if index $.BlockedUsers .ID}} 🚫 (Out){{end}}
+                                </option>
                                 {{end}}
                             </select>
                             <button type="submit" class="link-btn" title="Assign">+</button>

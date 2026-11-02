@@ -6,6 +6,14 @@
     <form method="post" action="/people/{{.User.ID}}" class="profile-form">
         <h2>Contact &amp; Vocal Info</h2>
         <label>Email <input value="{{.User.Email}}" disabled></label>
+        <label>Role
+            <select name="role">
+                <option value="volunteer" {{if eq .User.Role "volunteer"}}selected{{end}}>Volunteer (Scheduled Viewer)</option>
+                <option value="guest" {{if eq .User.Role "guest"}}selected{{end}}>Guest</option>
+                <option value="editor" {{if eq .User.Role "editor"}}selected{{end}}>Editor</option>
+                <option value="admin" {{if eq .User.Role "admin"}}selected{{end}}>Admin</option>
+            </select>
+        </label>
         <label>Phone <input name="phone" value="{{.User.Phone}}" placeholder="555-0100"></label>
 
         <div class="row">

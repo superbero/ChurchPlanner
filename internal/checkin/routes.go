@@ -3,7 +3,6 @@ package checkin
 import (
 	"embed"
 	"io/fs"
-	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,15 +21,17 @@ func Templates() fs.FS {
 	return sub
 }
 
-type Module struct{ renderer *httpx.Renderer }
+type Module struct{ handler *Handler }
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
-	_ = db // replace with repository wiring as you grow this module
-	return &Module{renderer: renderer}
+	return &Module{handler: &Handler{db: db, renderer: renderer}}
 }
 
 func (m *Module) Routes(r chi.Router) {
-	r.Get("/checkin", func(w http.ResponseWriter, req *http.Request) {
-		m.renderer.Render(w, req, http.StatusOK, "checkin_list", nil)
+	r.Route("/checkin", func(r chi.Router) {
+		r.Get("/", m.handler.Index)
+		r.Get("/add", m.handler.AddChildForm)
+		r.Post("/add", m.handler.AddChild)
+		r.Post("/submit", m.handler.Submit)
 	})
 }

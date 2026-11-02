@@ -2,355 +2,406 @@
 set -uo pipefail
 
 [ -f go.mod ] || { echo "✗ run from project root"; exit 1; }
+if ls migrations/00017_* >/dev/null 2>&1; then
+  echo "✗ migrations/00017_* already exists"; exit 1
+fi
 
 echo "════════════════════════════════════════════════════════════════"
-echo "  1/6  Update Renderer to inject CurrentUser everywhere"
+echo "  1/4  Migration 00017: Children & Checkins"
 echo "════════════════════════════════════════════════════════════════"
-cat > internal/platform/httpx/render.go <<'GOEOF'
-package httpx
+cat > migrations/00017_checkin.sql <<'SQLEOF'
+-- +goose Up
+CREATE TABLE children (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    parent_phone TEXT NOT NULL,
+    first_name   TEXT NOT NULL,
+    last_name    TEXT NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX children_phone_idx ON children (parent_phone);
+
+CREATE TABLE checkins (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    child_id        UUID NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+    security_code   TEXT NOT NULL,
+    checked_in_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    checked_out_at  TIMESTAMPTZ
+);
+CREATE INDEX checkins_child_idx ON checkins (child_id, checked_in_at DESC);
+
+-- +goose Down
+DROP TABLE IF EXISTS checkins;
+DROP TABLE IF EXISTS children;
+SQLEOF
+echo "  ✓ migration written"
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "  2/4  Checkin Module: internal/checkin"
+echo "════════════════════════════════════════════════════════════════"
+mkdir -p internal/checkin/templates
+
+cat > internal/checkin/handler.go <<'GOEOF'
+package checkin
 
 import (
+	"crypto/rand"
 	"fmt"
-	"html/template"
-	"io/fs"
-	"log/slog"
+	"math/big"
 	"net/http"
-	"path"
 	"strings"
+	"time"
 
-	"github.com/yourchurch/churchplanner/internal/platform/auth"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
-func funcMap() template.FuncMap {
-	return template.FuncMap{
-		"contains":   strings.Contains,
-		"hasPrefix":  strings.HasPrefix,
-		"hasSuffix":  strings.HasSuffix,
-		"split":      strings.Split,
-		"splitAfter": strings.SplitAfter,
-		"trimPrefix": strings.TrimPrefix,
-		"trimSuffix": strings.TrimSuffix,
-		"lower":      strings.ToLower,
-		"upper":      strings.ToUpper,
-		"languageLabel":   languageLabel,
-		"languageOptions": languageOptions,
+type Handler struct {
+	db       *pgxpool.Pool
+	renderer *httpx.Renderer
+}
+
+type Child struct {
+	ID        string
+	FirstName string
+	LastName  string
+	CheckedIn bool
+}
+
+// generateCode returns a random string like "X7F-382"
+func generateCode() string {
+	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const numbers = "0123456789"
+
+	l1, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+	l2, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+	l3, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+	n1, _ := rand.Int(rand.Reader, big.NewInt(int64(len(numbers))))
+	n2, _ := rand.Int(rand.Reader, big.NewInt(int64(len(numbers))))
+	n3, _ := rand.Int(rand.Reader, big.NewInt(int64(len(numbers))))
+
+	return fmt.Sprintf("%c%c%c-%c%c%c",
+		letters[l1.Int64()], letters[l2.Int64()], letters[l3.Int64()],
+		numbers[n1.Int64()], numbers[n2.Int64()], numbers[n3.Int64()])
+}
+
+func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
+	phone := strings.TrimSpace(r.URL.Query().Get("phone"))
+
+	if phone == "" {
+		h.renderer.Render(w, r, http.StatusOK, "checkin_index", nil)
+		return
 	}
-}
 
-type LanguageOption struct {
-	Code  string
-	Label string
-}
-
-var languageLabels = map[string]string{
-	"en": "English", "fr": "Français", "es": "Español", "pt": "Português",
-	"de": "Deutsch", "it": "Italiano", "nl": "Nederlands", "sw": "Kiswahili",
-	"zh": "中文", "ko": "한국어",
-}
-var languageOrder = []string{"en", "fr", "es", "pt", "de", "it", "nl", "sw", "zh", "ko"}
-
-func languageLabel(code string) string {
-	if code == "" { return "" }
-	if l, ok := languageLabels[code]; ok { return l }
-	return strings.ToUpper(code)
-}
-
-func languageOptions() []LanguageOption {
-	out := make([]LanguageOption, 0, len(languageOrder))
-	for _, c := range languageOrder {
-		out = append(out, LanguageOption{Code: c, Label: languageLabels[c]})
-	}
-	return out
-}
-
-type Renderer struct {
-	layout *template.Template
-	pages  map[string]*template.Template
-}
-
-func NewRenderer(layoutFS fs.FS) (*Renderer, error) {
-	layout, err := template.New("layout.html").Funcs(funcMap()).ParseFS(layoutFS, "layout.html")
+	rows, err := h.db.Query(r.Context(), `
+		SELECT id, first_name, last_name FROM children WHERE parent_phone = $1 ORDER BY first_name
+	`, phone)
 	if err != nil {
-		return nil, fmt.Errorf("parse layout: %w", err)
+		httpx.ServerError(w, err)
+		return
 	}
-	return &Renderer{layout: layout, pages: make(map[string]*template.Template)}, nil
-}
+	defer rows.Close()
 
-func (r *Renderer) Add(prefix string, fsys fs.FS, glob string) error {
-	matches, err := fs.Glob(fsys, glob)
-	if err != nil { return err }
-	for _, m := range matches {
-		t, err := r.layout.Clone()
-		if err != nil { return err }
-		if _, err := t.ParseFS(fsys, m); err != nil {
-			return fmt.Errorf("parse %s: %w", m, err)
+	var children []Child
+	for rows.Next() {
+		var c Child
+		if err := rows.Scan(&c.ID, &c.FirstName, &c.LastName); err != nil {
+			httpx.ServerError(w, err)
+			return
 		}
-		name := prefix + "_" + strings.TrimSuffix(path.Base(m), ".html")
-		r.pages[name] = t
+		children = append(children, c)
 	}
-	return nil
+
+	h.renderer.Render(w, r, http.StatusOK, "checkin_family", map[string]any{
+		"Phone":    phone,
+		"Children": children,
+	})
 }
 
-// Render now requires the request so it can inject CurrentUser into the template.
-func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, status int, page string, data any) {
-	t, ok := r.pages[page]
-	if !ok {
-		http.Error(w, "template not found: "+page, http.StatusInternalServerError)
+func (h *Handler) AddChildForm(w http.ResponseWriter, r *http.Request) {
+	phone := r.URL.Query().Get("phone")
+	h.renderer.Render(w, r, http.StatusOK, "checkin_add", map[string]any{"Phone": phone})
+}
+
+func (h *Handler) AddChild(w http.ResponseWriter, r *http.Request) {
+	phone := r.FormValue("phone")
+	first := strings.TrimSpace(r.FormValue("first_name"))
+	last := strings.TrimSpace(r.FormValue("last_name"))
+
+	_, err := h.db.Exec(r.Context(), `
+		INSERT INTO children (parent_phone, first_name, last_name) VALUES ($1, $2, $3)
+	`, phone, first, last)
+	if err != nil {
+		httpx.ServerError(w, err)
 		return
 	}
 
-	// Ensure data is a map so we can inject the user
-	var dataMap map[string]any
-	if data == nil {
-		dataMap = make(map[string]any)
-	} else if m, ok := data.(map[string]any); ok {
-		dataMap = m
-	} else {
-		http.Error(w, "renderer requires map[string]any", http.StatusInternalServerError)
+	http.Redirect(w, r, "/checkin?phone="+phone, http.StatusSeeOther)
+}
+
+func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpx.ServerError(w, err)
 		return
 	}
 
-	if u, ok := auth.UserFrom(req.Context()); ok {
-		dataMap["CurrentUser"] = u
-	} else {
-		dataMap["CurrentUser"] = nil
+	childIDs := r.Form["child_ids"]
+	if len(childIDs) == 0 {
+		http.Redirect(w, r, "/checkin", http.StatusSeeOther)
+		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	if err := t.ExecuteTemplate(w, "layout.html", dataMap); err != nil {
-		slog.Error("render", "page", page, "err", err)
-	}
-}
+	code := generateCode()
 
-func ServerError(w http.ResponseWriter, err error) {
-	slog.Error("handler error", "err", err)
-	http.Error(w, "internal server error", http.StatusInternalServerError)
+	// In a real app, we'd use a transaction. Here, a loop is fine for a small church.
+	for _, cid := range childIDs {
+		_, err := h.db.Exec(r.Context(), `
+			INSERT INTO checkins (child_id, security_code) VALUES ($1, $2)
+		`, cid, code)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+	}
+
+	// Fetch the children for the success tag
+	rows, err := h.db.Query(r.Context(), `
+		SELECT first_name, last_name FROM children WHERE id = ANY($1::uuid[])
+	`, childIDs)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	defer rows.Close()
+
+	var kids []Child
+	for rows.Next() {
+		var c Child
+		rows.Scan(&c.ID, &c.FirstName, &c.LastName)
+		kids = append(kids, c)
+	}
+
+	h.renderer.Render(w, r, http.StatusOK, "checkin_success", map[string]any{
+		"Code":  code,
+		"Kids":  kids,
+		"Now":   time.Now(),
+	})
 }
 GOEOF
 
-# Fix all handler Render calls across the app (regex replace)
-echo "  ✓ renderer updated"
-python3 - <<'PYEOF'
-import re
-from pathlib import Path
+cat > internal/checkin/routes.go <<'GOEOF'
+package checkin
 
-for p in Path("internal").rglob("*.go"):
-    if p.name.endswith("_test.go") or "render.go" in p.name: continue
-    src = p.read_text()
-    # Find .Render(w, http.Status...
-    # Replace with .Render(w, r, http.Status...
-    new_src = re.sub(r'\.Render\(w,\s*(http\.Status)', r'.Render(w, r, \1', src)
-    if new_src != src:
-        p.write_text(new_src)
-        print(f"  · updated {p}")
-PYEOF
+import (
+	"embed"
+	"io/fs"
 
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "  2/6  Layout: Dynamic Nav based on Role"
-echo "════════════════════════════════════════════════════════════════"
-cat > internal/web/templates/layout.html <<'HTMLEOF'
-{{define "layout.html"}}
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{block "title" .}}Church Planner{{end}}</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=10">
-    <script src="/static/js/app.js?v=10" defer></script>
-</head>
-<body>
-    <header class="nav">
-        <a href="/" class="brand">Church Planner</a>
-        <nav>
-            {{if .CurrentUser}}
-                {{if eq .CurrentUser.Role "admin"}}
-                    <a href="/plans">Plans</a>
-                    <a href="/people">People</a>
-                    <a href="/songs">Songs</a>
-                    <a href="/calendar">Calendar</a>
-                    <a href="/reports/ccli">Reports</a>
-                {{else}}
-                    <a href="/my-schedule">My Schedule</a>
-                    <a href="/calendar">Calendar</a>
-                    <a href="/songs">Songs</a>
-                {{end}}
-            {{end}}
-        </nav>
-        {{if .CurrentUser}}
-        <div class="user-menu">
-            <span class="user-name">{{.CurrentUser.Name}}</span>
-            <form method="post" action="/logout" class="logout"><button>Sign out</button></form>
-        </div>
-        {{end}}
-    </header>
-    <main>
-        {{template "content" .}}
-    </main>
-</body>
-</html>
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/yourchurch/churchplanner/internal/platform/httpx"
+)
+
+//go:embed templates/*.html
+var templatesFS embed.FS
+
+func Templates() fs.FS {
+	sub, err := fs.Sub(templatesFS, "templates")
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}
+
+type Module struct{ handler *Handler }
+
+func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
+	return &Module{handler: &Handler{db: db, renderer: renderer}}
+}
+
+func (m *Module) Routes(r chi.Router) {
+	r.Route("/checkin", func(r chi.Router) {
+		r.Get("/", m.handler.Index)
+		r.Get("/add", m.handler.AddChildForm)
+		r.Post("/add", m.handler.AddChild)
+		r.Post("/submit", m.handler.Submit)
+	})
+}
+GOEOF
+
+cat > internal/checkin/templates/index.html <<'HTMLEOF'
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Kids Check-in</h1>
+    <p class="muted">Enter your phone number to begin.</p>
+    <form method="get" action="/checkin" class="kiosk-form">
+        <input type="tel" name="phone" placeholder="555-0100" required autofocus>
+        <button type="submit">Find Family</button>
+    </form>
+</div>
 {{end}}
 HTMLEOF
-echo "  ✓ layout updated"
+
+cat > internal/checkin/templates/family.html <<'HTMLEOF'
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Check-in</h1>
+    <p class="muted">Phone: {{.Phone}}</p>
+
+    {{if .Children}}
+    <form method="post" action="/checkin/submit" class="kiosk-form">
+        <div class="kid-list">
+            {{range .Children}}
+            <label class="kid-checkbox">
+                <input type="checkbox" name="child_ids" value="{{.ID}}" checked>
+                <span>{{.FirstName}} {{.LastName}}</span>
+            </label>
+            {{end}}
+        </div>
+        <button type="submit" class="kiosk-btn">Check In Selected</button>
+    </form>
+    {{else}}
+    <p>No children found for this number.</p>
+    <a href="/checkin/add?phone={{.Phone}}" class="kiosk-btn" style="text-decoration:none">Add a Child</a>
+    {{end}}
+
+    <p style="margin-top:2rem"><a href="/checkin">Cancel</a></p>
+</div>
+{{end}}
+HTMLEOF
+
+cat > internal/checkin/templates/add.html <<'HTMLEOF'
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Add Child</h1>
+    <p class="muted">Phone: {{.Phone}}</p>
+    <form method="post" action="/checkin/add" class="kiosk-form">
+        <input type="hidden" name="phone" value="{{.Phone}}">
+        <input type="text" name="first_name" placeholder="First Name" required>
+        <input type="text" name="last_name" placeholder="Last Name" required>
+        <button type="submit" class="kiosk-btn">Save Child</button>
+    </form>
+    <p style="margin-top:2rem"><a href="/checkin?phone={{.Phone}}">Cancel</a></p>
+</div>
+{{end}}
+HTMLEOF
+
+cat > internal/checkin/templates/success.html <<'HTMLEOF'
+{{define "content"}}
+<div class="kiosk-container" style="text-align: center;">
+    <h1>✅ Checked In</h1>
+    <div class="security-code">{{.Code}}</div>
+    <p>Keep this code to pick up your children.</p>
+
+    <div style="margin-top: 2rem; border-top: 1px dashed #ccc; padding-top: 1rem;">
+        {{range .Kids}}
+        <p class="tag-kid">{{.FirstName}} {{.LastName}}</p>
+        {{end}}
+    </div>
+
+    <button onclick="window.print()" class="kiosk-btn" style="margin-top:2rem">Print Tags</button>
+    <p style="margin-top:1rem"><a href="/checkin">Done</a></p>
+</div>
+{{end}}
+HTMLEOF
+
+echo "  ✓ checkin module created"
 
 echo ""
 echo "════════════════════════════════════════════════════════════════"
-echo "  3/6  Router: Group routes by Role + Add Dashboard"
+echo "  3/4  Wire into Router & add Kiosk CSS"
 echo "════════════════════════════════════════════════════════════════"
 python3 - <<'PYEOF'
 from pathlib import Path
 p = Path("internal/web/router.go")
 src = p.read_text()
 
-# 1. Update Login redirect to go to / instead of /songs
-src = src.replace(
-    'http.Redirect(w, r, "/songs", http.StatusSeeOther)\n\t})\n\tr.Post("/logout"',
-    'http.Redirect(w, r, "/", http.StatusSeeOther)\n\t})\n\tr.Post("/logout"'
-)
+# Add import
+if 'internal/checkin"' not in src:
+    src = src.replace(
+        '"github.com/yourchurch/churchplanner/internal/calendar"',
+        '"github.com/yourchurch/churchplanner/internal/calendar"\n\t"github.com/yourchurch/churchplanner/internal/checkin"'
+    )
 
-# 2. Rewrite the route grouping
-start = src.find('\t// --- modules: construct once, mount once ---')
-if start == -1:
-    print("  ! modules mount point not found")
-    raise SystemExit(1)
+# Add templates
+if '{"checkin", checkin.Templates()}' not in src:
+    src = src.replace(
+        '{"reports", reports.Templates()},',
+        '{"reports", reports.Templates()},\n\t\t{"checkin", checkin.Templates()},'
+    )
 
-new_routes = '''	// --- modules: construct once, mount once ---
-	songsModule := songs.New(d.DB, renderer, songs.HandlerConfig{
-		PublicBaseURL:   d.Config.PublicBaseURL,
-		TranslateAPIURL: d.Config.TranslateAPIURL,
-		TranslateAPIKey: d.Config.TranslateAPIKey,
-		PrimaryLanguage: d.Config.PrimaryLanguage,
-	})
-	schedulingModule := scheduling.New(d.DB, renderer)
+# Add routes inside the Shared group (Volunteers and Admins can use kiosks)
+if 'checkin.New(d.DB, renderer).Routes(r)' not in src:
+    src = src.replace(
+        'calendar.New(d.DB, renderer).Routes(r)',
+        'calendar.New(d.DB, renderer).Routes(r)\n\t\tcheckin.New(d.DB, renderer).Routes(r)'
+    )
 
-	songsModule.PublicRoutes(r)
-
-	r.Group(func(r chi.Router) {
-		r.Use(authn.RequireUser)
-
-		// Dashboard (redirects based on role)
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			u, _ := auth.UserFrom(r.Context())
-			if u.Role == "admin" {
-				http.Redirect(w, r, "/plans", http.StatusSeeOther)
-			} else {
-				http.Redirect(w, r, "/my-schedule", http.StatusSeeOther)
-			}
-		})
-
-		// --- Shared (Volunteer + Admin) ---
-		schedulingModule.MyScheduleRoutes(r)
-		calendar.New(d.DB, renderer).Routes(r)
-
-		// Songs (Volunteers can view/list, but Edit buttons will be handled in templates)
-		songsModule.Routes(r)
-
-		// --- Admin Only ---
-		r.Group(func(r chi.Router) {
-			r.Use(authn.RequireRole("admin"))
-
-			schedulingModule.Routes(r) // Plans, Times, Items, Assignments
-			people.New(d.DB, renderer).Routes(r)
-			reports.New(d.DB, renderer).Routes(r)
-		})
-	})
-
-	return r, nil
-}'''
-
-src = src[:start] + new_routes
 p.write_text(src)
-print("  ✓ router updated with Admin/Volunteer groups")
+print("  ✓ router updated")
 PYEOF
 
-# We need to split MyScheduleRoutes out of scheduling routes
-python3 - <<'PYEOF'
-from pathlib import Path
-p = Path("internal/scheduling/routes.go")
-src = p.read_text()
-
-if 'func (m *Module) MyScheduleRoutes' not in src:
-    # 1. Remove my-schedule from Routes()
-    src = src.replace(
-        '''	// Volunteer self-service
-	r.Get("/my-schedule", m.handler.MySchedule)
-	r.Post("/my-schedule/{ppid}/respond", m.handler.RespondToAssignment)''',
-        ''
-    )
-
-    # 2. Add it as a new method
-    src += '''
-
-// MyScheduleRoutes are accessible to everyone.
-func (m *Module) MyScheduleRoutes(r chi.Router) {
-	r.Get("/my-schedule", m.handler.MySchedule)
-	r.Post("/my-schedule/{ppid}/respond", m.handler.RespondToAssignment)
-}
-'''
-    p.write_text(src)
-    print("  ✓ scheduling routes split")
-else:
-    print("  · scheduling routes already split")
-PYEOF
-
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "  4/6  Templates: Hide Admin Buttons from Volunteers"
-echo "════════════════════════════════════════════════════════════════"
-python3 - <<'PYEOF'
-from pathlib import Path
-
-# Songs list: Hide "Add song" and "Import" for volunteers
-p = Path("internal/songs/templates/list.html")
-src = p.read_text()
-if '{{if eq .CurrentUser.Role "admin"}}' not in src:
-    src = src.replace(
-        '<p>\n    <a class="button" href="/songs/new">Add song</a>',
-        '<p>\n    {{if eq .CurrentUser.Role "admin"}}\n    <a class="button" href="/songs/new">Add song</a>'
-    )
-    src = src.replace(
-        '<a class="button-secondary" href="/songs/tags">Manage tags</a>',
-        '<a class="button-secondary" href="/songs/tags">Manage tags</a>\n    {{end}}'
-    )
-    p.write_text(src)
-    print("  ✓ songs list locked down")
-
-# Song detail: Hide edit/delete for volunteers
-p = Path("internal/songs/templates/detail.html")
-src = p.read_text()
-if '{{if eq .CurrentUser.Role "admin"}}' not in src:
-    # Hide main edit button
-    src = src.replace(
-        '<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>',
-        '{{if eq .CurrentUser.Role "admin"}}<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>{{end}}'
-    )
-    # Hide add arrangement button
-    src = src.replace(
-        '<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>',
-        '{{if eq .CurrentUser.Role "admin"}}<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>{{end}}'
-    )
-    p.write_text(src)
-    print("  ✓ song detail locked down")
-PYEOF
-
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "  5/6  CSS for user menu"
-echo "════════════════════════════════════════════════════════════════"
 cat >> internal/web/static/css/app.css <<'CSSEOF'
 
-/* User Menu */
-.user-menu { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
-.user-name { font-size: 0.9em; color: #666; font-weight: 500; }
-.nav nav a { color: #475467; font-weight: 500; }
-.nav nav a:hover { color: var(--accent); }
+/* Kiosk Check-in */
+.kiosk-container {
+    max-width: 600px;
+    margin: 3rem auto;
+    background: #fff;
+    padding: 3rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+.kiosk-container h1 { font-size: 2.5rem; margin-top: 0; text-align: center; }
+.kiosk-form { display: flex; flex-direction: column; gap: 1.5rem; margin-top: 2rem; }
+.kiosk-form input[type="tel"],
+.kiosk-form input[type="text"] {
+    font-size: 1.5rem;
+    padding: 1rem;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+}
+.kiosk-btn {
+    display: block;
+    width: 100%;
+    font-size: 1.5rem;
+    padding: 1rem;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+}
+.kid-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.5rem;
+    padding: 1rem;
+    background: #f7f9fc;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.kid-checkbox input { width: 2rem; height: 2rem; }
+.security-code {
+    font-family: ui-monospace, monospace;
+    font-size: 4rem;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin: 2rem 0;
+}
+.tag-kid { font-size: 1.25rem; font-weight: bold; }
 CSSEOF
+
+echo "  ✓ CSS added"
 
 echo ""
 echo "════════════════════════════════════════════════════════════════"
-echo "  6/6  Build & Restart"
+echo "  4/4  Build & Restart"
 echo "════════════════════════════════════════════════════════════════"
 if ! go build ./...; then
     echo "✗ build failed — paste errors"
@@ -361,4 +412,4 @@ echo "✓ build OK"
 docker compose -f deploy/docker-compose.yml up -d --build
 echo ""
 echo "✅ Done."
-echo "Log out and log back in to see the new role-based UI."
+echo "Navigate to http://localhost:8080/checkin to test."

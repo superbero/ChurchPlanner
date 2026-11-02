@@ -12,6 +12,11 @@ import (
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 )
 
+
+func isEditorOrAdmin(role string) bool {
+	return role == "admin" || role == "editor"
+}
+
 func funcMap() template.FuncMap {
 	return template.FuncMap{
 		"contains":   strings.Contains,
@@ -24,6 +29,7 @@ func funcMap() template.FuncMap {
 		"lower":      strings.ToLower,
 		"upper":      strings.ToUpper,
 		"languageLabel":   languageLabel,
+		"isEditorOrAdmin": isEditorOrAdmin,
 		"languageOptions": languageOptions,
 	}
 }

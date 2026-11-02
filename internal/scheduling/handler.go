@@ -145,6 +145,21 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 	// not later, so defaulting to "end of the latest time" was confusing.
 	nextStart := plan.ServiceAt
 
+	// Fetch users who are blocked out on the plan's date
+	blockedMap := make(map[string]bool)
+	brows, err := h.plans.DB().Query(r.Context(), `
+		SELECT user_id FROM user_blockouts
+		WHERE starts_on <= $1 AND ends_on >= $1
+	`, plan.ServiceAt.Format("2006-01-02"))
+	if err == nil {
+		for brows.Next() {
+			var uid string
+			brows.Scan(&uid)
+			blockedMap[uid] = true
+		}
+		brows.Close()
+	}
+
 	// Build a map of PositionID -> []User (only those with the skill)
 	usersByPos := make(map[string][]auth.User)
 	for _, pos := range allPositions {
@@ -174,6 +189,7 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		"Users":        users,
 		"UsersByPos":   usersByPos,
 		"AllPositions": allPositions,
+		"BlockedUsers": blockedMap,
 		"NextStart":    nextStart,
 		"HasMultiple":  len(times) > 1,
 	})

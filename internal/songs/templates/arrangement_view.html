@@ -13,15 +13,21 @@
 
 {{if .TranslationMissing}}
 <p class="error">No translation in {{languageLabel .RequestedLang}} yet. Showing primary ({{languageLabel .ResolvedLang}}).
-    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new?lang={{.RequestedLang}}">Add one →</a></p>
+    {{if isEditorOrAdmin .CurrentUser.Role}}
+    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new?lang={{.RequestedLang}}">Add one →</a>
+    {{end}}
+</p>
 {{end}}
 
 {{if .Arrangement.Sequence}}<p><strong>Sequence:</strong> <code>{{.Arrangement.Sequence}}</code></p>{{end}}
 
 <p>
     <a class="button" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf?key={{.DisplayKey}}&lang={{.ResolvedLang}}">Download PDF ({{.DisplayKey}}{{if .ResolvedLang}} · {{languageLabel .ResolvedLang}}{{end}})</a>
+
+    {{if isEditorOrAdmin .CurrentUser.Role}}
     <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>
     <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/history">History</a>
+    {{end}}
 </p>
 
 <h2>Language</h2>
@@ -34,13 +40,17 @@
     <a href="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}?lang={{.Language}}"
        class="lang-chip {{if eq .Language $.ResolvedLang}}active{{end}}">
         {{languageLabel .Language}}
+        {{if isEditorOrAdmin $.CurrentUser.Role}}
         <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/translations/{{.ID}}/delete"
               style="display:inline" onsubmit="return confirm('Delete {{languageLabel .Language}} translation?')">
             <button type="submit" class="link-btn">×</button>
         </form>
+        {{end}}
     </a>
     {{end}}
+    {{if isEditorOrAdmin .CurrentUser.Role}}
     <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new" class="button-secondary">+ Add translation</a>
+    {{end}}
 </div>
 
 <h2>Transpose (transient view)</h2>
@@ -60,27 +70,31 @@
     {{range .Keys}}
     <li>
         <span class="chip">{{.Name}}: {{.Key}}{{if .IsDefault}} (default){{end}}</span>
-        {{if not .IsDefault}}
-            <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/set-default" style="display:inline">
-                <button class="link-btn" type="submit">★</button>
+        {{if isEditorOrAdmin $.CurrentUser.Role}}
+            {{if not .IsDefault}}
+                <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/set-default" style="display:inline">
+                    <button class="link-btn" type="submit">★</button>
+                </form>
+            {{end}}
+            <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Delete key?')">
+                <button class="link-btn" type="submit">×</button>
             </form>
         {{end}}
-        <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Delete key?')">
-            <button class="link-btn" type="submit">×</button>
-        </form>
     </li>
     {{end}}
 </ul>
 {{else}}
-<p class="muted">No named keys. Add one below.</p>
+<p class="muted">No named keys.</p>
 {{end}}
 
+{{if isEditorOrAdmin .CurrentUser.Role}}
 <form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/keys" class="inline-form">
     <input type="text" name="name" placeholder="e.g. Female Key" required>
     <input type="text" name="key" placeholder="A" required size="4">
     <label class="check"><input type="checkbox" name="make_default" value="1"> default</label>
     <button type="submit">Add key</button>
 </form>
+{{end}}
 
 <h2>Chart {{if .ResolvedLang}}· {{languageLabel .ResolvedLang}}{{end}}</h2>
 <div class="chart">
@@ -95,13 +109,15 @@
         {{end}}
     </div>
     {{else}}
-    <p class="muted">No content. Edit this arrangement to add the source.</p>
+    <p class="muted">No content.</p>
     {{end}}
 </div>
 
 {{if .Arrangement.Notes}}<h2>Notes</h2><p>{{.Arrangement.Notes}}</p>{{end}}
 
+{{if isEditorOrAdmin .CurrentUser.Role}}
 <form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete this arrangement and its keys/translations?')">
     <button type="submit" class="link-btn" style="color:#b42318">Delete arrangement</button>
 </form>
+{{end}}
 {{end}}

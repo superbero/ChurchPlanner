@@ -55,11 +55,15 @@ func (r *Repository) Get(ctx context.Context, id string) (auth.User, error) {
 	return u, err
 }
 
-// Update saves profile info.
-func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh string) error {
+// Update saves profile info, including the Role.
+func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh, role string) error {
+	if role == "" {
+		role = "volunteer"
+	}
 	_, err := r.db.Exec(ctx, `
-		UPDATE users SET phone = $2, vocal_low = $3, vocal_high = $4 WHERE id = $1
-	`, id, phone, vocalLow, vocalHigh)
+		UPDATE users SET phone = $2, vocal_low = $3, vocal_high = $4, role = $5
+		WHERE id = $1
+	`, id, phone, vocalLow, vocalHigh, role)
 	return err
 }
 

@@ -1,0 +1,16 @@
+{{define "content"}}
+<div class="kiosk-container" style="text-align: center;">
+    <h1>✅ Checked In</h1>
+    <div class="security-code">{{.Code}}</div>
+    <p>Keep this code to pick up your children.</p>
+
+    <div style="margin-top: 2rem; border-top: 1px dashed #ccc; padding-top: 1rem;">
+        {{range .Kids}}
+        <p class="tag-kid">{{.FirstName}} {{.LastName}}</p>
+        {{end}}
+    </div>
+
+    <button onclick="window.print()" class="kiosk-btn" style="margin-top:2rem">Print Tags</button>
+    <p style="margin-top:1rem"><a href="/checkin">Done</a></p>
+</div>
+{{end}}

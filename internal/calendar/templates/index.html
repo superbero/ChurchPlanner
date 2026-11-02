@@ -20,18 +20,34 @@
     {{range .Days}}
     <div class="cal-day {{if .IsOther}}cal-other{{end}} {{if .IsToday}}cal-today{{end}}">
         <div class="cal-date">
-            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan for this day">+</a>
+            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan">+</a>
             <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-day-num">{{.Date.Format "2"}}</a>
         </div>
-        <div class="cal-plans">
+
+        <div class="cal-events">
             {{range .Plans}}
             <a href="/plans/{{.ID}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
-                <span class="cal-time">{{.TimeStr}}</span>
-                <span class="cal-title">{{.Title}}</span>
+                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
             </a>
+            {{end}}
+
+            {{range .Blockouts}}
+            <div class="cal-blockout" title="{{.Reason}}">
+                🚫 {{.UserName}}
+            </div>
             {{end}}
         </div>
     </div>
     {{end}}
 </div>
+
+<details class="add-blockout-panel">
+    <summary>🚫 Mark me as unavailable (Add Blockout)</summary>
+    <form method="post" action="/calendar/blockouts" class="inline-form">
+        <label>From <input type="date" name="starts_on" required></label>
+        <label>To <input type="date" name="ends_on" required></label>
+        <label>Reason <input type="text" name="reason" placeholder="Vacation, Out of town, etc."></label>
+        <button type="submit">Save Blockout</button>
+    </form>
+</details>
 {{end}}
