@@ -24,7 +24,11 @@
         {{if .Children}}
         <a href="/checkin/retrieve?phone={{.Phone}}" class="button-secondary" style="margin-right: 1rem;">🔍 Retrieve Pickup Code</a>
         {{end}}
+
+        {{if .CurrentUser}}
         <a href="/checkin/family?phone={{.Phone}}">Manage Family / Add Child</a> ·
+        {{end}}
+
         <a href="/checkin">Cancel</a>
     </p>
 </div>

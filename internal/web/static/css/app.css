@@ -544,3 +544,38 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     padding: 2rem;
     margin-bottom: 2rem;
 }
+
+
+/* Team memberships */
+.team-memberships {
+    background: #fff;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+.membership-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .5rem 0;
+    border-bottom: 1px solid #f0f3f7;
+}
+.membership-row:last-child { border-bottom: 0; }
+.membership-name { font-weight: 600; min-width: 10rem; }
+.membership-select {
+    flex: 1;
+    max-width: 20rem;
+    padding: .35rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font: inherit;
+}
+
+/* People list Teams column */
+.team-cell {
+    font-size: 0.9em;
+    color: #475467;
+    max-width: 250px;
+    line-height: 1.4;
+}

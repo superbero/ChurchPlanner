@@ -17,6 +17,7 @@ type Handler struct {
 	svcTypes *ServiceTypeRepository
 	plans    *PlanRepository
 	assign   *AssignmentRepository
+	members  *TeamMembershipRepository
 	renderer *httpx.Renderer
 }
 
@@ -181,21 +182,51 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		usersByPos[pos.ID] = eligible
 	}
 
+	// Compute which positions the current user may edit.
+	var manageableIDs = map[string]bool{}
+	var manageablePositions []Position
+	if u, ok := auth.UserFrom(r.Context()); ok {
+		if u.Role == "admin" {
+			for _, pos := range allPositions {
+				manageableIDs[pos.ID] = true
+			}
+			manageablePositions = allPositions
+		} else {
+			leaderTeams, _ := h.members.LeaderTeams(r.Context(), u.ID)
+			teamSet := map[string]bool{}
+			for _, tid := range leaderTeams {
+				teamSet[tid] = true
+			}
+			for _, pos := range allPositions {
+				if teamSet[pos.TeamID] {
+					manageableIDs[pos.ID] = true
+					manageablePositions = append(manageablePositions, pos)
+				}
+			}
+		}
+	}
+
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_view", map[string]any{
-		"Plan":         plan,
-		"Times":        timeGroups,
-		"Unassigned":   unassigned,
-		"Teams":        tree,
-		"Users":        users,
-		"UsersByPos":   usersByPos,
-		"AllPositions": allPositions,
-		"BlockedUsers": blockedMap,
-		"NextStart":    nextStart,
-		"HasMultiple":  len(times) > 1,
+		"Plan":                   plan,
+		"Times":                  timeGroups,
+		"Unassigned":             unassigned,
+		"Teams":                  tree,
+		"Users":                  users,
+		"UsersByPos":             usersByPos,
+		"AllPositions":           allPositions,
+		"ManageablePositions":    manageablePositions,
+		"ManageablePositionIDs":  manageableIDs,
+		"BlockedUsers":           blockedMap,
+		"NextStart":              nextStart,
+		"HasMultiple":            len(times) > 1,
 	})
 }
 
 func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
+	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
+		http.Error(w, "admin required", http.StatusForbidden)
+		return
+	}
 	plan, err := h.plans.Get(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		http.NotFound(w, r)
@@ -210,6 +241,10 @@ func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
+	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
+		http.Error(w, "admin required", http.StatusForbidden)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	in, err := parsePlanInput(r)
 	if err != nil {
@@ -236,6 +271,10 @@ func (h *Handler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PublishPlan(w http.ResponseWriter, r *http.Request) {
+	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
+		http.Error(w, "admin required", http.StatusForbidden)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	published := r.FormValue("published") == "1"
 	if err := h.plans.Publish(r.Context(), id, published); err != nil {
@@ -246,6 +285,10 @@ func (h *Handler) PublishPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeletePlan(w http.ResponseWriter, r *http.Request) {
+	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
+		http.Error(w, "admin required", http.StatusForbidden)
+		return
+	}
 	if err := h.plans.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -340,6 +383,11 @@ func (h *Handler) AssignPerson(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 		return
 	}
+	allowed, err := h.canManagePosition(r, positionID)
+	if err != nil || !allowed {
+		forbid(w)
+		return
+	}
 	if err := h.assign.AssignPerson(r.Context(), planID, personID, positionID); err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -349,7 +397,16 @@ func (h *Handler) AssignPerson(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RemovePerson(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
-	_ = h.assign.RemovePerson(r.Context(), chi.URLParam(r, "pid"))
+	ppID := chi.URLParam(r, "pid")
+	posID, err := h.members.AssignmentPosition(r.Context(), ppID)
+	if err == nil {
+		allowed, _ := h.canManagePosition(r, posID)
+		if !allowed {
+			forbid(w)
+			return
+		}
+	}
+	_ = h.assign.RemovePerson(r.Context(), ppID)
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
 
@@ -535,6 +592,11 @@ func (h *Handler) AddNeededPosition(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	positionID := strings.TrimSpace(r.FormValue("position_id"))
 	if positionID != "" {
+		allowed, _ := h.canManagePosition(r, positionID)
+		if !allowed {
+			forbid(w)
+			return
+		}
 		_ = h.assign.AddNeededPosition(r.Context(), planID, positionID)
 	}
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
@@ -543,6 +605,11 @@ func (h *Handler) AddNeededPosition(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveNeededPosition(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	posID := chi.URLParam(r, "posid")
+	allowed, _ := h.canManagePosition(r, posID)
+	if !allowed {
+		forbid(w)
+		return
+	}
 	_ = h.assign.RemoveNeededPosition(r.Context(), planID, posID)
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
@@ -560,4 +627,26 @@ func (h *Handler) ReorderTimes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+
+// canManagePosition returns true if the current user can manage assignments
+// and position mutations for this position. Admins always pass.
+func (h *Handler) canManagePosition(r *http.Request, positionID string) (bool, error) {
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		return false, nil
+	}
+	if u.Role == "admin" {
+		return true, nil
+	}
+	teamID, err := h.members.PositionTeamID(r.Context(), positionID)
+	if err != nil {
+		return false, err
+	}
+	return h.members.CanManageTeam(r.Context(), u.ID, teamID)
+}
+
+func forbid(w http.ResponseWriter) {
+	http.Error(w, "forbidden: not a leader of this team", http.StatusForbidden)
 }

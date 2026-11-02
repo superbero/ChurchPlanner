@@ -5,8 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{block "title" .}}Church Planner{{end}}</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=11">
-    <script src="/static/js/app.js?v=10" defer></script>
+    <link rel="stylesheet" href="/static/css/app.css?v=14">
+    <script src="/static/js/app.js?v=11" defer></script>
 </head>
 <body>
     <header class="nav">
@@ -27,6 +27,7 @@
                     <a href="/calendar">Calendar</a>
                     <a href="/songs">Songs</a>
                 {{end}}
+                <a href="/checkin" target="_blank" title="Opens kiosk in a new tab">Check-in</a>
             {{end}}
         </nav>
         {{if .CurrentUser}}

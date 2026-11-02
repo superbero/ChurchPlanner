@@ -8,25 +8,33 @@ import (
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 )
 
-type UserWithSkills struct {
-	auth.User
-	Skills string
-}
-
 type Repository struct{ db *pgxpool.Pool }
 
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
-// List returns all users with their profiles and a comma-separated list of skills.
+type UserWithSkills struct {
+	auth.User
+	Skills    string
+	TeamRoles string
+}
+
 func (r *Repository) List(ctx context.Context) ([]UserWithSkills, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT u.id, u.name, u.email, u.role, u.phone, u.vocal_low, u.vocal_high,
-		       COALESCE(string_agg(t.name || ' · ' || p.name, ', ' ORDER BY t.name, p.position), '') AS skills
+		       COALESCE((
+		           SELECT string_agg(t.name || ' · ' || p.name, ', ' ORDER BY t.name, p.position)
+		           FROM user_positions up
+		           JOIN positions p ON p.id = up.position_id
+		           JOIN teams t ON t.id = p.team_id
+		           WHERE up.user_id = u.id
+		       ), ''),
+		       COALESCE((
+		           SELECT string_agg(t.name || ' (' || tm.role || ')', ', ' ORDER BY t.name)
+		           FROM team_memberships tm
+		           JOIN teams t ON t.id = tm.team_id
+		           WHERE tm.user_id = u.id
+		       ), '')
 		FROM users u
-		LEFT JOIN user_positions up ON up.user_id = u.id
-		LEFT JOIN positions p ON p.id = up.position_id
-		LEFT JOIN teams t ON t.id = p.team_id
-		GROUP BY u.id
 		ORDER BY u.name
 	`)
 	if err != nil {
@@ -37,7 +45,8 @@ func (r *Repository) List(ctx context.Context) ([]UserWithSkills, error) {
 	var out []UserWithSkills
 	for rows.Next() {
 		var u UserWithSkills
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Phone, &u.VocalLow, &u.VocalHigh, &u.Skills); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role,
+			&u.Phone, &u.VocalLow, &u.VocalHigh, &u.Skills, &u.TeamRoles); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -45,7 +54,6 @@ func (r *Repository) List(ctx context.Context) ([]UserWithSkills, error) {
 	return out, rows.Err()
 }
 
-// Get returns a single user.
 func (r *Repository) Get(ctx context.Context, id string) (auth.User, error) {
 	var u auth.User
 	err := r.db.QueryRow(ctx, `
@@ -55,7 +63,20 @@ func (r *Repository) Get(ctx context.Context, id string) (auth.User, error) {
 	return u, err
 }
 
-// Update saves profile info, including the Role.
+func (r *Repository) Create(ctx context.Context, name, email, password, role string) (string, error) {
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return "", err
+	}
+	var id string
+	err = r.db.QueryRow(ctx, `
+		INSERT INTO users (name, email, password_hash, role)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id
+	`, name, email, hash, role).Scan(&id)
+	return id, err
+}
+
 func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh, role string) error {
 	if role == "" {
 		role = "volunteer"
@@ -67,7 +88,6 @@ func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh,
 	return err
 }
 
-// PositionsFor returns the position IDs a user is skilled in.
 func (r *Repository) PositionsFor(ctx context.Context, userID string) ([]string, error) {
 	rows, err := r.db.Query(ctx, `SELECT position_id FROM user_positions WHERE user_id = $1`, userID)
 	if err != nil {
@@ -85,7 +105,6 @@ func (r *Repository) PositionsFor(ctx context.Context, userID string) ([]string,
 	return out, rows.Err()
 }
 
-// SetPositions replaces all skills for a user.
 func (r *Repository) SetPositions(ctx context.Context, userID string, positionIDs []string) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -104,18 +123,31 @@ func (r *Repository) SetPositions(ctx context.Context, userID string, positionID
 	return tx.Commit(ctx)
 }
 
+type TeamRole struct {
+	TeamID   string
+	TeamName string
+	Role     string
+}
 
-// Create inserts a new user, hashing the password.
-func (r *Repository) Create(ctx context.Context, name, email, password, role string) (string, error) {
-	hash, err := auth.HashPassword(password)
+func (r *Repository) TeamRolesFor(ctx context.Context, userID string) ([]TeamRole, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT t.id, t.name, tm.role
+		FROM team_memberships tm
+		JOIN teams t ON t.id = tm.team_id
+		WHERE tm.user_id = $1
+		ORDER BY t.name
+	`, userID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	var id string
-	err = r.db.QueryRow(ctx, `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id
-	`, name, email, hash, role).Scan(&id)
-	return id, err
+	defer rows.Close()
+	var out []TeamRole
+	for rows.Next() {
+		var t TeamRole
+		if err := rows.Scan(&t.TeamID, &t.TeamName, &t.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }

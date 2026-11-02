@@ -4,18 +4,18 @@
 
 <div class="profile-grid">
     <form method="post" action="/people/{{.User.ID}}" class="profile-form">
-        <h2>Contact &amp; Vocal Info</h2>
+
+        <h2>Account</h2>
         <label>Email <input value="{{.User.Email}}" disabled></label>
         <label>Role
             <select name="role">
                 <option value="volunteer" {{if eq .User.Role "volunteer"}}selected{{end}}>Volunteer (Scheduled Viewer)</option>
-                <option value="guest" {{if eq .User.Role "guest"}}selected{{end}}>Guest</option>
-                <option value="editor" {{if eq .User.Role "editor"}}selected{{end}}>Editor</option>
-                <option value="admin" {{if eq .User.Role "admin"}}selected{{end}}>Admin</option>
+                <option value="guest"     {{if eq .User.Role "guest"}}selected{{end}}>Guest</option>
+                <option value="editor"    {{if eq .User.Role "editor"}}selected{{end}}>Editor</option>
+                <option value="admin"     {{if eq .User.Role "admin"}}selected{{end}}>Admin</option>
             </select>
         </label>
         <label>Phone <input name="phone" value="{{.User.Phone}}" placeholder="555-0100"></label>
-
         <div class="row">
             <label>Vocal Low <input name="vocal_low" value="{{.User.VocalLow}}" size="4" placeholder="A3"></label>
             <label>Vocal High <input name="vocal_high" value="{{.User.VocalHigh}}" size="4" placeholder="E5"></label>
@@ -24,7 +24,6 @@
         <h2>Skills / Instruments</h2>
         <p class="muted">Add the positions this person is comfortable filling.</p>
 
-        <!-- Panel of active skills -->
         <div id="active-skills" class="active-skills-panel">
             {{range .Positions}}
                 {{if index $.SkillMap .ID}}
@@ -37,7 +36,6 @@
             {{end}}
         </div>
 
-        <!-- Dropdown to add new skill -->
         <div class="add-skill-row">
             <select id="skill-picker">
                 <option value="">— Select a skill to add —</option>
@@ -48,6 +46,24 @@
                 {{end}}
             </select>
             <button type="button" id="add-skill-btn" class="button-secondary">Add</button>
+        </div>
+
+        <h2>Team Memberships</h2>
+        <p class="muted">Leaders can manage plans for their team without admin access to People or Reports.</p>
+        <div class="team-memberships">
+            {{range .Teams}}
+            {{$currentRole := index $.MembershipRoles .ID}}
+            <div class="membership-row">
+                <span class="membership-name">{{.Name}}</span>
+                <select name="team_role_{{.ID}}" class="membership-select">
+                    <option value=""       {{if eq $currentRole ""}}selected{{end}}>— not a member —</option>
+                    <option value="member" {{if eq $currentRole "member"}}selected{{end}}>Member</option>
+                    <option value="leader" {{if eq $currentRole "leader"}}selected{{end}}>Leader (can manage plans)</option>
+                </select>
+            </div>
+            {{else}}
+            <p class="muted">No teams configured.</p>
+            {{end}}
         </div>
 
         <p style="margin-top:1.5rem">

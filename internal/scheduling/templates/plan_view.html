@@ -206,6 +206,7 @@
                         {{end}}
                     </td>
                     <td class="pos-assign">
+                        {{if index $.ManageablePositionIDs .PositionID}}
                         <form method="post" action="/plans/{{$.Plan.ID}}/people" class="inline-form">
                             <input type="hidden" name="position_id" value="{{.PositionID}}">
                             <select name="person_id" required>
@@ -219,6 +220,9 @@
                             </select>
                             <button type="submit" class="link-btn" title="Assign">+</button>
                         </form>
+                        {{else}}
+                        <span class="muted">—</span>
+                        {{end}}
                     </td>
                     <td class="pos-remove">
                         <form method="post" action="/plans/{{$.Plan.ID}}/positions/{{.PositionID}}/delete"
@@ -236,17 +240,20 @@
 <p class="muted">No positions required yet. Add the instruments and vocalists you need for this service.</p>
 {{end}}
 
+{{if .ManageablePositions}}
 <h3>Add a needed position</h3>
 <form method="post" action="/plans/{{.Plan.ID}}/positions" class="inline-form">
     <select name="position_id" required>
         <option value="">— pick a position —</option>
-        {{range .AllPositions}}
+        {{range .ManageablePositions}}
         <option value="{{.ID}}">{{.TeamName}} · {{.Name}}</option>
         {{end}}
     </select>
     <button type="submit">Add</button>
 </form>
+{{end}}
 
+{{if eq .CurrentUser.Role "admin"}}
 <footer class="plan-footer">
     <form method="post" action="/plans/{{.Plan.ID}}/publish" class="publish-form">
         <input type="hidden" name="published" value="{{if .Plan.Published}}0{{else}}1{{end}}">
@@ -259,4 +266,5 @@
         <button type="submit" class="link-btn danger">Delete plan</button>
     </form>
 </footer>
+{{end}}
 {{end}}

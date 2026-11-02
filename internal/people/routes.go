@@ -26,9 +26,10 @@ type Module struct{ handler *Handler }
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	return &Module{handler: &Handler{
-		repo:      NewRepository(db),
-		schedRepo: scheduling.NewAssignmentRepository(db),
-		renderer:  renderer,
+		repo:        NewRepository(db),
+		schedRepo:   scheduling.NewAssignmentRepository(db),
+		memberships: scheduling.NewTeamMembershipRepository(db),
+		renderer:    renderer,
 	}}
 }
 

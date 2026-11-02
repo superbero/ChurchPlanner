@@ -14,10 +14,10 @@ import (
 	"github.com/yourchurch/churchplanner/internal/checkin"
 	"github.com/yourchurch/churchplanner/internal/communications"
 	"github.com/yourchurch/churchplanner/internal/people"
-	"github.com/yourchurch/churchplanner/internal/reports"
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/config"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
+	"github.com/yourchurch/churchplanner/internal/reports"
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 	"github.com/yourchurch/churchplanner/internal/songs"
 )
@@ -47,7 +47,6 @@ func NewRouter(d Deps) (http.Handler, error) {
 	if err := renderer.Add("web", sub, "login.html"); err != nil {
 		return nil, err
 	}
-	// Every module appears exactly once here.
 	for _, add := range []struct {
 		prefix string
 		fsys   fs.FS
@@ -56,6 +55,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		{"scheduling", scheduling.Templates()},
 		{"people", people.Templates()},
 		{"calendar", calendar.Templates()},
+		{"reports", reports.Templates()},
 		{"checkin", checkin.Templates()},
 		{"communications", communications.Templates()},
 	} {
@@ -79,7 +79,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// --- public: login ---
+	// --- Public: login ---
 	r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
 		renderer.Render(w, r, http.StatusOK, "web_login", nil)
 	})
@@ -103,7 +103,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
 
-	// --- modules: construct once, mount once ---
+	// --- Modules: construct once, mount once ---
 	songsModule := songs.New(d.DB, renderer, songs.HandlerConfig{
 		PublicBaseURL:   d.Config.PublicBaseURL,
 		TranslateAPIURL: d.Config.TranslateAPIURL,
@@ -111,35 +111,75 @@ func NewRouter(d Deps) (http.Handler, error) {
 		PrimaryLanguage: d.Config.PrimaryLanguage,
 	})
 	schedulingModule := scheduling.New(d.DB, renderer)
+	checkinModule := checkin.New(d.DB, renderer)
 
+	// Public: no auth required
 	songsModule.PublicRoutes(r)
+	checkinModule.PublicRoutes(r)
 
+	// teamLeaderOrAdmin: allows admin OR any user with a leader row in team_memberships.
+	// Used only to gate the /plans subrouter — per-position writes are further
+	// restricted inside the scheduling handlers via canManagePosition().
+	teamLeaderOrAdmin := func(next http.Handler) http.Handler {
+		return authn.RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, ok := auth.UserFrom(r.Context())
+			if !ok {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+			if u.Role == "admin" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			var isLeader bool
+			_ = d.DB.QueryRow(r.Context(),
+				`SELECT EXISTS(SELECT 1 FROM team_memberships WHERE user_id = $1 AND role = 'leader')`,
+				u.ID).Scan(&isLeader)
+			if isLeader {
+				next.ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, "forbidden", http.StatusForbidden)
+		}))
+	}
+
+	// --- Authenticated area ---
 	r.Group(func(r chi.Router) {
 		r.Use(authn.RequireUser)
 
-		// Dashboard (redirects based on role)
+		// Dashboard
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			u, _ := auth.UserFrom(r.Context())
 			if u.Role == "admin" {
 				http.Redirect(w, r, "/plans", http.StatusSeeOther)
-			} else {
-				http.Redirect(w, r, "/my-schedule", http.StatusSeeOther)
+				return
 			}
+			var isLeader bool
+			_ = d.DB.QueryRow(r.Context(),
+				`SELECT EXISTS(SELECT 1 FROM team_memberships WHERE user_id = $1 AND role = 'leader')`,
+				u.ID).Scan(&isLeader)
+			if isLeader {
+				http.Redirect(w, r, "/plans", http.StatusSeeOther)
+				return
+			}
+			http.Redirect(w, r, "/my-schedule", http.StatusSeeOther)
 		})
 
-		// --- Shared (Volunteer + Admin) ---
+		// Shared across all logged-in users
 		schedulingModule.MyScheduleRoutes(r)
 		calendar.New(d.DB, renderer).Routes(r)
-		checkin.New(d.DB, renderer).Routes(r)
-
-		// Songs (Volunteers can view/list, but Edit buttons will be handled in templates)
+		checkinModule.StaffRoutes(r)
 		songsModule.Routes(r, authn)
 
-		// --- Admin Only ---
+		// /plans: admins + team leaders (per-position writes further scoped)
+		r.Group(func(r chi.Router) {
+			r.Use(teamLeaderOrAdmin)
+			schedulingModule.Routes(r)
+		})
+
+		// Admin only
 		r.Group(func(r chi.Router) {
 			r.Use(authn.RequireRoles("admin"))
-
-			schedulingModule.Routes(r) // Plans, Times, Items, Assignments
 			people.New(d.DB, renderer).Routes(r)
 			reports.New(d.DB, renderer).Routes(r)
 		})

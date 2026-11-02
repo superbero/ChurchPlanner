@@ -1,6 +1,7 @@
 package people
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -11,9 +12,10 @@ import (
 )
 
 type Handler struct {
-	repo     *Repository
-	schedRepo *scheduling.AssignmentRepository
-	renderer *httpx.Renderer
+	repo        *Repository
+	schedRepo   *scheduling.AssignmentRepository
+	memberships *scheduling.TeamMembershipRepository
+	renderer    *httpx.Renderer
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -34,26 +36,47 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
 	positions, err := h.schedRepo.ListPositions(r.Context())
 	if err != nil {
+		slog.Error("ListPositions", "err", err)
 		httpx.ServerError(w, err)
 		return
 	}
+	teams, err := h.schedRepo.ListTeams(r.Context())
+	if err != nil {
+		slog.Error("ListTeams", "err", err)
+		httpx.ServerError(w, err)
+		return
+	}
+
 	userSkills, err := h.repo.PositionsFor(r.Context(), id)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
-
 	skillMap := map[string]bool{}
 	for _, s := range userSkills {
 		skillMap[s] = true
 	}
 
+	teamRoles, err := h.repo.TeamRolesFor(r.Context(), id)
+	if err != nil {
+		slog.Error("TeamRolesFor", "err", err)
+		httpx.ServerError(w, err)
+		return
+	}
+	membershipRoles := map[string]string{}
+	for _, tr := range teamRoles {
+		membershipRoles[tr.TeamID] = tr.Role
+	}
+
 	h.renderer.Render(w, r, http.StatusOK, "people_view", map[string]any{
-		"User":      user,
-		"Positions": positions,
-		"SkillMap":  skillMap,
+		"User":            user,
+		"Positions":       positions,
+		"SkillMap":        skillMap,
+		"Teams":           teams,
+		"MembershipRoles": membershipRoles,
 	})
 }
 
@@ -62,9 +85,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	phone := strings.TrimSpace(r.FormValue("phone"))
 	vLow := strings.TrimSpace(r.FormValue("vocal_low"))
 	vHigh := strings.TrimSpace(r.FormValue("vocal_high"))
-	role := strings.TrimSpace(r.FormValue("role"))
+	userRole := strings.TrimSpace(r.FormValue("role"))
 
-	if err := h.repo.Update(r.Context(), id, phone, vLow, vHigh, role); err != nil {
+	if err := h.repo.Update(r.Context(), id, phone, vLow, vHigh, userRole); err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
@@ -75,9 +98,25 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	memberships := map[string]string{}
+	for key, values := range r.Form {
+		if !strings.HasPrefix(key, "team_role_") || len(values) == 0 {
+			continue
+		}
+		teamRole := strings.TrimSpace(values[0])
+		if teamRole == "" {
+			continue
+		}
+		teamID := strings.TrimPrefix(key, "team_role_")
+		memberships[teamID] = teamRole
+	}
+	if err := h.memberships.SetForUser(r.Context(), id, memberships); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
 	http.Redirect(w, r, "/people/"+id, http.StatusSeeOther)
 }
-
 
 func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, r, http.StatusOK, "people_form", nil)
@@ -92,18 +131,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		role = "volunteer"
 	}
 
-	_, err := h.repo.Create(r.Context(), name, email, password, role)
-	if err != nil {
+	if _, err := h.repo.Create(r.Context(), name, email, password, role); err != nil {
 		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "people_form", map[string]any{
-			"Error": err.Error(),
-			"Name":  name,
-			"Email": email,
-			"Role":  role,
+			"Error": err.Error(), "Name": name, "Email": email, "Role": role,
 		})
 		return
 	}
-
-	// Redirect to the new user's profile to fill out skills
-	// (We'd need the ID, but for simplicity we just go back to the list)
 	http.Redirect(w, r, "/people", http.StatusSeeOther)
 }

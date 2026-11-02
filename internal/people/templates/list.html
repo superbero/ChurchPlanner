@@ -10,6 +10,7 @@
             <th>Email</th>
             <th>Phone</th>
             <th>Vocal Range</th>
+            <th>Team(s)</th>
             <th>Skills / Instruments</th>
             <th></th>
         </tr>
@@ -21,11 +22,12 @@
             <td>{{.Email}}</td>
             <td>{{.Phone}}</td>
             <td>{{if .VocalLow}}{{.VocalLow}} – {{.VocalHigh}}{{end}}</td>
-            <td class="skills-cell">{{.Skills}}</td>
+            <td class="team-cell">{{if .TeamRoles}}{{.TeamRoles}}{{else}}<span class="muted">—</span>{{end}}</td>
+            <td class="skills-cell">{{if .Skills}}{{.Skills}}{{else}}<span class="muted">—</span>{{end}}</td>
             <td><a href="/people/{{.ID}}">Edit</a></td>
         </tr>
     {{else}}
-        <tr><td colspan="6">No people found.</td></tr>
+        <tr><td colspan="7">No people found.</td></tr>
     {{end}}
     </tbody>
 </table>

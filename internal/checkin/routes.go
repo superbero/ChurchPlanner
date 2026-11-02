@@ -27,18 +27,21 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	return &Module{handler: &Handler{db: db, renderer: renderer}}
 }
 
-func (m *Module) Routes(r chi.Router) {
-	r.Route("/checkin", func(r chi.Router) {
-		r.Get("/", m.handler.Index)
-		r.Get("/add", m.handler.AddChildForm)
-		r.Post("/add", m.handler.AddChild)
-		r.Post("/submit", m.handler.Submit)
-		r.Get("/retrieve", m.handler.RetrieveCode)
-		r.Get("/family", m.handler.ManageFamily)
-		r.Get("/child/{id}/edit", m.handler.EditChildForm)
-		r.Post("/child/{id}", m.handler.UpdateChild)
-		r.Post("/child/{id}/delete", m.handler.DeleteChild)
-		r.Post("/guardian", m.handler.AddGuardian)
-		r.Post("/guardian/{id}/delete", m.handler.DeleteGuardian)
-	})
+// PublicRoutes are available to parents on a lobby kiosk without login.
+func (m *Module) PublicRoutes(r chi.Router) {
+	r.Get("/checkin", m.handler.Index)
+	r.Get("/checkin/add", m.handler.AddChildForm)
+	r.Post("/checkin/add", m.handler.AddChild)
+	r.Post("/checkin/submit", m.handler.Submit)
+	r.Get("/checkin/retrieve", m.handler.RetrieveCode)
+}
+
+// StaffRoutes are for logged-in admins/volunteers to manage family data.
+func (m *Module) StaffRoutes(r chi.Router) {
+	r.Get("/checkin/family", m.handler.ManageFamily)
+	r.Get("/checkin/child/{id}/edit", m.handler.EditChildForm)
+	r.Post("/checkin/child/{id}", m.handler.UpdateChild)
+	r.Post("/checkin/child/{id}/delete", m.handler.DeleteChild)
+	r.Post("/checkin/guardian", m.handler.AddGuardian)
+	r.Post("/checkin/guardian/{id}/delete", m.handler.DeleteGuardian)
 }
