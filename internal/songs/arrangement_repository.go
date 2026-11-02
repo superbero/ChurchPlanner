@@ -20,13 +20,14 @@ func NewArrangementRepository(db *pgxpool.Pool) *ArrangementRepository {
 }
 
 const arrangementColumns = `id, song_id, name, bpm, meter, length_seconds,
-	sequence, notes, original_key, source_content, format,
+	sequence, notes, original_key, source_content, format, primary_language,
 	lyrics, chords, is_default, archived, created_at, updated_at`
 
 func scanArrangement(row pgx.Row) (Arrangement, error) {
 	var a Arrangement
 	err := row.Scan(&a.ID, &a.SongID, &a.Name, &a.BPM, &a.Meter, &a.LengthSeconds,
 		&a.Sequence, &a.Notes, &a.OriginalKey, &a.SourceContent, &a.Format,
+		&a.PrimaryLanguage,
 		&a.Lyrics, &a.Chords, &a.IsDefault, &a.Archived,
 		&a.CreatedAt, &a.UpdatedAt)
 	return a, err
@@ -94,16 +95,20 @@ func (r *ArrangementRepository) Create(ctx context.Context, songID string, in Cr
 	if format == "" {
 		format = "manual"
 	}
+	primaryLang := in.PrimaryLanguage
+	if primaryLang == "" {
+		primaryLang = "en"
+	}
 	a, err := scanArrangement(tx.QueryRow(ctx, `
 		INSERT INTO song_arrangements (
 			song_id, name, bpm, meter, length_seconds,
-			sequence, notes, original_key, source_content, format,
+			sequence, notes, original_key, source_content, format, primary_language,
 			lyrics, chords,
 			is_default, archived
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 		RETURNING `+arrangementColumns,
 		songID, in.Name, in.BPM, in.Meter, in.LengthSeconds,
-		in.Sequence, in.Notes, in.OriginalKey, in.SourceContent, format,
+		in.Sequence, in.Notes, in.OriginalKey, in.SourceContent, format, primaryLang,
 		in.Lyrics, in.Chords,
 		isDefault, in.Archived))
 	if err != nil {
@@ -153,15 +158,25 @@ func (r *ArrangementRepository) Update(ctx context.Context, id string, in Create
 		return Arrangement{}, err
 	}
 
+	updFormat := in.Format
+	if updFormat == "" {
+		updFormat = "chordpro"
+	}
+	primaryLang := in.PrimaryLanguage
+	if primaryLang == "" {
+		primaryLang = "en"
+	}
 	a, err := scanArrangement(tx.QueryRow(ctx, `
 		UPDATE song_arrangements SET
 			name=$2, bpm=$3, meter=$4, length_seconds=$5,
 			sequence=$6, notes=$7, original_key=$8, source_content=$9,
-			lyrics=$10, chords=$11, archived=$12, updated_at=now()
+			format=$10, primary_language=$11, lyrics=$12, chords=$13,
+			archived=$14, updated_at=now()
 		WHERE id=$1
 		RETURNING `+arrangementColumns,
 		id, in.Name, in.BPM, in.Meter, in.LengthSeconds,
 		in.Sequence, in.Notes, in.OriginalKey, in.SourceContent,
+		updFormat, primaryLang,
 		lyrics, chords, in.Archived))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Arrangement{}, ErrArrangementNotFound

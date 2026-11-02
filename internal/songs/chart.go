@@ -6,7 +6,7 @@ import (
 
 // BuildChart renders an arrangement's chart in the given key.
 // If displayKey is empty, arrangement's original_key is used.
-func BuildChart(a *Arrangement, displayKey string) []RenderedSection {
+func BuildChart(a *Arrangement, translation *ArrangementTranslation, displayKey string) []RenderedSection {
 	if a == nil {
 		return nil
 	}
@@ -14,10 +14,17 @@ func BuildChart(a *Arrangement, displayKey string) []RenderedSection {
 	source := a.SourceContent
 	lyrics := a.Lyrics
 	chords := a.Chords
+	format := a.Format
+	if translation != nil {
+		source = translation.SourceContent
+		lyrics = translation.Lyrics
+		chords = translation.Chords
+		format = translation.Format
+	}
 
 	// If source is present, reparse so section directives are respected.
 	var sections []Section
-	switch a.Format {
+	switch format {
 	case "chordpro", "":
 		sections = ParseSections(source)
 	case "opensong":

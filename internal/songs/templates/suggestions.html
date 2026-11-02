@@ -1,0 +1,44 @@
+{{define "content"}}
+<p><a href="/songs">← All songs</a></p>
+<h1>Suggestions</h1>
+<p class="muted">Ranked by last use, recency, overuse, key fit, and drift.</p>
+
+<form method="get" action="/songs/suggest" class="filter-bar">
+    <select name="tag" multiple size="4" class="tag-multi">
+        {{range .TagGroups}}
+            <optgroup label="{{.Group.Name}}">
+                {{range .Tags}}
+                    <option value="{{.Slug}}" {{if index $.SelectedTagSlugs .Slug}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </optgroup>
+        {{end}}
+    </select>
+    <input type="text" name="key" placeholder="Preferred key (optional)" value="{{.Key}}" size="8">
+    <input type="number" name="limit" value="{{.Limit}}" min="1" max="100" style="width:5rem">
+    <input type="hidden" name="run" value="1">
+    <button type="submit">Suggest</button>
+</form>
+
+{{if .Ran}}
+    {{if .Songs}}
+    <div class="suggestion-grid">
+        {{range .Songs}}
+        <div class="suggestion-card">
+            <h3><a href="/songs/{{.SongID}}">{{.SongTitle}}</a></h3>
+            <p class="muted">{{.SongAuthor}}</p>
+            <p><strong>Score:</strong> {{printf "%.0f" .Score}} / 100</p>
+            {{if .ArrangementName}}
+            <p class="muted">{{.ArrangementName}} · {{.Key}}</p>
+            {{end}}
+            <p class="suggestion-reason">{{.Reason}}</p>
+            {{if .ArrangementID}}
+            <p><a class="button-secondary" href="/songs/{{.SongID}}/arrangements/{{.ArrangementID}}">Open chart</a></p>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <p class="muted">No songs matched those tags.</p>
+    {{end}}
+{{end}}
+{{end}}

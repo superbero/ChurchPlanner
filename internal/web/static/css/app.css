@@ -112,3 +112,23 @@ tr.archived td { opacity: .6; }
 /* Practice page */
 .practice { max-width: 900px; }
 .video-embed iframe { max-width: 100%; aspect-ratio: 16/9; height: auto; }
+
+/* Language picker */
+.lang-picker, .lang-switcher { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .75rem 0 1.25rem; }
+.lang-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .35rem .7rem; background: #fff; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; color: var(--fg); font-size: .9em; }
+.lang-chip:hover { border-color: var(--accent); }
+.lang-chip.active { border-color: var(--accent); background: #eef2f7; font-weight: 600; }
+.lang-chip form { margin: 0; }
+.lang-chip .link-btn { padding: 0 .15rem; font-size: 1em; }
+
+/* Primary source disclosure in translation form */
+.primary-source { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: .75rem 1rem; margin-bottom: 1rem; }
+.primary-source summary { cursor: pointer; font-weight: 600; }
+.primary-source pre { white-space: pre-wrap; word-wrap: break-word; font-size: .85em; margin: .5rem 0 0; }
+
+/* Suggestion cards */
+.suggestion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.suggestion-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+.suggestion-card h3 { margin: 0 0 .25rem; font-size: 1.05em; }
+.suggestion-card h3 a { color: var(--accent); text-decoration: none; }
+.suggestion-reason { color: #475467; font-size: .9em; margin: .5rem 0; }

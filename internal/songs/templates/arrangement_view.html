@@ -5,22 +5,48 @@
 <div class="meta">
     <span><strong>Key:</strong> {{.DisplayKey}}{{if .Offset}} ({{if gt .Offset 0}}+{{end}}{{.Offset}}){{end}}</span>
     {{if .Arrangement.OriginalKey}}<span><strong>Original:</strong> {{.Arrangement.OriginalKey}}</span>{{end}}
+    {{if .Arrangement.PrimaryLanguage}}<span><strong>Language:</strong> {{languageLabel .ResolvedLang}}</span>{{end}}
     {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
     {{if .Arrangement.Meter}}<span><strong>Meter:</strong> {{.Arrangement.Meter}}</span>{{end}}
     {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
 </div>
 
+{{if .TranslationMissing}}
+<p class="error">No translation in {{languageLabel .RequestedLang}} yet. Showing primary ({{languageLabel .ResolvedLang}}).
+    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new?lang={{.RequestedLang}}">Add one →</a></p>
+{{end}}
+
 {{if .Arrangement.Sequence}}<p><strong>Sequence:</strong> <code>{{.Arrangement.Sequence}}</code></p>{{end}}
 
 <p>
-    <a class="button" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf?key={{.DisplayKey}}">Download PDF ({{.DisplayKey}})</a>
+    <a class="button" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf?key={{.DisplayKey}}&lang={{.ResolvedLang}}">Download PDF ({{.DisplayKey}}{{if .ResolvedLang}} · {{languageLabel .ResolvedLang}}{{end}})</a>
     <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>
     <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/history">History</a>
 </p>
 
+<h2>Language</h2>
+<div class="lang-picker">
+    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}"
+       class="lang-chip {{if eq .ResolvedLang .Arrangement.PrimaryLanguage}}active{{end}}">
+        {{languageLabel .Arrangement.PrimaryLanguage}} <span class="muted">(primary)</span>
+    </a>
+    {{range .Translations}}
+    <a href="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}?lang={{.Language}}"
+       class="lang-chip {{if eq .Language $.ResolvedLang}}active{{end}}">
+        {{languageLabel .Language}}
+        <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/translations/{{.ID}}/delete"
+              style="display:inline" onsubmit="return confirm('Delete {{languageLabel .Language}} translation?')">
+            <button type="submit" class="link-btn">×</button>
+        </form>
+    </a>
+    {{end}}
+    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new" class="button-secondary">+ Add translation</a>
+</div>
+
 <h2>Transpose (transient view)</h2>
 <form method="get" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}" class="transpose">
     <input type="hidden" name="key" value="{{.DisplayKey}}">
+    {{if .ResolvedLang}}<input type="hidden" name="lang" value="{{.ResolvedLang}}">{{end}}
     <button name="semitones" value="-2">−2</button>
     <button name="semitones" value="-1">−1</button>
     <button name="semitones" value="0">reset</button>
@@ -56,7 +82,7 @@
     <button type="submit">Add key</button>
 </form>
 
-<h2>Chart</h2>
+<h2>Chart {{if .ResolvedLang}}· {{languageLabel .ResolvedLang}}{{end}}</h2>
 <div class="chart">
     {{range .Chart}}
     <div class="chart-section">
@@ -75,7 +101,7 @@
 
 {{if .Arrangement.Notes}}<h2>Notes</h2><p>{{.Arrangement.Notes}}</p>{{end}}
 
-<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete this arrangement and its keys?')">
+<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete this arrangement and its keys/translations?')">
     <button type="submit" class="link-btn" style="color:#b42318">Delete arrangement</button>
 </form>
 {{end}}

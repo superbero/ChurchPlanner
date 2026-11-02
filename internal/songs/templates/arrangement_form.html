@@ -25,6 +25,17 @@
         </select>
     </label>
 
+    <label>Primary language
+        <select name="primary_language">
+            {{$primary := .Arrangement.PrimaryLanguage}}
+            {{if not $primary}}{{$primary = "en"}}{{end}}
+            {{range languageOptions}}
+                <option value="{{.Code}}" {{if eq .Code $primary}}selected{{end}}>{{.Label}}</option>
+            {{end}}
+        </select>
+    </label>
+    <p class="muted">Translations in other languages are managed from the arrangement's detail page.</p>
+
     <label>Source (ChordPro, OpenSong XML, or plain lyrics)
         <textarea name="source_content" rows="16" style="font-family: monospace">{{.Arrangement.SourceContent}}</textarea>
     </label>

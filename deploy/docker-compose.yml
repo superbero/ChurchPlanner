@@ -26,5 +26,29 @@ services:
       retries: 10
     restart: unless-stopped
 
+  libretranslate:
+    image: libretranslate/libretranslate:v1.6.0
+    container_name: churchplanner-libretranslate
+    restart: unless-stopped
+    ports:
+      - "5000:5000"            # remove this line if you never want it reachable from the host
+    volumes:
+      - libretranslate_models:/home/libretranslate/.local:rw
+      - libretranslate_db:/app/db
+    environment:
+      LT_LOAD_ONLY: "en,fr"    # only download the languages you actually use — saves ~1GB per pair
+      LT_DISABLE_WEB_UI: "true"
+      LT_UPDATE_MODELS: "true"
+      LT_SSL: "false"
+      LT_API_KEYS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "./venv/bin/python scripts/healthcheck.py"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s       # first boot downloads models; give it time
+
 volumes:
   pgdata:
+  libretranslate_models:
+  libretranslate_db:

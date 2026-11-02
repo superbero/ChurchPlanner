@@ -82,47 +82,32 @@ func (s *ArrangementService) SetDefaultKey(ctx context.Context, arrangementID, k
 	return s.repo.SetDefaultKey(ctx, arrangementID, keyID)
 }
 
-// Chart returns the rendered chart for an arrangement in a display key.
-// If displayKey is empty, the arrangement's default key (or original key) is used.
+// Chart is a backwards-compatible wrapper that returns the chart in the
+// arrangement's primary language.
 func (s *ArrangementService) Chart(ctx context.Context, arrangementID, displayKey string) ([]RenderedSection, string, error) {
-	a, err := s.repo.Get(ctx, arrangementID)
-	if err != nil {
-		return nil, "", err
-	}
-	dk := displayKey
-	if dk == "" {
-		if k, err := s.repo.DefaultKeyForArrangement(ctx, arrangementID); err == nil {
-			dk = k.Key
-		}
-	}
-	if dk == "" {
-		dk = a.OriginalKey
-	}
-	return BuildChart(&a, dk), dk, nil
+	chart, dk, _, _, err := s.ChartForLanguage(ctx, arrangementID, displayKey, "")
+	return chart, dk, err
 }
 
-// RenderPDF builds a PDF for the arrangement in the given display key.
-func (s *ArrangementService) RenderPDF(ctx context.Context, song *Song, arrangementID, displayKey, qrURL string) ([]byte, string, error) {
+// RenderPDF builds a PDF for the arrangement, honoring the requested language.
+func (s *ArrangementService) RenderPDF(ctx context.Context, song *Song, arrangementID, displayKey, qrURL, lang string) ([]byte, string, error) {
 	a, err := s.repo.Get(ctx, arrangementID)
 	if err != nil {
 		return nil, "", err
 	}
-	dk := displayKey
-	if dk == "" {
-		if k, err := s.repo.DefaultKeyForArrangement(ctx, arrangementID); err == nil {
-			dk = k.Key
-		}
-	}
-	if dk == "" {
-		dk = a.OriginalKey
-	}
-	chart := BuildChart(&a, dk)
-
-	data, err := RenderSongPDF(song.Title, song.Author, dk, a.Name, a.Sequence, chart, qrURL)
+	chart, dk, resolvedLang, _, err := s.ChartForLanguage(ctx, arrangementID, displayKey, lang)
 	if err != nil {
 		return nil, "", err
 	}
-	return data, sanitizeFilename(song.Title+"_"+a.Name) + ".pdf", nil
+	data, err := RenderSongPDF(song.Title, song.Author, dk, a.Name, a.Sequence, chart, qrURL, resolvedLang)
+	if err != nil {
+		return nil, "", err
+	}
+	suffix := ""
+	if resolvedLang != "" && resolvedLang != a.PrimaryLanguage {
+		suffix = "_" + resolvedLang
+	}
+	return data, sanitizeFilename(song.Title+"_"+a.Name) + suffix + ".pdf", nil
 }
 
 // RestoreRevision (delegates to the repository; also snapshots current state).

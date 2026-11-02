@@ -53,6 +53,7 @@ type Arrangement struct {
 	OriginalKey    string    `json:"original_key"`
 	SourceContent  string    `json:"source_content"`
 	Format         string    `json:"format"`
+	PrimaryLanguage string   `json:"primary_language"`
 	Lyrics         string    `json:"lyrics"`
 	Chords         string    `json:"chords"`
 	IsDefault      bool      `json:"is_default"`
@@ -71,6 +72,7 @@ type CreateArrangementInput struct {
 	OriginalKey   string
 	SourceContent string
 	Format        string
+	PrimaryLanguage string
 	Archived      bool
 
 	// Lyrics and Chords are derived from SourceContent by ArrangementService.
@@ -105,4 +107,31 @@ type ChordPos struct {
 type RenderedSection struct {
 	Label string
 	Lines []ChartLine
+}
+
+
+type ArrangementTranslation struct {
+	ID            string
+	ArrangementID string
+	Language      string
+	Lyrics        string
+	Chords        string
+	SourceContent string
+	Format        string
+	Notes         string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type Suggestion struct {
+	SongID          string
+	SongTitle       string
+	SongAuthor      string
+	ArrangementID   string
+	ArrangementName string
+	Key             string
+	Score           float64
+	Reason          string
+	LastUsedDays    int
+	Uses3m          int
 }

@@ -103,7 +103,10 @@ func NewRouter(d Deps) (http.Handler, error) {
 
 	// --- protected modules ---
 	songsModule := songs.New(d.DB, renderer, songs.HandlerConfig{
-		PublicBaseURL: d.Config.PublicBaseURL,
+		PublicBaseURL:   d.Config.PublicBaseURL,
+		TranslateAPIURL: d.Config.TranslateAPIURL,
+		TranslateAPIKey: d.Config.TranslateAPIKey,
+		PrimaryLanguage: d.Config.PrimaryLanguage,
 	})
 
 	// Public routes mount outside the auth group.

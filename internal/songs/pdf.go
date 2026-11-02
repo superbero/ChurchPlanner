@@ -3,12 +3,13 @@ package songs
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/go-pdf/fpdf"
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-func RenderSongPDF(title, author, key, arrangement, sequence string, chart []RenderedSection, qrURL string) ([]byte, error) {
+func RenderSongPDF(title, author, key, arrangement, sequence string, chart []RenderedSection, qrURL, language string) ([]byte, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(18, 18, 18)
 	pdf.SetAutoPageBreak(true, 15)
@@ -41,6 +42,9 @@ func RenderSongPDF(title, author, key, arrangement, sequence string, chart []Ren
 	}
 	if key != "" {
 		sub += "  —  Key: " + key
+	}
+	if language != "" && language != "en" {
+		sub += "  —  " + strings.ToUpper(language)
 	}
 	pdf.CellFormat(0, 6, sub, "", 1, "C", false, 0, "")
 

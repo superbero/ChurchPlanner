@@ -21,12 +21,17 @@ type Handler struct {
 	revs     *RevisionRepository
 	practice *PracticeRepository
 	health   *HealthService
+	sugg     *SuggestionService
+	trans    *Translator
 	cfg      HandlerConfig
 	renderer *httpx.Renderer
 }
 
 type HandlerConfig struct {
-	PublicBaseURL string
+	PublicBaseURL   string
+	TranslateAPIURL string
+	TranslateAPIKey string
+	PrimaryLanguage string
 }
 
 // ---- Song handlers ----
@@ -212,6 +217,7 @@ func (h *Handler) ViewArrangement(w http.ResponseWriter, r *http.Request) {
 	displayKey := r.URL.Query().Get("key")
 	offsetStr := r.URL.Query().Get("semitones")
 	offset, _ := strconv.Atoi(offsetStr)
+	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
 
 	// Resolve display key
 	resolvedKey := displayKey
@@ -227,7 +233,7 @@ func (h *Handler) ViewArrangement(w http.ResponseWriter, r *http.Request) {
 		resolvedKey = TransposeKey(resolvedKey, offset)
 	}
 
-	chart, _, err := h.arr.Chart(r.Context(), arrID, resolvedKey)
+	chart, resolvedKey, resolvedLang, translationMissing, err := h.arr.ChartForLanguage(r.Context(), arrID, resolvedKey, lang)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -239,13 +245,23 @@ func (h *Handler) ViewArrangement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	translations, err := h.arr.ListTranslations(r.Context(), arrID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
 	h.renderer.Render(w, http.StatusOK, "songs_arrangement_view", map[string]any{
-		"Song":        song,
-		"Arrangement": a,
-		"Keys":        keys,
-		"DisplayKey":  resolvedKey,
-		"Offset":      offset,
-		"Chart":       chart,
+		"Song":               song,
+		"Arrangement":        a,
+		"Keys":               keys,
+		"DisplayKey":         resolvedKey,
+		"Offset":             offset,
+		"Chart":              chart,
+		"RequestedLang":      lang,
+		"ResolvedLang":       resolvedLang,
+		"TranslationMissing": translationMissing,
+		"Translations":       translations,
 	})
 }
 
@@ -350,8 +366,9 @@ func (h *Handler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 		arrID = a.ID
 	}
 	displayKey := r.URL.Query().Get("key")
+	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
 
-	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, "")
+	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, "", lang)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -569,21 +586,29 @@ func (h *Handler) ViewPractice(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	chart, _, err := h.arr.Chart(r.Context(), arrID, displayKey)
+	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
+
+	chart, displayKey, resolvedLang, translationMissing, err := h.arr.ChartForLanguage(r.Context(), arrID, displayKey, lang)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
 
+	translations, _ := h.arr.ListTranslations(r.Context(), arrID)
+
 	h.renderer.Render(w, http.StatusOK, "songs_practice", map[string]any{
-		"Token":       token,
-		"Song":        song,
-		"Arrangement": arr,
-		"DisplayKey":  displayKey,
-		"Offset":      offset,
-		"Chart":       chart,
-		"ExpiresAt":   pt.ExpiresAt,
-		"YouTubeID":   youtubeID(song.YouTubeURL),
+		"Token":              token,
+		"Song":               song,
+		"Arrangement":        arr,
+		"DisplayKey":         displayKey,
+		"Offset":             offset,
+		"Chart":              chart,
+		"ExpiresAt":          pt.ExpiresAt,
+		"YouTubeID":          youtubeID(song.YouTubeURL),
+		"RequestedLang":      lang,
+		"ResolvedLang":       resolvedLang,
+		"TranslationMissing": translationMissing,
+		"Translations":       translations,
 	})
 }
 
@@ -612,9 +637,10 @@ func (h *Handler) ViewPracticePDF(w http.ResponseWriter, r *http.Request) {
 	if displayKey == "" {
 		displayKey = pt.DisplayKey
 	}
+	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
 	qrURL := h.publicBaseURL(r) + "/practice/" + token
 
-	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, qrURL)
+	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, qrURL, lang)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -703,6 +729,181 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- helpers ----
+
+// ---- Translation handlers ----
+
+func (h *Handler) NewTranslationForm(w http.ResponseWriter, r *http.Request) {
+	songID := chi.URLParam(r, "id")
+	arrID := chi.URLParam(r, "aid")
+	song, err := h.svc.Get(r.Context(), songID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	a, err := h.arr.Get(r.Context(), arrID)
+	if err != nil || a.SongID != songID {
+		http.NotFound(w, r)
+		return
+	}
+	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
+	if lang == "" {
+		lang = "fr"
+	}
+
+	// If a translation already exists, pre-fill the form.
+	var existing ArrangementTranslation
+	if t, err := h.arr.GetTranslation(r.Context(), arrID, lang); err == nil {
+		existing = t
+	}
+
+	h.renderTranslationForm(w, r, song, a, lang, existing.SourceContent, existing.Format, existing.Notes, "")
+}
+
+func (h *Handler) SaveTranslation(w http.ResponseWriter, r *http.Request) {
+	songID := chi.URLParam(r, "id")
+	arrID := chi.URLParam(r, "aid")
+	if err := r.ParseForm(); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	lang := r.FormValue("language")
+	source := r.FormValue("source_content")
+	format := r.FormValue("format")
+	notes := r.FormValue("notes")
+
+	if _, err := h.arr.UpsertTranslation(r.Context(), arrID, lang, source, format, notes); err != nil {
+		song, _ := h.svc.Get(r.Context(), songID)
+		a, _ := h.arr.Get(r.Context(), arrID)
+		h.renderTranslationForm(w, r, song, a, lang, source, format, notes, err.Error())
+		return
+	}
+	http.Redirect(w, r, "/songs/"+songID+"/arrangements/"+arrID+"?lang="+lang, http.StatusSeeOther)
+}
+
+func (h *Handler) DeleteTranslation(w http.ResponseWriter, r *http.Request) {
+	songID := chi.URLParam(r, "id")
+	arrID := chi.URLParam(r, "aid")
+	_ = h.arr.DeleteTranslation(r.Context(), chi.URLParam(r, "tid"))
+	http.Redirect(w, r, "/songs/"+songID+"/arrangements/"+arrID, http.StatusSeeOther)
+}
+
+// TranslateSource is the target of a formaction button. It translates the
+// arrangement's primary source into the requested language and re-renders
+// the translation form with the result pre-filled.
+func (h *Handler) TranslateSource(w http.ResponseWriter, r *http.Request) {
+	songID := chi.URLParam(r, "id")
+	arrID := chi.URLParam(r, "aid")
+	if err := r.ParseForm(); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	lang := r.FormValue("language")
+	if lang == "" {
+		lang = r.URL.Query().Get("lang")
+	}
+
+	song, err := h.svc.Get(r.Context(), songID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	a, err := h.arr.Get(r.Context(), arrID)
+	if err != nil || a.SongID != songID {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Track what to display in the form even on error
+	source := r.FormValue("source_content")
+	format := r.FormValue("format")
+	notes := r.FormValue("notes")
+
+	if !h.trans.Enabled() {
+		h.renderTranslationForm(w, r, song, a, lang, source, format, notes,
+			"Translation service not configured. Set TRANSLATE_API_URL to enable. You can still paste the translation manually.")
+		return
+	}
+
+	plain := StripChordsForTranslation(a.SourceContent, a.Format)
+	if plain == "" {
+		plain = a.Lyrics
+	}
+	if plain == "" {
+		h.renderTranslationForm(w, r, song, a, lang, source, format, notes,
+			"No source content to translate.")
+		return
+	}
+
+	translated, err := h.trans.Translate(r.Context(), plain, a.PrimaryLanguage, lang)
+	if err != nil {
+		h.renderTranslationForm(w, r, song, a, lang, source, format, notes,
+			"Translate failed: "+err.Error())
+		return
+	}
+
+	h.renderTranslationForm(w, r, song, a, lang, translated, format, notes, "")
+}
+
+func (h *Handler) renderTranslationForm(w http.ResponseWriter, r *http.Request, song Song, a Arrangement, lang, source, format, notes, errMsg string) {
+	if format == "" {
+		format = a.Format
+		if format == "" {
+			format = "chordpro"
+		}
+	}
+	h.renderer.Render(w, http.StatusOK, "songs_translation_form", map[string]any{
+		"Song":             song,
+		"Arrangement":      a,
+		"Language":         lang,
+		"SourceContent":    source,
+		"Format":           format,
+		"Notes":            notes,
+		"Error":            errMsg,
+		"TranslatorEnabled": h.trans != nil && h.trans.Enabled(),
+	})
+}
+
+// ---- Suggestions ----
+
+func (h *Handler) Suggestions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	tagSlugs := q["tag"]
+	key := strings.TrimSpace(q.Get("key"))
+	limit := 15
+	if n, _ := strconv.Atoi(q.Get("limit")); n > 0 {
+		limit = n
+	}
+
+	var suggestions []Suggestion
+	var err error
+	run := r.URL.Query().Get("run") == "1" || len(tagSlugs) > 0 || key != ""
+	if run {
+		suggestions, err = h.sugg.Suggest(r.Context(), tagSlugs, key, limit)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+	}
+
+	groups, err := h.tags.ListGrouped(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	selected := map[string]bool{}
+	for _, s := range tagSlugs {
+		selected[s] = true
+	}
+
+	h.renderer.Render(w, http.StatusOK, "songs_suggestions", map[string]any{
+		"Songs":            suggestions,
+		"TagGroups":        groups,
+		"SelectedTagSlugs": selected,
+		"Key":              key,
+		"Limit":            limit,
+		"Ran":              run,
+	})
+}
 
 // youtubeID extracts the video ID from common YouTube URL forms.
 // Returns "" if the URL isn't recognised (caller falls back to a plain link).

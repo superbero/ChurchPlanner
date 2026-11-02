@@ -1,0 +1,49 @@
+{{define "content"}}
+<p><a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}">← {{.Arrangement.Name}}</a></p>
+<h1>Translation · <span class="muted">{{languageLabel .Language}}</span></h1>
+<p class="muted">{{.Song.Title}} · {{.Arrangement.Name}} (primary: {{languageLabel .Arrangement.PrimaryLanguage}})</p>
+{{with .Error}}<p class="error">{{.}}</p>{{end}}
+
+<details class="primary-source">
+    <summary>Primary source ({{languageLabel .Arrangement.PrimaryLanguage}})</summary>
+    <pre>{{.Arrangement.SourceContent}}</pre>
+</details>
+
+<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations">
+    <input type="hidden" name="language" value="{{.Language}}">
+
+    <label>Format
+        <select name="format">
+            <option value="chordpro" {{if eq .Format "chordpro"}}selected{{end}}>ChordPro</option>
+            <option value="opensong" {{if eq .Format "opensong"}}selected{{end}}>OpenSong</option>
+            <option value="text"     {{if eq .Format "text"}}selected{{end}}>Plain lyrics</option>
+        </select>
+    </label>
+
+    <label>Translated source
+        <textarea name="source_content" rows="16" style="font-family: monospace" placeholder="Paste the translated lyrics (and chords, if desired) here.">{{.SourceContent}}</textarea>
+    </label>
+
+    <label>Notes <textarea name="notes" rows="2">{{.Notes}}</textarea></label>
+
+    {{if .TranslatorEnabled}}
+    <p>
+        <button type="submit">Save translation</button>
+        <button type="submit"
+                formaction="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translate"
+                class="button-secondary">
+            Auto-translate from {{languageLabel .Arrangement.PrimaryLanguage}}
+        </button>
+    </p>
+    <p class="muted">
+        Auto-translate sends the lyrics (chords stripped) to the configured translation service.
+        It will <strong>not</strong> place chords for you — review and add chords manually.
+    </p>
+    {{else}}
+    <p>
+        <button type="submit">Save translation</button>
+    </p>
+    <p class="muted">Auto-translate is disabled. Set <code>TRANSLATE_API_URL</code> to enable.</p>
+    {{end}}
+</form>
+{{end}}

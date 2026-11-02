@@ -7,7 +7,18 @@
         <span><strong>Key:</strong> {{.DisplayKey}}{{if .Offset}} ({{if gt .Offset 0}}+{{end}}{{.Offset}}){{end}}</span>
         {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
         {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
+        {{if .ResolvedLang}}<span><strong>Language:</strong> {{languageLabel .ResolvedLang}}</span>{{end}}
     </div>
+
+    {{if or .Translations (ne .ResolvedLang .Arrangement.PrimaryLanguage)}}
+    <div class="lang-switcher">
+        <a href="/practice/{{.Token}}" class="lang-chip {{if eq .ResolvedLang .Arrangement.PrimaryLanguage}}active{{end}}">{{languageLabel .Arrangement.PrimaryLanguage}}</a>
+        {{range .Translations}}
+        <a href="/practice/{{$.Token}}?lang={{.Language}}" class="lang-chip {{if eq .Language $.ResolvedLang}}active{{end}}">{{languageLabel .Language}}</a>
+        {{end}}
+    </div>
+    {{end}}
+    {{if .TranslationMissing}}<p class="muted">No translation in {{languageLabel .RequestedLang}} yet — showing primary.</p>{{end}}
 
     <form method="get" action="/practice/{{.Token}}" class="transpose">
         <input type="hidden" name="key" value="{{.DisplayKey}}">

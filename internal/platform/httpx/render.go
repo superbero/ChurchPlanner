@@ -10,6 +10,44 @@ import (
 	"strings"
 )
 
+type LanguageOption struct {
+	Code  string
+	Label string
+}
+
+var languageLabels = map[string]string{
+	"en": "English",
+	"fr": "Français",
+	"es": "Español",
+	"pt": "Português",
+	"de": "Deutsch",
+	"it": "Italiano",
+	"nl": "Nederlands",
+	"sw": "Kiswahili",
+	"zh": "中文",
+	"ko": "한국어",
+}
+
+var languageOrder = []string{"en", "fr", "es", "pt", "de", "it", "nl", "sw", "zh", "ko"}
+
+func languageLabel(code string) string {
+	if code == "" {
+		return ""
+	}
+	if l, ok := languageLabels[code]; ok {
+		return l
+	}
+	return strings.ToUpper(code)
+}
+
+func languageOptions() []LanguageOption {
+	out := make([]LanguageOption, 0, len(languageOrder))
+	for _, c := range languageOrder {
+		out = append(out, LanguageOption{Code: c, Label: languageLabels[c]})
+	}
+	return out
+}
+
 // funcMap provides helper functions available in all templates.
 // Registering them centrally means any template can use them without
 // the file that declares it being aware.
@@ -22,8 +60,10 @@ func funcMap() template.FuncMap {
 		"splitAfter": strings.SplitAfter,
 		"trimPrefix": strings.TrimPrefix,
 		"trimSuffix": strings.TrimSuffix,
-		"lower":      strings.ToLower,
-		"upper":      strings.ToUpper,
+		"lower":         strings.ToLower,
+		"upper":         strings.ToUpper,
+		"languageLabel": languageLabel,
+		"languageOptions": languageOptions,
 	}
 }
 

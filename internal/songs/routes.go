@@ -25,20 +25,23 @@ type Module struct{ handler *Handler }
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer, cfg HandlerConfig) *Module {
 	arrRepo := NewArrangementRepository(db)
+	health := NewHealthService(db)
+	translator := NewTranslator(cfg.TranslateAPIURL, cfg.TranslateAPIKey)
 	return &Module{handler: &Handler{
 		svc:      NewService(NewRepository(db), NewHistoryRepository(db)),
 		arr:      NewArrangementService(arrRepo),
 		tags:     NewTagService(db),
 		revs:     NewRevisionRepository(db),
 		practice: NewPracticeRepository(db),
-		health:   NewHealthService(db),
+		health:   health,
+		sugg:     NewSuggestionService(db, health),
+		trans:    translator,
 		cfg:      cfg,
 		renderer: renderer,
 	}}
 }
 
-// PublicRoutes are mounted BEFORE auth middleware. Practice links must be
-// reachable by volunteers who don't have an account.
+// PublicRoutes are mounted outside auth middleware (practice links).
 func (m *Module) PublicRoutes(r chi.Router) {
 	r.Get("/practice/{token}", m.handler.ViewPractice)
 	r.Get("/practice/{token}/pdf", m.handler.ViewPracticePDF)
@@ -51,10 +54,8 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/", m.handler.Create)
 		r.Get("/import", m.handler.ShowImport)
 		r.Post("/import", m.handler.Import)
-
-		// Health dashboard BEFORE /{id}
 		r.Get("/reports/health", m.handler.Health)
-
+		r.Get("/suggest", m.handler.Suggestions)
 		r.Get("/tags", m.handler.TagsIndex)
 		r.Post("/tags/groups", m.handler.CreateTagGroup)
 		r.Post("/tags/tags", m.handler.CreateTag)
@@ -82,5 +83,11 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/{id}/arrangements/{aid}/keys", m.handler.CreateArrangementKey)
 		r.Post("/{id}/arrangements/{aid}/keys/{kid}/delete", m.handler.DeleteArrangementKey)
 		r.Post("/{id}/arrangements/{aid}/keys/{kid}/set-default", m.handler.SetDefaultArrangementKey)
+
+		// Translations
+		r.Get("/{id}/arrangements/{aid}/translations/new", m.handler.NewTranslationForm)
+		r.Post("/{id}/arrangements/{aid}/translations", m.handler.SaveTranslation)
+		r.Post("/{id}/arrangements/{aid}/translations/{tid}/delete", m.handler.DeleteTranslation)
+		r.Post("/{id}/arrangements/{aid}/translate", m.handler.TranslateSource)
 	})
 }
