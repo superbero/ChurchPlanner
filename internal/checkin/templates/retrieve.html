@@ -1,0 +1,33 @@
+{{define "content"}}
+<div class="kiosk-container" style="text-align: center;">
+    <h1>Pickup Codes</h1>
+    <p class="muted">Phone: {{.Phone}}</p>
+
+    {{if .Passes}}
+        <p class="muted" style="margin-bottom: 2rem;">Show these QR codes or codes to the check-in staff when picking up.</p>
+
+        {{range .Passes}}
+        <div class="pickup-pass">
+            <div class="security-code">{{.Code}}</div>
+            {{if .QR}}
+            <div class="qr-container">
+                <img src="data:image/png;base64,{{.QR}}" alt="QR Code" width="180" height="180">
+            </div>
+            {{end}}
+            <div style="margin-top: 1rem; border-top: 1px dashed #ccc; padding-top: 1rem;">
+                {{range .Kids}}
+                <p class="tag-kid">{{.FirstName}} {{.LastName}}</p>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    {{else}}
+        <div style="padding: 2rem; background: #fef0c7; border-radius: 8px; margin: 2rem 0;">
+            <h2 style="margin-top: 0; color: #93370d;">No Active Check-ins</h2>
+            <p>There are currently no children from this family checked in.</p>
+        </div>
+    {{end}}
+
+    <p style="margin-top:3rem"><a href="/checkin?phone={{.Phone}}" class="button-secondary">← Back to Check-in</a></p>
+</div>
+{{end}}

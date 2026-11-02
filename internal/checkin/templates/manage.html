@@ -1,0 +1,72 @@
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Manage Family</h1>
+    <p class="muted">Logged in as: {{.Phone}}</p>
+
+    {{if .FamilyID}}
+    <h2>Guardians / Parents</h2>
+    <div class="manage-list">
+        {{range .Guardians}}
+        <div class="manage-item">
+            <span class="manage-name">{{if .Name}}{{.Name}}{{else}}Parent{{end}} · {{.Phone}}</span>
+            <div class="manage-actions">
+                {{if ne .Phone $.Phone}}
+                <form method="post" action="/checkin/guardian/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove this guardian?')">
+                    <input type="hidden" name="orig_phone" value="{{$.Phone}}">
+                    <button type="submit" class="link-btn" style="color:#b42318; font-size: .8em;">Remove</button>
+                </form>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <h3>Add another Parent / Guardian</h3>
+    <form method="post" action="/checkin/guardian" class="kiosk-form" style="gap: 1rem; margin-bottom: 3rem;">
+        <input type="hidden" name="family_id" value="{{.FamilyID}}">
+        <input type="hidden" name="orig_phone" value="{{.Phone}}">
+        <input type="text" name="name" placeholder="Name (e.g. Dad)" required style="font-size:1.2rem; padding:.75rem;">
+        <input type="tel" name="phone" placeholder="Phone Number" required style="font-size:1.2rem; padding:.75rem;">
+        <button type="submit" class="kiosk-btn" style="font-size:1.2rem; padding:.75rem;">Add Guardian</button>
+    </form>
+
+    <h2>Children</h2>
+    {{if .Children}}
+    <div class="manage-list">
+        {{range .Children}}
+        <div class="manage-item">
+            <span class="manage-name">{{.FirstName}} {{.LastName}}</span>
+            <div class="manage-actions">
+                <a href="/checkin/child/{{.ID}}/edit" class="button-secondary" style="padding: .25rem .5rem; font-size: .8em;">Edit</a>
+                <form method="post" action="/checkin/child/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove {{.FirstName}} from the household?')">
+                    <input type="hidden" name="phone" value="{{$.Phone}}">
+                    <button type="submit" class="link-btn" style="color:#b42318; padding: .25rem .5rem; font-size: .8em;">Remove</button>
+                </form>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <p>No children found.</p>
+    {{end}}
+
+    <h3>Add a Child</h3>
+    <form method="post" action="/checkin/add" class="kiosk-form" style="gap: 1rem;">
+        <input type="hidden" name="phone" value="{{.Phone}}">
+        <input type="text" name="first_name" placeholder="First Name" required style="font-size:1.2rem; padding:.75rem;">
+        <input type="text" name="last_name" placeholder="Last Name" required style="font-size:1.2rem; padding:.75rem;">
+        <button type="submit" class="kiosk-btn" style="font-size:1.2rem; padding:.75rem;">Add Child</button>
+    </form>
+    {{else}}
+    <p>No family found for this number. Add a child first to create your family.</p>
+    <form method="post" action="/checkin/add" class="kiosk-form">
+        <input type="hidden" name="phone" value="{{.Phone}}">
+        <input type="text" name="first_name" placeholder="First Name" required>
+        <input type="text" name="last_name" placeholder="Last Name" required>
+        <button type="submit" class="kiosk-btn">Create Family & Add Child</button>
+    </form>
+    {{end}}
+
+    <p style="margin-top:2rem"><a href="/checkin?phone={{.Phone}}">← Back to Check-in</a></p>
+</div>
+{{end}}

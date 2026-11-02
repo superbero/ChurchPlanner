@@ -20,6 +20,12 @@
     <a href="/checkin/add?phone={{.Phone}}" class="kiosk-btn" style="text-decoration:none">Add a Child</a>
     {{end}}
 
-    <p style="margin-top:2rem"><a href="/checkin">Cancel</a></p>
+    <p style="margin-top:2rem">
+        {{if .Children}}
+        <a href="/checkin/retrieve?phone={{.Phone}}" class="button-secondary" style="margin-right: 1rem;">🔍 Retrieve Pickup Code</a>
+        {{end}}
+        <a href="/checkin/family?phone={{.Phone}}">Manage Family / Add Child</a> ·
+        <a href="/checkin">Cancel</a>
+    </p>
 </div>
 {{end}}

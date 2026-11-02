@@ -1,0 +1,12 @@
+{{define "content"}}
+<div class="kiosk-container">
+    <h1>Edit Child</h1>
+    <form method="post" action="/checkin/child/{{.Child.ID}}" class="kiosk-form">
+        <input type="hidden" name="phone" value="{{.Phone}}">
+        <input type="text" name="first_name" value="{{.Child.FirstName}}" required>
+        <input type="text" name="last_name" value="{{.Child.LastName}}" required>
+        <button type="submit" class="kiosk-btn">Save Changes</button>
+    </form>
+    <p style="margin-top:2rem"><a href="/checkin/family?phone={{.Phone}}">Cancel</a></p>
+</div>
+{{end}}

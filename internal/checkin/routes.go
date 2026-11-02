@@ -33,5 +33,12 @@ func (m *Module) Routes(r chi.Router) {
 		r.Get("/add", m.handler.AddChildForm)
 		r.Post("/add", m.handler.AddChild)
 		r.Post("/submit", m.handler.Submit)
+		r.Get("/retrieve", m.handler.RetrieveCode)
+		r.Get("/family", m.handler.ManageFamily)
+		r.Get("/child/{id}/edit", m.handler.EditChildForm)
+		r.Post("/child/{id}", m.handler.UpdateChild)
+		r.Post("/child/{id}/delete", m.handler.DeleteChild)
+		r.Post("/guardian", m.handler.AddGuardian)
+		r.Post("/guardian/{id}/delete", m.handler.DeleteGuardian)
 	})
 }

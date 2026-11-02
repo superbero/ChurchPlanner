@@ -1,8 +1,15 @@
 {{define "content"}}
 <div class="kiosk-container" style="text-align: center;">
     <h1>✅ Checked In</h1>
+
     <div class="security-code">{{.Code}}</div>
-    <p>Keep this code to pick up your children.</p>
+
+    {{if .QRCode}}
+    <div class="qr-container">
+        <img src="data:image/png;base64,{{.QRCode}}" alt="Pickup QR Code" width="200" height="200">
+    </div>
+    <p class="muted">Screenshot this QR code for pickup.</p>
+    {{end}}
 
     <div style="margin-top: 2rem; border-top: 1px dashed #ccc; padding-top: 1rem;">
         {{range .Kids}}

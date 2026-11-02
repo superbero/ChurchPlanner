@@ -517,3 +517,30 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     margin: 2rem 0;
 }
 .tag-kid { font-size: 1.25rem; font-weight: bold; }
+
+/* Manage Family */
+.manage-list {
+    background: #f7f9fc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 2rem;
+}
+.manage-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.manage-item:last-child { border-bottom: 0; }
+.manage-name { font-size: 1.2rem; font-weight: 600; }
+.manage-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+/* Pickup Passes */
+.pickup-pass {
+    background: #f7f9fc;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
