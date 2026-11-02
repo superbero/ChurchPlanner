@@ -1,0 +1,51 @@
+{{define "content"}}
+<p><a href="/songs">← All songs</a></p>
+<h1>Song health</h1>
+<p class="muted">Insights based on key history and arrangement usage.</p>
+
+<div class="health-tiles">
+    <a class="health-tile {{if eq .Filter ""}}active{{end}}" href="/songs/reports/health">
+        <span class="health-num">{{index .Counts "all"}}</span>
+        <span class="health-label">All</span>
+    </a>
+    <a class="health-tile {{if eq .Filter "stale"}}active{{end}}" href="/songs/reports/health?cat=stale">
+        <span class="health-num">{{index .Counts "stale"}}</span>
+        <span class="health-label">Stale (not sung in 12mo)</span>
+    </a>
+    <a class="health-tile {{if eq .Filter "fresh"}}active{{end}}" href="/songs/reports/health?cat=fresh">
+        <span class="health-num">{{index .Counts "fresh"}}</span>
+        <span class="health-label">Fresh (sung &lt;30d)</span>
+    </a>
+    <a class="health-tile {{if eq .Filter "overused"}}active{{end}}" href="/songs/reports/health?cat=overused">
+        <span class="health-num">{{index .Counts "overused"}}</span>
+        <span class="health-label">Overused (5+ in 3mo)</span>
+    </a>
+    <a class="health-tile {{if eq .Filter "drifted"}}active{{end}}" href="/songs/reports/health?cat=drifted">
+        <span class="health-num">{{index .Counts "drifted"}}</span>
+        <span class="health-label">Drifted (≥2 semitones)</span>
+    </a>
+    <a class="health-tile {{if eq .Filter "ok"}}active{{end}}" href="/songs/reports/health?cat=ok">
+        <span class="health-num">{{index .Counts "ok"}}</span>
+        <span class="health-label">Ok</span>
+    </a>
+</div>
+
+<table>
+    <thead><tr><th>Title</th><th>Last used</th><th>Uses 3mo</th><th>Uses 12mo</th><th>Original key</th><th>Avg drift</th><th>Category</th></tr></thead>
+    <tbody>
+    {{range .Songs}}
+        <tr>
+            <td><a href="/songs/{{.SongID}}">{{.Title}}</a></td>
+            <td>{{if ge .DaysSinceUse 0}}{{.DaysSinceUse}}d ago{{else}}never{{end}}</td>
+            <td>{{.Uses3m}}</td>
+            <td>{{.Uses12m}}</td>
+            <td>{{.OriginalKey}}</td>
+            <td>{{if gt .DriftSamples 0}}{{printf "%.1f" .AvgDrift}}{{end}}</td>
+            <td><span class="chip cat-{{.Category}}">{{.Category}}</span></td>
+        </tr>
+    {{else}}
+        <tr><td colspan="7">No songs.</td></tr>
+    {{end}}
+    </tbody>
+</table>
+{{end}}

@@ -1,13 +1,31 @@
 {{define "content"}}
 <h1>{{if .Song.ID}}Edit song{{else}}New song{{end}}</h1>
 {{with .Error}}<p class="error">{{.}}</p>{{end}}
+<p class="muted">Musical content lives on each <em>arrangement</em>. This page is metadata only.</p>
 <form method="post" action="{{if .Song.ID}}/songs/{{.Song.ID}}{{else}}/songs{{end}}">
     <label>Title <input name="title" value="{{.Song.Title}}" required></label>
     <label>Author <input name="author" value="{{.Song.Author}}"></label>
-    <label>Key <input name="key" value="{{.Song.Key}}"></label>
-    <label>Tempo <input name="tempo" type="number" value="{{.Song.Tempo}}"></label>
-    <label>Lyrics <textarea name="lyrics" rows="6">{{.Song.Lyrics}}</textarea></label>
-    <label>Chords <textarea name="chords" rows="6">{{.Song.Chords}}</textarea></label>
-    <button type="submit">Save</button>
+    <label>YouTube URL <input name="youtube_url" type="url" value="{{.Song.YouTubeURL}}" placeholder="https://youtube.com/watch?v=…"></label>
+
+    <h2>Publishing</h2>
+    <div class="row">
+        <label>CCLI number <input name="ccli_number" value="{{.Song.CCLINumber}}"></label>
+        <label>Copyright holder <input name="copyright_holder" value="{{.Song.CopyrightHolder}}"></label>
+    </div>
+    <div class="row">
+        <label>Copyright year <input name="copyright_date" value="{{.Song.CopyrightDate}}"></label>
+        <label>Publisher <input name="publisher" value="{{.Song.Publisher}}"></label>
+    </div>
+    <label>Scripture reference <input name="scripture" value="{{.Song.Scripture}}" placeholder="John 3:16"></label>
+
+    <label>Notes <textarea name="notes" rows="3">{{.Song.Notes}}</textarea></label>
+    {{if .Song.ID}}
+    <label class="check"><input type="checkbox" name="archived" value="1" {{if .Song.Archived}}checked{{end}}> Archived</label>
+    {{end}}
+
+    <p>
+        <button type="submit">Save</button>
+        <a href="{{if .Song.ID}}/songs/{{.Song.ID}}{{else}}/songs{{end}}" class="button-secondary">Cancel</a>
+    </p>
 </form>
 {{end}}

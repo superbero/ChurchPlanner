@@ -1,0 +1,32 @@
+{{define "content"}}
+<p><a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}">← {{.Arrangement.Name}}</a></p>
+<h1>Revision history</h1>
+<p class="muted">{{.Song.Title}} · {{.Arrangement.Name}}</p>
+
+{{if .Revisions}}
+<table>
+    <thead><tr><th>When</th><th>Key</th><th>Sequence</th><th>Source length</th><th></th></tr></thead>
+    <tbody>
+    {{range .Revisions}}
+        <tr>
+            <td>{{.CreatedAt.Format "2 Jan 2006 15:04"}}</td>
+            <td>{{.OriginalKey}}</td>
+            <td>{{.Sequence}}</td>
+            <td>{{len .SourceContent}} chars</td>
+            <td>
+                <details>
+                    <summary>Preview</summary>
+                    <pre style="max-height: 200px; overflow: auto; font-size: .8em">{{.SourceContent}}</pre>
+                    <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/history/{{.ID}}/restore" onsubmit="return confirm('Restore this revision? Current state will be snapshotted first.')">
+                        <button type="submit">Restore this revision</button>
+                    </form>
+                </details>
+            </td>
+        </tr>
+    {{end}}
+    </tbody>
+</table>
+{{else}}
+<p class="muted">No revisions yet. Revisions are created automatically when you edit the arrangement.</p>
+{{end}}
+{{end}}

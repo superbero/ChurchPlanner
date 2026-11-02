@@ -1,0 +1,55 @@
+{{define "content"}}
+<article class="practice">
+    <h1>{{.Song.Title}}</h1>
+    <p class="muted">{{.Song.Author}} · {{.Arrangement.Name}}</p>
+
+    <div class="meta">
+        <span><strong>Key:</strong> {{.DisplayKey}}{{if .Offset}} ({{if gt .Offset 0}}+{{end}}{{.Offset}}){{end}}</span>
+        {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
+        {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
+    </div>
+
+    <form method="get" action="/practice/{{.Token}}" class="transpose">
+        <input type="hidden" name="key" value="{{.DisplayKey}}">
+        <button name="semitones" value="-2">−2</button>
+        <button name="semitones" value="-1">−1</button>
+        <button name="semitones" value="0">reset</button>
+        <button name="semitones" value="1">+1</button>
+        <button name="semitones" value="2">+2</button>
+    </form>
+
+    {{if .YouTubeID}}
+    <h2>Listen</h2>
+    <div class="video-embed">
+        <iframe width="560" height="315"
+                src="https://www.youtube.com/embed/{{.YouTubeID}}"
+                title="YouTube video"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+    </div>
+    {{else if .Song.YouTubeURL}}
+    <p><a class="button-secondary" href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">Open on YouTube</a></p>
+    {{end}}
+
+    <p>
+        <a class="button" href="/practice/{{.Token}}/pdf?key={{.DisplayKey}}">Download PDF</a>
+    </p>
+
+    <h2>Chart</h2>
+    <div class="chart">
+        {{range .Chart}}
+        <div class="chart-section">
+            {{if .Label}}<div class="chart-section-label">{{.Label}}</div>{{end}}
+            {{range .Lines}}
+            <div class="chart-line">
+                {{range .Chords}}<span class="chord" style="left: {{.Position}}ch">{{.Chord}}</span>{{end}}
+                <span class="lyric">{{.Lyric}}</span>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    <p class="muted">Link valid until {{.ExpiresAt.Format "2 Jan 2006"}}.</p>
+</article>
+{{end}}

@@ -102,6 +102,13 @@ func NewRouter(d Deps) (http.Handler, error) {
 	})
 
 	// --- protected modules ---
+	songsModule := songs.New(d.DB, renderer, songs.HandlerConfig{
+		PublicBaseURL: d.Config.PublicBaseURL,
+	})
+
+	// Public routes mount outside the auth group.
+	songsModule.PublicRoutes(r)
+
 	r.Group(func(r chi.Router) {
 		r.Use(authn.RequireUser)
 
@@ -109,7 +116,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 			http.Redirect(w, r, "/songs", http.StatusSeeOther)
 		})
 
-		songs.New(d.DB, renderer).Routes(r)
+		songsModule.Routes(r)
 		people.New(d.DB, renderer).Routes(r)
 		scheduling.New(d.DB, renderer).Routes(r)
 		calendar.New(d.DB, renderer).Routes(r)

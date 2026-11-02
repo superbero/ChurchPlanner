@@ -1,0 +1,50 @@
+{{define "content"}}
+<p><a href="/songs/{{.Song.ID}}">← {{.Song.Title}}</a></p>
+<h1>{{if .IsNew}}New arrangement{{else}}Edit arrangement{{end}}</h1>
+{{with .Error}}<p class="error">{{.}}</p>{{end}}
+
+<form method="post" action="{{if .IsNew}}/songs/{{.Song.ID}}/arrangements{{else}}/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}{{end}}">
+    <label>Arrangement name <input name="name" value="{{.Arrangement.Name}}" required placeholder="Original, Acoustic, Youth, …"></label>
+
+    <div class="row">
+        <label>Original key <input name="original_key" value="{{.Arrangement.OriginalKey}}" size="6" placeholder="G"></label>
+        <label>BPM <input name="bpm" type="number" value="{{if .Arrangement.BPM}}{{.Arrangement.BPM}}{{end}}" size="6"></label>
+        <label>Meter <input name="meter" value="{{.Arrangement.Meter}}" size="6" placeholder="4/4"></label>
+        <label>Length (sec) <input name="length_seconds" type="number" value="{{if .Arrangement.LengthSeconds}}{{.Arrangement.LengthSeconds}}{{end}}" size="6"></label>
+    </div>
+
+    <label>Sequence <input name="sequence" value="{{.Arrangement.Sequence}}" placeholder="V1 C V2 C B C"></label>
+    <p class="muted">Space or comma separated. Labels follow ChordPro section markers: V1, V2, C, B, PC, T, I, O.</p>
+
+    <label>Format
+        <select name="format">
+            <option value="chordpro"  {{if eq .Arrangement.Format "chordpro"}}selected{{end}}>ChordPro</option>
+            <option value="opensong"  {{if eq .Arrangement.Format "opensong"}}selected{{end}}>OpenSong</option>
+            <option value="text"      {{if eq .Arrangement.Format "text"}}selected{{end}}>Plain lyrics</option>
+            <option value="manual"    {{if eq .Arrangement.Format "manual"}}selected{{end}}>Manual (no parsing)</option>
+        </select>
+    </label>
+
+    <label>Source (ChordPro, OpenSong XML, or plain lyrics)
+        <textarea name="source_content" rows="16" style="font-family: monospace">{{.Arrangement.SourceContent}}</textarea>
+    </label>
+    <p class="muted">
+        ChordPro: <code>{title: …}</code>, <code>{start_of_verse: Verse 1} … {end_of_verse}</code>,
+        <code>{soc} … {eoc}</code>, and inline chords like <code>[G]Amazing [G7]grace</code>.
+        Plain <code>[Verse 1]</code> lines are also recognised as section markers.
+    </p>
+
+    <label>Notes <textarea name="notes" rows="2">{{.Arrangement.Notes}}</textarea></label>
+
+    {{if .IsNew}}
+    <label class="check"><input type="checkbox" name="make_default" value="1" {{if .MakeDefault}}checked{{end}}> Make this the default arrangement</label>
+    {{else}}
+    <label class="check"><input type="checkbox" name="archived" value="1" {{if .Arrangement.Archived}}checked{{end}}> Archived</label>
+    {{end}}
+
+    <p>
+        <button type="submit">Save arrangement</button>
+        <a href="/songs/{{.Song.ID}}" class="button-secondary">Cancel</a>
+    </p>
+</form>
+{{end}}

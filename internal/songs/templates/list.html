@@ -1,18 +1,55 @@
 {{define "content"}}
 <h1>Songs</h1>
-<p><a class="button" href="/songs/new">Add song</a></p>
+<p>
+    <a class="button" href="/songs/new">Add song</a>
+    <a class="button" href="/songs/import">Import</a>
+    <a class="button-secondary" href="/songs/tags">Manage tags</a>
+    <a class="button-secondary" href="/songs/reports/health">Health</a>
+</p>
+
+<form method="get" action="/songs" class="filter-bar">
+    <input type="search" name="q" placeholder="Search title, author, lyrics…" value="{{.Filter.Query}}">
+    <input type="text" name="key" placeholder="Key" value="{{.Filter.Key}}" size="5">
+    <select name="tag" multiple size="3" class="tag-multi">
+        {{range .TagGroups}}
+            <optgroup label="{{.Group.Name}}">
+                {{range .Tags}}
+                    <option value="{{.Slug}}" {{if index $.SelectedTagSlugs .Slug}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </optgroup>
+        {{end}}
+    </select>
+    <select name="sort">
+        <option value="title"   {{if or (eq .Filter.Sort "title")   (eq .Filter.Sort "")}}selected{{end}}>Title</option>
+        <option value="created" {{if eq .Filter.Sort "created"}}selected{{end}}>Newest</option>
+        <option value="updated" {{if eq .Filter.Sort "updated"}}selected{{end}}>Recently updated</option>
+    </select>
+    <label class="check"><input type="checkbox" name="archived" value="1" {{if .Filter.IncludeArchived}}checked{{end}}> Include archived</label>
+    <button type="submit">Filter</button>
+    <a href="/songs" class="button-secondary">Clear</a>
+</form>
+
+<p class="muted">{{len .Songs}} song(s).</p>
+
 <table>
-    <thead><tr><th>Title</th><th>Author</th><th>Key</th><th></th></tr></thead>
+    <thead><tr><th>Title</th><th>Author</th><th></th></tr></thead>
     <tbody>
     {{range .Songs}}
-        <tr>
-            <td>{{.Title}}</td>
+        <tr {{if .Archived}}class="archived"{{end}}>
+            <td>
+                <a href="/songs/{{.ID}}">{{.Title}}</a>
+                {{if .Archived}}<span class="chip">archived</span>{{end}}
+            </td>
             <td>{{.Author}}</td>
-            <td>{{.Key}}</td>
-            <td><a href="/songs/{{.ID}}/edit">Edit</a></td>
+            <td>
+                <a href="/songs/{{.ID}}">View</a> ·
+                <a href="/songs/{{.ID}}/edit">Edit</a> ·
+                <a href="/songs/{{.ID}}/pdf">PDF</a>
+                {{if .YouTubeURL}}· <a href="{{.YouTubeURL}}" target="_blank" rel="noopener">YouTube</a>{{end}}
+            </td>
         </tr>
     {{else}}
-        <tr><td colspan="4">No songs yet.</td></tr>
+        <tr><td colspan="3">No songs match.</td></tr>
     {{end}}
     </tbody>
 </table>

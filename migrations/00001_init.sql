@@ -69,7 +69,7 @@ CREATE TABLE events (
 
 -- Seed an admin so you can log in immediately. CHANGE THE PASSWORD.
 INSERT INTO users (name, email, password_hash, role)
-VALUES ('Admin', 'admin@example.com', crypt('changeme', gen_salt('bf')), 'admin')
+VALUES ('Admin', 'onesimeking@gmail.com', crypt('changeme', gen_salt('bf')), 'admin')
 ON CONFLICT (email) DO NOTHING;
 
 -- +goose Down

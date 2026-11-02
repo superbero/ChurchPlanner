@@ -1,0 +1,18 @@
+{{define "content"}}
+<h1>Import songs</h1>
+{{with .Error}}<p class="error">{{.}}</p>{{end}}
+<p>Supported formats:</p>
+<ul>
+    <li><strong>ChordPro</strong> — <code>.cho</code>, <code>.pro</code>, <code>.chordpro</code>, <code>.txt</code></li>
+    <li><strong>OpenSong XML</strong> — files exported from the OpenSong desktop app</li>
+    <li><strong>OpenLyrics XML</strong> — the OpenLyrics 0.8+ standard</li>
+    <li><strong>Plain text</strong> — lyrics only</li>
+</ul>
+<form method="post" action="/songs/import" enctype="multipart/form-data">
+    <label>Choose a file
+        <input type="file" name="file" accept=".cho,.pro,.chordpro,.txt,.xml" required>
+    </label>
+    <button type="submit">Import</button>
+</form>
+<p><a href="/songs">Back to songs</a></p>
+{{end}}

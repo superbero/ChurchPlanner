@@ -3,6 +3,8 @@ package songs
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,16 +16,67 @@ type Repository struct{ db *pgxpool.Pool }
 
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
-const columns = `id, title, author, key, tempo, lyrics, chords, created_at, updated_at`
+const songColumns = `id, title, author, youtube_url, ccli_number,
+	copyright_holder, copyright_date, publisher, scripture, notes,
+	archived, created_at, updated_at`
 
-func scan(row pgx.Row) (Song, error) {
+func scanSong(row pgx.Row) (Song, error) {
 	var s Song
-	err := row.Scan(&s.ID, &s.Title, &s.Author, &s.Key, &s.Tempo, &s.Lyrics, &s.Chords, &s.CreatedAt, &s.UpdatedAt)
+	err := row.Scan(&s.ID, &s.Title, &s.Author, &s.YouTubeURL, &s.CCLINumber,
+		&s.CopyrightHolder, &s.CopyrightDate, &s.Publisher, &s.Scripture,
+		&s.Notes, &s.Archived, &s.CreatedAt, &s.UpdatedAt)
 	return s, err
 }
 
 func (r *Repository) List(ctx context.Context) ([]Song, error) {
-	rows, err := r.db.Query(ctx, `SELECT `+columns+` FROM songs ORDER BY title`)
+	return r.Search(ctx, Filter{})
+}
+
+func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
+	var args []any
+	var conds []string
+
+	if q := strings.TrimSpace(f.Query); q != "" {
+		args = append(args, q)
+		conds = append(conds, fmt.Sprintf("search_vector @@ plainto_tsquery('english', $%d)", len(args)))
+	}
+	if k := strings.TrimSpace(f.Key); k != "" {
+		args = append(args, k)
+		conds = append(conds, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM song_arrangements a
+			WHERE a.song_id = songs.id AND a.original_key = $%d
+			UNION
+			SELECT 1 FROM song_arrangements a
+			JOIN arrangement_keys ak ON ak.arrangement_id = a.id
+			WHERE a.song_id = songs.id AND ak.key = $%d
+		)`, len(args), len(args)))
+	}
+	if !f.IncludeArchived {
+		conds = append(conds, "archived = FALSE")
+	}
+	if len(f.TagSlugs) > 0 {
+		args = append(args, f.TagSlugs)
+		args = append(args, len(f.TagSlugs))
+		conds = append(conds, fmt.Sprintf(
+			`(SELECT COUNT(*) FROM song_tags st JOIN tags t ON t.id = st.tag_id
+			  WHERE st.song_id = songs.id AND t.slug = ANY($%d)) = $%d`,
+			len(args)-1, len(args)))
+	}
+
+	where := "TRUE"
+	if len(conds) > 0 {
+		where = strings.Join(conds, " AND ")
+	}
+	orderBy := "title"
+	switch f.Sort {
+	case "created":
+		orderBy = "created_at DESC"
+	case "updated":
+		orderBy = "updated_at DESC"
+	}
+
+	q := fmt.Sprintf(`SELECT %s FROM songs WHERE %s ORDER BY %s`, songColumns, where, orderBy)
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +84,7 @@ func (r *Repository) List(ctx context.Context) ([]Song, error) {
 
 	var out []Song
 	for rows.Next() {
-		s, err := scan(rows)
+		s, err := scanSong(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -41,7 +94,7 @@ func (r *Repository) List(ctx context.Context) ([]Song, error) {
 }
 
 func (r *Repository) Get(ctx context.Context, id string) (Song, error) {
-	s, err := scan(r.db.QueryRow(ctx, `SELECT `+columns+` FROM songs WHERE id = $1`, id))
+	s, err := scanSong(r.db.QueryRow(ctx, `SELECT `+songColumns+` FROM songs WHERE id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Song{}, ErrNotFound
 	}
@@ -49,20 +102,28 @@ func (r *Repository) Get(ctx context.Context, id string) (Song, error) {
 }
 
 func (r *Repository) Create(ctx context.Context, in CreateSongInput) (Song, error) {
-	return scan(r.db.QueryRow(ctx, `
-		INSERT INTO songs (title, author, key, tempo, lyrics, chords)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING `+columns,
-		in.Title, in.Author, in.Key, in.Tempo, in.Lyrics, in.Chords))
+	return scanSong(r.db.QueryRow(ctx, `
+		INSERT INTO songs (
+			title, author, youtube_url, ccli_number,
+			copyright_holder, copyright_date, publisher, scripture, notes, archived
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		RETURNING `+songColumns,
+		in.Title, in.Author, in.YouTubeURL, in.CCLINumber,
+		in.CopyrightHolder, in.CopyrightDate, in.Publisher, in.Scripture,
+		in.Notes, in.Archived))
 }
 
 func (r *Repository) Update(ctx context.Context, id string, in CreateSongInput) (Song, error) {
-	s, err := scan(r.db.QueryRow(ctx, `
-		UPDATE songs
-		SET title=$2, author=$3, key=$4, tempo=$5, lyrics=$6, chords=$7, updated_at=now()
+	s, err := scanSong(r.db.QueryRow(ctx, `
+		UPDATE songs SET
+			title=$2, author=$3, youtube_url=$4, ccli_number=$5,
+			copyright_holder=$6, copyright_date=$7, publisher=$8,
+			scripture=$9, notes=$10, archived=$11, updated_at=now()
 		WHERE id=$1
-		RETURNING `+columns,
-		id, in.Title, in.Author, in.Key, in.Tempo, in.Lyrics, in.Chords))
+		RETURNING `+songColumns,
+		id, in.Title, in.Author, in.YouTubeURL, in.CCLINumber,
+		in.CopyrightHolder, in.CopyrightDate, in.Publisher, in.Scripture,
+		in.Notes, in.Archived))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Song{}, ErrNotFound
 	}

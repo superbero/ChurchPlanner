@@ -10,28 +10,45 @@ import (
 	"strings"
 )
 
+// funcMap provides helper functions available in all templates.
+// Registering them centrally means any template can use them without
+// the file that declares it being aware.
+func funcMap() template.FuncMap {
+	return template.FuncMap{
+		"contains":   strings.Contains,
+		"hasPrefix":  strings.HasPrefix,
+		"hasSuffix":  strings.HasSuffix,
+		"split":      strings.Split,
+		"splitAfter": strings.SplitAfter,
+		"trimPrefix": strings.TrimPrefix,
+		"trimSuffix": strings.TrimSuffix,
+		"lower":      strings.ToLower,
+		"upper":      strings.ToUpper,
+	}
+}
+
 type Renderer struct {
 	layout *template.Template
 	pages  map[string]*template.Template
 }
 
 func NewRenderer(layoutFS fs.FS) (*Renderer, error) {
-	layout, err := template.ParseFS(layoutFS, "layout.html")
+	// Funcs must be attached to the layout template BEFORE ParseFS, so that
+	// every page parsed from a Clone of it inherits them.
+	layout, err := template.New("layout.html").Funcs(funcMap()).ParseFS(layoutFS, "layout.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse layout: %w", err)
 	}
 	return &Renderer{layout: layout, pages: make(map[string]*template.Template)}, nil
 }
 
-// Add parses every file matching glob from fsys as a page.
-// The rendered name is "<prefix>_<filename>" so modules can't collide.
 func (r *Renderer) Add(prefix string, fsys fs.FS, glob string) error {
 	matches, err := fs.Glob(fsys, glob)
 	if err != nil {
 		return err
 	}
 	for _, m := range matches {
-		t, err := r.layout.Clone()
+		t, err := r.layout.Clone() // inherits funcs from layout
 		if err != nil {
 			return err
 		}

@@ -1,0 +1,38 @@
+{{define "content"}}
+<p><a href="/songs">← All songs</a></p>
+<h1>Manage tags</h1>
+
+<h2>Groups &amp; tags</h2>
+{{range .TagGroups}}
+    <section class="tag-group">
+        <h3>{{.Group.Name}}</h3>
+        {{if .Tags}}
+        <ul class="tag-list">
+            {{range .Tags}}
+            <li>
+                <span class="chip">{{.Name}}</span>
+                <form method="post" action="/songs/tags/{{.ID}}/delete" style="display:inline">
+                    <button type="submit" class="link-btn" onclick="return confirm('Delete tag {{.Name}}?')">×</button>
+                </form>
+            </li>
+            {{end}}
+        </ul>
+        {{else}}
+        <p class="muted">No tags in this group yet.</p>
+        {{end}}
+        <form method="post" action="/songs/tags/tags" class="inline-form">
+            <input type="hidden" name="group_id" value="{{.Group.ID}}">
+            <input type="text" name="name" placeholder="New tag name" required>
+            <button type="submit">Add tag</button>
+        </form>
+    </section>
+{{else}}
+<p class="muted">No tag groups yet.</p>
+{{end}}
+
+<h2>Add tag group</h2>
+<form method="post" action="/songs/tags/groups" class="inline-form">
+    <input type="text" name="name" placeholder="e.g. Instrumentation" required>
+    <button type="submit">Create group</button>
+</form>
+{{end}}

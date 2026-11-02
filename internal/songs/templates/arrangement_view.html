@@ -1,0 +1,81 @@
+{{define "content"}}
+<p><a href="/songs/{{.Song.ID}}">← {{.Song.Title}}</a></p>
+<h1>{{.Arrangement.Name}} <span class="muted">· {{.Song.Title}}</span></h1>
+
+<div class="meta">
+    <span><strong>Key:</strong> {{.DisplayKey}}{{if .Offset}} ({{if gt .Offset 0}}+{{end}}{{.Offset}}){{end}}</span>
+    {{if .Arrangement.OriginalKey}}<span><strong>Original:</strong> {{.Arrangement.OriginalKey}}</span>{{end}}
+    {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
+    {{if .Arrangement.Meter}}<span><strong>Meter:</strong> {{.Arrangement.Meter}}</span>{{end}}
+    {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
+</div>
+
+{{if .Arrangement.Sequence}}<p><strong>Sequence:</strong> <code>{{.Arrangement.Sequence}}</code></p>{{end}}
+
+<p>
+    <a class="button" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf?key={{.DisplayKey}}">Download PDF ({{.DisplayKey}})</a>
+    <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>
+    <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/history">History</a>
+</p>
+
+<h2>Transpose (transient view)</h2>
+<form method="get" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}" class="transpose">
+    <input type="hidden" name="key" value="{{.DisplayKey}}">
+    <button name="semitones" value="-2">−2</button>
+    <button name="semitones" value="-1">−1</button>
+    <button name="semitones" value="0">reset</button>
+    <button name="semitones" value="1">+1</button>
+    <button name="semitones" value="2">+2</button>
+</form>
+
+<h2>Named keys</h2>
+{{if .Keys}}
+<ul class="tag-list">
+    {{range .Keys}}
+    <li>
+        <span class="chip">{{.Name}}: {{.Key}}{{if .IsDefault}} (default){{end}}</span>
+        {{if not .IsDefault}}
+            <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/set-default" style="display:inline">
+                <button class="link-btn" type="submit">★</button>
+            </form>
+        {{end}}
+        <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Delete key?')">
+            <button class="link-btn" type="submit">×</button>
+        </form>
+    </li>
+    {{end}}
+</ul>
+{{else}}
+<p class="muted">No named keys. Add one below.</p>
+{{end}}
+
+<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/keys" class="inline-form">
+    <input type="text" name="name" placeholder="e.g. Female Key" required>
+    <input type="text" name="key" placeholder="A" required size="4">
+    <label class="check"><input type="checkbox" name="make_default" value="1"> default</label>
+    <button type="submit">Add key</button>
+</form>
+
+<h2>Chart</h2>
+<div class="chart">
+    {{range .Chart}}
+    <div class="chart-section">
+        {{if .Label}}<div class="chart-section-label">{{.Label}}</div>{{end}}
+        {{range .Lines}}
+        <div class="chart-line">
+            {{range .Chords}}<span class="chord" style="left: {{.Position}}ch">{{.Chord}}</span>{{end}}
+            <span class="lyric">{{.Lyric}}</span>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <p class="muted">No content. Edit this arrangement to add the source.</p>
+    {{end}}
+</div>
+
+{{if .Arrangement.Notes}}<h2>Notes</h2><p>{{.Arrangement.Notes}}</p>{{end}}
+
+<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete this arrangement and its keys?')">
+    <button type="submit" class="link-btn" style="color:#b42318">Delete arrangement</button>
+</form>
+{{end}}
