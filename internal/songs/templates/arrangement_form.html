@@ -1,61 +1,152 @@
 {{define "content"}}
-<p><a href="/songs/{{.Song.ID}}">← {{.Song.Title}}</a></p>
-<h1>{{if .IsNew}}New arrangement{{else}}Edit arrangement{{end}}</h1>
-{{with .Error}}<p class="error">{{.}}</p>{{end}}
-
-<form method="post" action="{{if .IsNew}}/songs/{{.Song.ID}}/arrangements{{else}}/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}{{end}}">
-    <label>Arrangement name <input name="name" value="{{.Arrangement.Name}}" required placeholder="Original, Acoustic, Youth, …"></label>
-
-    <div class="row">
-        <label>Original key <input name="original_key" value="{{.Arrangement.OriginalKey}}" size="6" placeholder="G"></label>
-        <label>BPM <input name="bpm" type="number" value="{{if .Arrangement.BPM}}{{.Arrangement.BPM}}{{end}}" size="6"></label>
-        <label>Meter <input name="meter" value="{{.Arrangement.Meter}}" size="6" placeholder="4/4"></label>
-        <label>Length (sec) <input name="length_seconds" type="number" value="{{if .Arrangement.LengthSeconds}}{{.Arrangement.LengthSeconds}}{{end}}" size="6"></label>
+<div class="editor-header">
+    <div>
+        <p class="breadcrumb"><a href="/songs/{{.Song.ID}}">← {{.Song.Title}}</a></p>
+        <h1>{{if .IsNew}}New arrangement{{else}}Edit arrangement{{end}}</h1>
     </div>
-
-    <label>Sequence <input name="sequence" value="{{.Arrangement.Sequence}}" placeholder="V1 C V2 C B C"></label>
-    <p class="muted">Space or comma separated. Labels follow ChordPro section markers: V1, V2, C, B, PC, T, I, O.</p>
-
-    <label>Format
-        <select name="format">
-            <option value="chordpro"  {{if eq .Arrangement.Format "chordpro"}}selected{{end}}>ChordPro</option>
-            <option value="opensong"  {{if eq .Arrangement.Format "opensong"}}selected{{end}}>OpenSong</option>
-            <option value="text"      {{if eq .Arrangement.Format "text"}}selected{{end}}>Plain lyrics</option>
-            <option value="manual"    {{if eq .Arrangement.Format "manual"}}selected{{end}}>Manual (no parsing)</option>
-        </select>
-    </label>
-
-    <label>Primary language
-        <select name="primary_language">
-            {{$primary := .Arrangement.PrimaryLanguage}}
-            {{if not $primary}}{{$primary = "en"}}{{end}}
-            {{range languageOptions}}
-                <option value="{{.Code}}" {{if eq .Code $primary}}selected{{end}}>{{.Label}}</option>
-            {{end}}
-        </select>
-    </label>
-    <p class="muted">Translations in other languages are managed from the arrangement's detail page.</p>
-
-    <label>Source (ChordPro, OpenSong XML, or plain lyrics)
-        <textarea name="source_content" rows="16" style="font-family: monospace">{{.Arrangement.SourceContent}}</textarea>
-    </label>
-    <p class="muted">
-        ChordPro: <code>{title: …}</code>, <code>{start_of_verse: Verse 1} … {end_of_verse}</code>,
-        <code>{soc} … {eoc}</code>, and inline chords like <code>[G]Amazing [G7]grace</code>.
-        Plain <code>[Verse 1]</code> lines are also recognised as section markers.
-    </p>
-
-    <label>Notes <textarea name="notes" rows="2">{{.Arrangement.Notes}}</textarea></label>
-
-    {{if .IsNew}}
-    <label class="check"><input type="checkbox" name="make_default" value="1" {{if .MakeDefault}}checked{{end}}> Make this the default arrangement</label>
-    {{else}}
-    <label class="check"><input type="checkbox" name="archived" value="1" {{if .Arrangement.Archived}}checked{{end}}> Archived</label>
-    {{end}}
-
-    <p>
-        <button type="submit">Save arrangement</button>
+    <div class="header-actions">
         <a href="/songs/{{.Song.ID}}" class="button-secondary">Cancel</a>
-    </p>
+        <button type="submit" form="arrangement-form" class="button">Save Arrangement</button>
+    </div>
+</div>
+
+{{with .Error}}<p class="error" style="margin-bottom: 1rem;">{{.}}</p>{{end}}
+
+<form id="arrangement-form" method="post" action="{{if .IsNew}}/songs/{{.Song.ID}}/arrangements{{else}}/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}{{end}}">
+
+    <div class="editor-layout">
+
+        <!-- LEFT COLUMN: The Source Code -->
+        <div class="editor-main">
+            <div class="code-editor-wrapper">
+                <div class="code-editor-header">
+                    <label for="source_content">Source Content</label>
+                    <span class="muted" style="font-size: 0.8em;">ChordPro / OpenSong XML / Plain Lyrics</span>
+                </div>
+                <textarea id="source_content" name="source_content" class="code-editor" spellcheck="false" placeholder="Paste your ChordPro or OpenSong content here...">{{.Arrangement.SourceContent}}</textarea>
+            </div>
+            <p class="muted" style="font-size: 0.85em; margin-top: 0.5rem;">
+                <strong>ChordPro format:</strong> Use <code>[G]Amazing [C]grace</code> for chords. Use <code>{start_of_verse: Verse 1}</code> and <code>{end_of_verse}</code> for sections.
+            </p>
+        </div>
+
+        <!-- RIGHT COLUMN: The Settings -->
+        <div class="editor-sidebar">
+
+            <div class="settings-card">
+                <h3>Basic Settings</h3>
+                <label>Arrangement Name
+                    <input name="name" value="{{.Arrangement.Name}}" required placeholder="e.g. Original, Acoustic, Youth">
+                </label>
+
+                <div class="grid-2">
+                    <label>Original Key
+                        <input name="original_key" value="{{.Arrangement.OriginalKey}}" placeholder="G">
+                    </label>
+                    <label>BPM
+                        <input name="bpm" type="number" value="{{if .Arrangement.BPM}}{{.Arrangement.BPM}}{{end}}" placeholder="90">
+                    </label>
+                </div>
+
+                <div class="grid-2">
+                    <label>Meter
+                        <input name="meter" value="{{.Arrangement.Meter}}" placeholder="4/4">
+                    </label>
+                    <label>Length (sec)
+                        <input name="length_seconds" type="number" value="{{if .Arrangement.LengthSeconds}}{{.Arrangement.LengthSeconds}}{{end}}" placeholder="240">
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h3>Structure & Format</h3>
+                <label>Sequence
+                    <input name="sequence" value="{{.Arrangement.Sequence}}" placeholder="V1 C V2 C B C">
+                </label>
+                <p class="muted" style="font-size: 0.8em; margin-top: -0.5rem; margin-bottom: 1rem;">
+                    Space separated. e.g., V1 C V2 C.
+                </p>
+
+                <div class="grid-2">
+                    <label>Format
+                        <select name="format">
+                            <option value="chordpro"  {{if eq .Arrangement.Format "chordpro"}}selected{{end}}>ChordPro</option>
+                            <option value="opensong"  {{if eq .Arrangement.Format "opensong"}}selected{{end}}>OpenSong XML</option>
+                            <option value="text"      {{if eq .Arrangement.Format "text"}}selected{{end}}>Plain Text</option>
+                            <option value="manual"    {{if eq .Arrangement.Format "manual"}}selected{{end}}>Manual</option>
+                        </select>
+                    </label>
+                    <label>Language
+                        <select name="primary_language">
+                            {{$primary := .Arrangement.PrimaryLanguage}}
+                            {{if not $primary}}{{$primary = "en"}}{{end}}
+                            {{range languageOptions}}
+                                <option value="{{.Code}}" {{if eq .Code $primary}}selected{{end}}>{{.Label}}</option>
+                            {{end}}
+                        </select>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h3>Transpose Workspace</h3>
+                <p class="muted" style="font-size: 0.85em; margin-top: 0; margin-bottom: 1rem;">
+                    Rewrite the chords in the source content.
+                </p>
+
+                <label>Target Key
+                    <select id="target-key">
+                        <option value="">— Choose Key —</option>
+                        <option value="C">C</option>
+                        <option value="Db">Db (C#)</option>
+                        <option value="D">D</option>
+                        <option value="Eb">Eb (D#)</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="F#">F# (Gb)</option>
+                        <option value="G">G</option>
+                        <option value="Ab">Ab (G#)</option>
+                        <option value="A">A</option>
+                        <option value="Bb">Bb (A#)</option>
+                        <option value="B">B</option>
+                    </select>
+                </label>
+
+                <div class="grid-2" style="align-items: end; margin-top: 1rem;">
+                    <label>Shift by
+                        <select id="shift-semitones">
+                            <option value="0">None</option>
+                            <option value="1">+1 (Up 1)</option>
+                            <option value="2">+2 (Up 2)</option>
+                            <option value="-1">-1 (Drop 1)</option>
+                            <option value="-2">-2 (Drop 2)</option>
+                            <option value="-3">-3 (Drop 3)</option>
+                        </select>
+                    </label>
+                    <button type="button" id="btn-transpose" class="button" style="margin-bottom: 1rem;">Apply</button>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h3>Internal</h3>
+                <label>Notes
+                    <textarea name="notes" rows="3" placeholder="Notes for the band...">{{.Arrangement.Notes}}</textarea>
+                </label>
+
+                {{if .IsNew}}
+                <label class="check" style="margin-top: 1rem;">
+                    <input type="checkbox" name="make_default" value="1" checked>
+                    Make this the default arrangement
+                </label>
+                {{else}}
+                <label class="check" style="margin-top: 1rem;">
+                    <input type="checkbox" name="archived" value="1" {{if .Arrangement.Archived}}checked{{end}}>
+                    Archived (hidden from plan pickers)
+                </label>
+                {{end}}
+            </div>
+
+        </div>
+    </div>
 </form>
 {{end}}

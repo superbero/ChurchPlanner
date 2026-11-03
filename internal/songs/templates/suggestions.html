@@ -1,22 +1,38 @@
 {{define "content"}}
-<p><a href="/songs">← All songs</a></p>
-<h1>Suggestions</h1>
-<p class="muted">Ranked by last use, recency, overuse, key fit, and drift.</p>
+<div class="page-header">
+    <div>
+        <h1>Suggestions</h1>
+        <p class="muted">Ranked by last use, recency, overuse, key fit, and drift.</p>
+    </div>
+</div>
 
-<form method="get" action="/songs/suggest" class="filter-bar">
-    <select name="tag" multiple size="4" class="tag-multi">
-        {{range .TagGroups}}
-            <optgroup label="{{.Group.Name}}">
-                {{range .Tags}}
-                    <option value="{{.Slug}}" {{if index $.SelectedTagSlugs .Slug}}selected{{end}}>{{.Name}}</option>
-                {{end}}
-            </optgroup>
-        {{end}}
-    </select>
-    <input type="text" name="key" placeholder="Preferred key (optional)" value="{{.Key}}" size="8">
-    <input type="number" name="limit" value="{{.Limit}}" min="1" max="100" style="width:5rem">
+<form method="get" action="/songs/suggest" class="filter-bar-horizontal" style="margin-bottom: 2rem;">
+    {{range .TagGroups}}
+    <div class="filter-group">
+        <select name="tag">
+            <option value="">Any {{.Group.Name}}</option>
+            {{range .Tags}}
+                <option value="{{.Slug}}" {{if index $.SelectedTagSlugs .Slug}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    {{end}}
+
+    <div class="filter-group">
+        <input type="text" name="key" placeholder="Preferred key (optional)" value="{{.Key}}" size="15">
+    </div>
+
+    <div class="filter-group">
+        <label class="muted" style="font-size: 0.9em;">Limit</label>
+        <input type="number" name="limit" value="{{.Limit}}" min="1" max="100" style="width: 70px;">
+    </div>
+
     <input type="hidden" name="run" value="1">
-    <button type="submit">Suggest</button>
+
+    <div class="filter-group" style="margin-left: auto;">
+        <button type="submit" class="button">Suggest</button>
+        <a href="/songs/suggest" class="button-secondary">Reset</a>
+    </div>
 </form>
 
 {{if .Ran}}
@@ -24,21 +40,31 @@
     <div class="suggestion-grid">
         {{range .Songs}}
         <div class="suggestion-card">
-            <h3><a href="/songs/{{.SongID}}">{{.SongTitle}}</a></h3>
-            <p class="muted">{{.SongAuthor}}</p>
-            <p><strong>Score:</strong> {{printf "%.0f" .Score}} / 100</p>
-            {{if .ArrangementName}}
-            <p class="muted">{{.ArrangementName}} · {{.Key}}</p>
-            {{end}}
+            <div class="suggestion-header">
+                <h3><a href="/songs/{{.SongID}}">{{.SongTitle}}</a></h3>
+                <span class="score-badge">{{printf "%.0f" .Score}}</span>
+            </div>
+            <p class="muted" style="margin-top: 0;">{{.SongAuthor}}</p>
+
+            <div class="suggestion-meta">
+                {{if .ArrangementName}}<span class="chip">{{.ArrangementName}} · {{.Key}}</span>{{end}}
+            </div>
+
             <p class="suggestion-reason">{{.Reason}}</p>
+
             {{if .ArrangementID}}
-            <p><a class="button-secondary" href="/songs/{{.SongID}}/arrangements/{{.ArrangementID}}">Open chart</a></p>
+            <p style="margin-top: 1rem;">
+                <a class="button-secondary" href="/songs/{{.SongID}}/arrangements/{{.ArrangementID}}">Open chart</a>
+            </p>
             {{end}}
         </div>
         {{end}}
     </div>
     {{else}}
-    <p class="muted">No songs matched those tags.</p>
+    <div class="empty-state">
+        <p>No songs matched those tags.</p>
+        <p class="muted">Try selecting different tags or lowering the key requirements.</p>
+    </div>
     {{end}}
 {{end}}
 {{end}}

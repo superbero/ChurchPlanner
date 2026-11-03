@@ -1,94 +1,159 @@
 {{define "content"}}
-<p><a href="/songs">← All songs</a></p>
-<h1>{{.Song.Title}} {{if .Song.Archived}}<span class="chip">archived</span>{{end}}</h1>
-<p><em>{{.Song.Author}}</em></p>
+<div class="page-header song-header">
+    <div>
+        <h1>{{.Song.Title}} {{if .Song.Archived}}<span class="chip">archived</span>{{end}}</h1>
+        <p class="author">{{.Song.Author}}</p>
 
-<div class="meta">
-    {{if .Song.CCLINumber}}<span><strong>CCLI:</strong> {{.Song.CCLINumber}}</span>{{end}}
-    {{if .Song.CopyrightHolder}}<span><strong>©</strong> {{.Song.CopyrightHolder}}{{if .Song.CopyrightDate}} {{.Song.CopyrightDate}}{{end}}</span>{{end}}
-    {{if .Song.Publisher}}<span><strong>Publisher:</strong> {{.Song.Publisher}}</span>{{end}}
-    {{if .Song.Scripture}}<span><strong>Scripture:</strong> {{.Song.Scripture}}</span>{{end}}
+        <div class="meta-chips">
+            {{if .Song.CCLINumber}}<span class="meta-chip" title="CCLI Number"><strong>CCLI:</strong> {{.Song.CCLINumber}}</span>{{end}}
+            {{if .Song.CopyrightHolder}}<span class="meta-chip" title="Copyright Holder">© {{.Song.CopyrightHolder}}{{if .Song.CopyrightDate}} {{.Song.CopyrightDate}}{{end}}</span>{{end}}
+            {{if .Song.Publisher}}<span class="meta-chip"><strong>Publisher:</strong> {{.Song.Publisher}}</span>{{end}}
+            {{if .Song.Scripture}}<span class="meta-chip"><strong>Scripture:</strong> {{.Song.Scripture}}</span>{{end}}
+            {{range .Tags}}<span class="chip">{{.Name}}</span>{{end}}
+        </div>
+    </div>
+
+    <div class="header-actions">
+        {{if .Song.YouTubeURL}}
+        <a class="button-secondary" href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">▶ Watch Video</a>
+        {{end}}
+        <a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add Arrangement</a>
+        {{if isEditorOrAdmin .CurrentUser.Role}}
+        <a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit Metadata</a>
+        {{end}}
+    </div>
 </div>
 
-{{if .Tags}}<p class="tag-chips">{{range .Tags}}<span class="chip">{{.Name}}</span>{{end}}</p>{{end}}
-{{if .Song.YouTubeURL}}<p><a href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">▶ Watch on YouTube</a></p>{{end}}
+<div class="song-layout">
 
-<p>
-    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>{{end}}
-    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>{{end}}
-    <a class="button-secondary" href="/songs/{{.Song.ID}}/pdf">Download PDF (default)</a>
-</p>
+    <!-- LEFT COLUMN: Arrangements -->
+    <div class="song-main">
+        <h2>Arrangements</h2>
+        {{if .Arrangements}}
+        <div class="arrangement-list">
+            {{range .Arrangements}}
+            <div class="arrangement-card {{if .Arrangement.Archived}}archived{{end}}">
+                <div class="arrangement-info">
+                    <h3>
+                        <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}">{{.Arrangement.Name}}</a>
+                        {{if .Arrangement.IsDefault}}<span class="chip chip-default">Default</span>{{end}}
+                        {{if .Arrangement.Archived}}<span class="chip">archived</span>{{end}}
+                    </h3>
+                    <div class="arrangement-meta">
+                        <span><strong>Key:</strong> {{.Arrangement.OriginalKey}}</span>
+                        {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
+                        {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
+                    </div>
+                    {{if .Keys}}
+                    <div class="arrangement-keys">
+                        {{range .Keys}}<span class="key-badge">{{.Name}}: {{.Key}}</span>{{end}}
+                    </div>
+                    {{end}}
+                </div>
 
-<h2>Arrangements</h2>
-{{if .Arrangements}}
-<table>
-    <thead><tr><th>Name</th><th>Default</th><th>Original key</th><th>Keys</th><th>BPM</th><th></th></tr></thead>
-    <tbody>
-    {{range .Arrangements}}
-        <tr {{if .Arrangement.Archived}}class="archived"{{end}}>
-            <td>
-                <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}">{{.Arrangement.Name}}</a>
-                {{if .Arrangement.Archived}}<span class="chip">archived</span>{{end}}
-            </td>
-            <td>{{if .Arrangement.IsDefault}}✓{{end}}</td>
-            <td>{{.Arrangement.OriginalKey}}</td>
-            <td class="tags-cell">{{range .Keys}}<span class="chip">{{.Name}}: {{.Key}}</span>{{end}}</td>
-            <td>{{if .Arrangement.BPM}}{{.Arrangement.BPM}}{{end}}</td>
-            <td>
-                <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}">View</a>
-                {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}· <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>{{end}} ·
-                <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf">PDF</a>
-                {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role) (not .Arrangement.IsDefault)}}
-                    · <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/set-default" style="display:inline">
-                        <button type="submit" class="link-btn">set default</button>
-                    </form>
+                <div class="arrangement-actions">
+                    <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}" class="button">View Chart</a>
+                    {{if isEditorOrAdmin $.CurrentUser.Role}}
+                    <div class="secondary-actions">
+                        <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a> ·
+                        <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf">PDF</a>
+                        {{if not .Arrangement.IsDefault}}
+                            · <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/set-default" style="display:inline">
+                                <button type="submit" class="link-btn" style="color:var(--accent)">Make Default</button>
+                            </form>
+                        {{end}}
+                    </div>
+                    {{else}}
+                    <div class="secondary-actions">
+                        <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf">PDF</a>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="empty-state">
+            <p>No arrangements yet. You need an arrangement to start building a chord chart.</p>
+            <a href="/songs/{{.Song.ID}}/arrangements/new" class="button">Create First Arrangement</a>
+        </div>
+        {{end}}
+
+        {{if .Song.Notes}}
+        <h2 style="margin-top: 2rem;">Notes</h2>
+        <div class="song-notes">{{.Song.Notes}}</div>
+        {{end}}
+    </div>
+
+    <!-- RIGHT COLUMN: Sidebar (Share & History) -->
+    <div class="song-sidebar">
+
+        <!-- Share for Practice -->
+        <div class="sidebar-card">
+            <h3>Share for practice</h3>
+            <p class="muted" style="font-size: 0.9em; margin-bottom: 1rem;">
+                Generate a link volunteers can open without logging in. They'll see the chart, YouTube video, and a PDF download.
+            </p>
+            <form method="post" action="/songs/{{.Song.ID}}/practice-links" class="practice-form">
+                <div class="input-group">
+                    <input type="number" name="ttl_days" value="30" min="1" max="365" required style="width: 70px;">
+                    <span class="muted">days</span>
+                    <button type="submit" class="button" style="margin-left:auto;">Generate Link</button>
+                </div>
+            </form>
+            {{if .PracticeToken}}
+            <div class="practice-result">
+                <strong>New link:</strong> <a href="/practice/{{.PracticeToken}}" target="_blank">/practice/{{.PracticeToken}}</a>
+            </div>
+            {{end}}
+        </div>
+
+        <!-- Key History -->
+        <div class="sidebar-card">
+            <h3>Key History</h3>
+            <p class="muted" style="font-size: 0.9em; margin-bottom: 1rem;">Record which key was used on a specific date.</p>
+
+            <form method="post" action="/songs/{{.Song.ID}}/history" class="history-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" name="used_on" required>
+                    </div>
+                    <div class="form-group" style="flex: 0 0 80px;">
+                        <label>Key</label>
+                        <input type="text" name="key" value="{{.Song.Key}}" required placeholder="G">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <input type="text" name="notes" placeholder="e.g. Sunday Service">
+                </div>
+                <button type="submit" class="button-secondary" style="width: 100%; margin-top: 0.5rem;">Record Key</button>
+            </form>
+
+            {{if .History}}
+            <table class="history-table">
+                <thead><tr><th>Date</th><th>Key</th><th>Notes</th></tr></thead>
+                <tbody>
+                {{range .History}}
+                    <tr>
+                        <td>{{.UsedOn.Format "2 Jan 2006"}}</td>
+                        <td><strong>{{.Key}}</strong></td>
+                        <td class="muted">{{.Notes}}</td>
+                    </tr>
                 {{end}}
-            </td>
-        </tr>
-    {{end}}
-    </tbody>
-</table>
-{{else}}
-<p class="muted">No arrangements yet. Add one to enter the chord chart.</p>
-{{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <p class="muted" style="font-size: 0.9em; margin-top: 1rem; text-align: center;">No history recorded.</p>
+            {{end}}
+        </div>
 
-{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-<h2>Share for practice</h2>
-<p class="muted">Generate a link volunteers can open without logging in. They'll see the chart, YouTube video, and a PDF download. Link expires in 30 days.</p>
-<form method="post" action="/songs/{{.Song.ID}}/practice-links" class="inline-form">
-    <input type="number" name="ttl_days" value="30" min="1" max="365" style="width:6rem">
-    <span class="muted">days</span>
-    <button type="submit">Generate practice link</button>
-</form>
-
-{{if .PracticeToken}}
-<p><strong>New practice link:</strong> <a href="/practice/{{.PracticeToken}}">/practice/{{.PracticeToken}}</a></p>
-{{end}}
-{{end}}
-
-{{if .Song.Notes}}<h2>Notes</h2><p>{{.Song.Notes}}</p>{{end}}
-
-{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-<h2>Key history</h2>
-<form method="post" action="/songs/{{.Song.ID}}/history">
-    <label>Date used <input type="date" name="used_on" required></label>
-    <label>Key <input type="text" name="key" required></label>
-    <label>Notes <input type="text" name="notes" placeholder="e.g. Sunday service"></label>
-    <button type="submit">Record key used</button>
-</form>
-{{if .History}}
-<table>
-    <thead><tr><th>Date</th><th>Key</th><th>Notes</th></tr></thead>
-    <tbody>
-    {{range .History}}<tr><td>{{.UsedOn.Format "2006-01-02"}}</td><td>{{.Key}}</td><td>{{.Notes}}</td></tr>{{end}}
-    </tbody>
-</table>
-{{else}}
-<p class="muted">No key history recorded yet.</p>
-{{end}}
-
-<form method="post" action="/songs/{{.Song.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete song and all arrangements?')">
-    <button type="submit" class="link-btn" style="color:#b42318">Delete song</button>
-</form>
-{{end}}
+        {{if isEditorOrAdmin .CurrentUser.Role}}
+        <form method="post" action="/songs/{{.Song.ID}}/delete" onsubmit="return confirm('Delete song and all arrangements?')">
+            <button type="submit" class="link-btn" style="color:#b42318; width: 100%; margin-top: 1rem;">Delete Song</button>
+        </form>
+        {{end}}
+    </div>
+</div>
 {{end}}

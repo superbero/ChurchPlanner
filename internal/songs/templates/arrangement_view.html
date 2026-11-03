@@ -1,123 +1,164 @@
 {{define "content"}}
-<p><a href="/songs/{{.Song.ID}}">← {{.Song.Title}}</a></p>
-<h1>{{.Arrangement.Name}} <span class="muted">· {{.Song.Title}}</span></h1>
+<div class="music-stand-header">
+    <div>
+        <p class="breadcrumb"><a href="/songs/{{.Song.ID}}">← {{.Song.Title}}</a></p>
+        <h1>{{.Arrangement.Name}}</h1>
+    </div>
+    <div class="header-actions">
+        {{if isEditorOrAdmin .CurrentUser.Role}}
+        <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>
+        <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/history">History</a>
+        {{end}}
 
-<div class="meta">
-    <span><strong>Key:</strong> {{.DisplayKey}}{{if .Offset}} ({{if gt .Offset 0}}+{{end}}{{.Offset}}){{end}}</span>
-    {{if .Arrangement.OriginalKey}}<span><strong>Original:</strong> {{.Arrangement.OriginalKey}}</span>{{end}}
-    {{if .Arrangement.PrimaryLanguage}}<span><strong>Language:</strong> {{languageLabel .ResolvedLang}}</span>{{end}}
-    {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
-    {{if .Arrangement.Meter}}<span><strong>Meter:</strong> {{.Arrangement.Meter}}</span>{{end}}
-    {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
+        <form method="GET" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf" style="display:flex; gap:0.5rem; align-items:center; margin:0;">
+            <input type="hidden" name="key" value="{{.DisplayKey}}">
+            {{if .ResolvedLang}}<input type="hidden" name="lang" value="{{.ResolvedLang}}">{{end}}
+            <select name="format" style="padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border);">
+                <option value="chords">Chords & Lyrics</option>
+                <option value="numbers">Nashville Numbers</option>
+                <option value="lyrics">Lyrics Only</option>
+            </select>
+            <button type="submit" class="button">Download PDF</button>
+        </form>
+    </div>
 </div>
 
 {{if .TranslationMissing}}
-<p class="error">No translation in {{languageLabel .RequestedLang}} yet. Showing primary ({{languageLabel .ResolvedLang}}).
-    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new?lang={{.RequestedLang}}">Add one →</a>
-    {{end}}
-</p>
+<p class="error" style="margin-top: 1rem;">No translation in {{languageLabel .RequestedLang}} yet. Showing primary.</p>
 {{end}}
 
-{{if .Arrangement.Sequence}}<p><strong>Sequence:</strong> <code>{{.Arrangement.Sequence}}</code></p>{{end}}
+<div class="music-stand-layout">
 
-<p>
-    <a class="button" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf?key={{.DisplayKey}}&lang={{.ResolvedLang}}">Download PDF ({{.DisplayKey}}{{if .ResolvedLang}} · {{languageLabel .ResolvedLang}}{{end}})</a>
+    <!-- LEFT COLUMN: The Chart -->
+    <div class="chart-column">
+        <!-- Floating Toolbar -->
+        <div class="chart-toolbar">
+            <div class="toolbar-group">
+                <span class="current-key">{{.DisplayKey}}</span>
+                <div class="transpose-nav">
+                    <a href="?key={{.DisplayKey}}&semitones=-1{{if .ResolvedLang}}&lang={{.ResolvedLang}}{{end}}" title="Transpose down 1 semitone">−</a>
+                    <a href="?key={{.DisplayKey}}&semitones=0{{if .ResolvedLang}}&lang={{.ResolvedLang}}{{end}}" title="Reset to original key">Reset</a>
+                    <a href="?key={{.DisplayKey}}&semitones=1{{if .ResolvedLang}}&lang={{.ResolvedLang}}{{end}}" title="Transpose up 1 semitone">+</a>
+                </div>
+            </div>
+            {{if .Offset}}
+            <div class="toolbar-group muted" style="font-size:0.9em;">
+                Shifted from original ({{.Arrangement.OriginalKey}})
+            </div>
+            {{end}}
+            {{if .Arrangement.Sequence}}
+            <div class="toolbar-group muted" style="font-size:0.9em;">
+                Sequence: <code>{{.Arrangement.Sequence}}</code>
+            </div>
+            {{end}}
+        </div>
 
-    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-    <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>
-    <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/history">History</a>
-    {{end}}
-</p>
+        <!-- The Chart Paper -->
+        <div class="chart-paper">
+            {{if .Chart}}
+                {{range .Chart}}
+                <div class="chart-section">
+                    {{if .Label}}<div class="chart-section-label">{{.Label}}</div>{{end}}
+                    {{range .Lines}}
+                    <div class="chart-line">
+                        {{range .Chords}}<span class="chord" style="left: {{.Position}}ch">{{.Chord}}</span>{{end}}
+                        <span class="lyric">{{.Lyric}}</span>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+            {{else}}
+                <div class="empty-state">
+                    <p>No chart content available for this arrangement.</p>
+                    {{if isEditorOrAdmin .CurrentUser.Role}}
+                    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit" class="button">Add Content</a>
+                    {{end}}
+                </div>
+            {{end}}
+        </div>
+    </div>
 
-<h2>Language</h2>
-<div class="lang-picker">
-    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}"
-       class="lang-chip {{if eq .ResolvedLang .Arrangement.PrimaryLanguage}}active{{end}}">
-        {{languageLabel .Arrangement.PrimaryLanguage}} <span class="muted">(primary)</span>
-    </a>
-    {{range .Translations}}
-    <a href="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}?lang={{.Language}}"
-       class="lang-chip {{if eq .Language $.ResolvedLang}}active{{end}}">
-        {{languageLabel .Language}}
-        {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
-        <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/translations/{{.ID}}/delete"
-              style="display:inline" onsubmit="return confirm('Delete {{languageLabel .Language}} translation?')">
-            <button type="submit" class="link-btn">×</button>
+    <!-- RIGHT COLUMN: The Tools -->
+    <div class="tools-column">
+
+        <div class="tool-card">
+            <h3>Language</h3>
+            <div class="lang-list">
+                <a href="?key={{.DisplayKey}}" class="lang-item {{if eq .ResolvedLang .Arrangement.PrimaryLanguage}}active{{end}}">
+                    <span>{{languageLabel .Arrangement.PrimaryLanguage}}</span>
+                    <span class="muted">Primary</span>
+                </a>
+                {{range .Translations}}
+                <a href="?key={{.DisplayKey}}&lang={{.Language}}" class="lang-item {{if eq .Language $.ResolvedLang}}active{{end}}">
+                    <span>{{languageLabel .Language}}</span>
+                    {{if isEditorOrAdmin $.CurrentUser.Role}}
+                    <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/translations/{{.ID}}/delete" onsubmit="return confirm('Delete translation?')">
+                        <button type="submit" class="link-btn" style="color:#b42318">×</button>
+                    </form>
+                    {{end}}
+                </a>
+                {{end}}
+                {{if isEditorOrAdmin .CurrentUser.Role}}
+                <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new" class="button-secondary" style="margin-top: 0.5rem; width: 100%; text-align: center;">+ Add Translation</a>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="tool-card">
+            <h3>Named Keys</h3>
+            <div class="lang-list">
+                {{range .Keys}}
+                <div class="lang-item {{if eq .Key $.DisplayKey}}active{{end}}">
+                    <span>{{.Name}} <span class="muted">({{.Key}})</span></span>
+                    {{if isEditorOrAdmin $.CurrentUser.Role}}
+                    <div style="display:flex; gap:0.25rem;">
+                        {{if not .IsDefault}}
+                        <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/set-default">
+                            <button class="link-btn" type="submit" title="Make default">★</button>
+                        </form>
+                        {{end}}
+                        <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/delete" onsubmit="return confirm('Delete key?')">
+                            <button class="link-btn" type="submit" title="Delete">×</button>
+                        </form>
+                    </div>
+                    {{end}}
+                </div>
+                {{else}}
+                <p class="muted" style="font-size: 0.9em;">No named keys yet.</p>
+                {{end}}
+            </div>
+
+            {{if isEditorOrAdmin .CurrentUser.Role}}
+            <form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/keys" class="add-key-form">
+                <input type="text" name="name" placeholder="Name (e.g. Female Key)" required>
+                <input type="text" name="key" placeholder="Key" required style="width: 60px;">
+                <label class="check" style="font-size:0.85em;"><input type="checkbox" name="make_default" value="1"> Default</label>
+                <button type="submit" class="button-secondary" style="width: 100%;">Add Key</button>
+            </form>
+            {{end}}
+        </div>
+
+        <div class="tool-card">
+            <h3>Details</h3>
+            <ul class="detail-list">
+                {{if .Arrangement.OriginalKey}}<li><span>Original Key</span> <span>{{.Arrangement.OriginalKey}}</span></li>{{end}}
+                {{if .Arrangement.BPM}}<li><span>BPM</span> <span>{{.Arrangement.BPM}}</span></li>{{end}}
+                {{if .Arrangement.Meter}}<li><span>Meter</span> <span>{{.Arrangement.Meter}}</span></li>{{end}}
+                {{if .Arrangement.LengthSeconds}}<li><span>Length</span> <span>{{.Arrangement.LengthSeconds}}s</span></li>{{end}}
+            </ul>
+            {{if .Arrangement.Notes}}
+            <div style="margin-top: 1rem;">
+                <h4 style="margin-bottom: 0.25rem; font-size: 0.9em; color:#666;">Notes</h4>
+                <p style="font-size: 0.9em;">{{.Arrangement.Notes}}</p>
+            </div>
+            {{end}}
+        </div>
+
+        {{if isEditorOrAdmin .CurrentUser.Role}}
+        <form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top: 1rem;" onsubmit="return confirm('Delete this arrangement?')">
+            <button type="submit" class="link-btn" style="color:#b42318; width: 100%;">Delete arrangement</button>
         </form>
         {{end}}
-    </a>
-    {{end}}
-    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-    <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new" class="button-secondary">+ Add translation</a>
-    {{end}}
-</div>
-
-<h2>Transpose (transient view)</h2>
-<form method="get" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}" class="transpose">
-    <input type="hidden" name="key" value="{{.DisplayKey}}">
-    {{if .ResolvedLang}}<input type="hidden" name="lang" value="{{.ResolvedLang}}">{{end}}
-    <button name="semitones" value="-2">−2</button>
-    <button name="semitones" value="-1">−1</button>
-    <button name="semitones" value="0">reset</button>
-    <button name="semitones" value="1">+1</button>
-    <button name="semitones" value="2">+2</button>
-</form>
-
-<h2>Named keys</h2>
-{{if .Keys}}
-<ul class="tag-list">
-    {{range .Keys}}
-    <li>
-        <span class="chip">{{.Name}}: {{.Key}}{{if .IsDefault}} (default){{end}}</span>
-        {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
-            {{if not .IsDefault}}
-                <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/set-default" style="display:inline">
-                    <button class="link-btn" type="submit">★</button>
-                </form>
-            {{end}}
-            <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Delete key?')">
-                <button class="link-btn" type="submit">×</button>
-            </form>
-        {{end}}
-    </li>
-    {{end}}
-</ul>
-{{else}}
-<p class="muted">No named keys.</p>
-{{end}}
-
-{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/keys" class="inline-form">
-    <input type="text" name="name" placeholder="e.g. Female Key" required>
-    <input type="text" name="key" placeholder="A" required size="4">
-    <label class="check"><input type="checkbox" name="make_default" value="1"> default</label>
-    <button type="submit">Add key</button>
-</form>
-{{end}}
-
-<h2>Chart {{if .ResolvedLang}}· {{languageLabel .ResolvedLang}}{{end}}</h2>
-<div class="chart">
-    {{range .Chart}}
-    <div class="chart-section">
-        {{if .Label}}<div class="chart-section-label">{{.Label}}</div>{{end}}
-        {{range .Lines}}
-        <div class="chart-line">
-            {{range .Chords}}<span class="chord" style="left: {{.Position}}ch">{{.Chord}}</span>{{end}}
-            <span class="lyric">{{.Lyric}}</span>
-        </div>
-        {{end}}
     </div>
-    {{else}}
-    <p class="muted">No content.</p>
-    {{end}}
 </div>
-
-{{if .Arrangement.Notes}}<h2>Notes</h2><p>{{.Arrangement.Notes}}</p>{{end}}
-
-{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-<form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete this arrangement and its keys/translations?')">
-    <button type="submit" class="link-btn" style="color:#b42318">Delete arrangement</button>
-</form>
-{{end}}
 {{end}}

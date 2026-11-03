@@ -9,7 +9,7 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-func RenderSongPDF(title, author, key, arrangement, sequence string, chart []RenderedSection, qrURL, language string) ([]byte, error) {
+func RenderSongPDF(title, author, key, arrangement, sequence string, chart []RenderedSection, qrURL, language, pdfFormat string) ([]byte, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(18, 18, 18)
 	pdf.SetAutoPageBreak(true, 15)
@@ -101,4 +101,45 @@ func RenderSongPDF(title, author, key, arrangement, sequence string, chart []Ren
 		return nil, fmt.Errorf("pdf: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+
+// toNashville converts an absolute chord (e.g., Cmaj7) to its Nashville Number equivalent (e.g., 4maj7)
+func toNashville(chord, key string) string {
+	keyIdx, ok1 := KeyIndex(key)
+	if !ok1 {
+		return chord
+	}
+	// Strip minor from key if present (we just need the root)
+	keyRoot := key
+	if len(key) > 1 && key[1] == 'm' {
+		keyRoot = key[:1]
+	}
+
+	match := chordRE.FindStringSubmatch(chord)
+	if match == nil {
+		return chord
+	}
+	root, suffix := match[1], match[2]
+
+	chordIdx, ok2 := KeyIndex(root)
+	if !ok2 {
+		return chord
+	}
+
+	interval := (chordIdx - keyIdx + 12) % 12
+
+	// Map intervals to Nashville numbers
+	// 1=0, 2=2, 3=4, 4=5, 5=7, 6=9, 7=11
+	numberMap := map[int]string{
+		0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4",
+		6: "b5", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7",
+	}
+
+	num := numberMap[interval]
+	if num == "" {
+		num = "?"
+	}
+
+	return num + suffix
 }

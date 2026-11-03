@@ -90,7 +90,7 @@ func (s *ArrangementService) Chart(ctx context.Context, arrangementID, displayKe
 }
 
 // RenderPDF builds a PDF for the arrangement, honoring the requested language.
-func (s *ArrangementService) RenderPDF(ctx context.Context, song *Song, arrangementID, displayKey, qrURL, lang string) ([]byte, string, error) {
+func (s *ArrangementService) RenderPDF(ctx context.Context, song *Song, arrangementID, displayKey, qrURL, lang, pdfFormat string) ([]byte, string, error) {
 	a, err := s.repo.Get(ctx, arrangementID)
 	if err != nil {
 		return nil, "", err
@@ -99,7 +99,7 @@ func (s *ArrangementService) RenderPDF(ctx context.Context, song *Song, arrangem
 	if err != nil {
 		return nil, "", err
 	}
-	data, err := RenderSongPDF(song.Title, song.Author, dk, a.Name, a.Sequence, chart, qrURL, resolvedLang)
+	data, err := RenderSongPDF(song.Title, song.Author, dk, a.Name, a.Sequence, chart, qrURL, resolvedLang, pdfFormat)
 	if err != nil {
 		return nil, "", err
 	}

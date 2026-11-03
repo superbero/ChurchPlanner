@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="preview-header">
+    <h2>{{.Song.Title}}</h2>
+    <p class="muted">{{.Song.Author}}</p>
+</div>
+
+{{if .YouTubeID}}
+<div class="preview-video">
+    <iframe src="https://www.youtube.com/embed/{{.YouTubeID}}" allowfullscreen></iframe>
+</div>
+{{else if .Song.YouTubeURL}}
+<p><a href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">Open on YouTube ↗</a></p>
+{{end}}
+
+<div class="preview-lyrics">
+    {{range .Chart}}
+        {{if .Label}}<h4>{{.Label}}</h4>{{end}}
+        {{range .Lines}}
+            <div class="chart-line">
+                {{range .Chords}}<span class="chord" style="left: {{.Position}}ch">{{.Chord}}</span>{{end}}
+                <span class="lyric">{{.Lyric}}</span>
+            </div>
+        {{end}}
+    {{else}}
+        <p class="muted">No lyrics or chords available.</p>
+    {{end}}
+</div>
+{{end}}

@@ -138,6 +138,38 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, status int, 
 	}
 }
 
+// RenderPartial renders only the "content" block, without the layout.
+// Useful for AJAX/htmx endpoints that inject HTML into an existing page.
+func (r *Renderer) RenderPartial(w http.ResponseWriter, req *http.Request, status int, page string, data any) {
+	t, ok := r.pages[page]
+	if !ok {
+		http.Error(w, "template not found: "+page, http.StatusInternalServerError)
+		return
+	}
+
+	var dataMap map[string]any
+	if data == nil {
+		dataMap = make(map[string]any)
+	} else if m, ok := data.(map[string]any); ok {
+		dataMap = m
+	} else {
+		http.Error(w, "renderer requires map[string]any", http.StatusInternalServerError)
+		return
+	}
+
+	if u, ok := auth.UserFrom(req.Context()); ok {
+		dataMap["CurrentUser"] = u
+	} else {
+		dataMap["CurrentUser"] = nil
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := t.ExecuteTemplate(w, "content", dataMap); err != nil {
+		slog.Error("render partial", "page", page, "err", err)
+	}
+}
+
 func ServerError(w http.ResponseWriter, err error) {
 	slog.Error("handler error", "err", err)
 	http.Error(w, "internal server error", http.StatusInternalServerError)

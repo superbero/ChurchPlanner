@@ -322,3 +322,112 @@ document.querySelectorAll('.item-row').forEach(function (row) {
         chip.remove();
     });
 })();
+
+// ---- Arrangement Editor: Chord Transposition ----
+(function () {
+    const btn = document.getElementById('btn-transpose');
+    if (!btn) return;
+
+    const targetKeySelect = document.getElementById('target-key');
+    const shiftSelect = document.getElementById('shift-semitones');
+    const sourceTextarea = document.getElementById('source_content');
+    const originalKeyInput = document.querySelector('input[name="original_key"]');
+
+    const notesSharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const notesFlat  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    const flatKeys = ['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'];
+
+    function getKeyIndex(key) {
+        let k = key.trim();
+        if (!k) return -1;
+        let root = k.charAt(0).toUpperCase() + k.slice(1).toLowerCase();
+        if (root.length > 1 && root[1] === 'B') root = root[0] + 'b';
+        if (notesSharp.includes(root)) return notesSharp.indexOf(root);
+        if (notesFlat.includes(root)) return notesFlat.indexOf(root);
+        return -1;
+    }
+
+    function transposeChord(chord, semitones, useFlats) {
+        const match = chord.match(/^([A-G][#b]?)(.*)$/);
+        if (!match) return chord;
+
+        let root = match[1];
+        let suffix = match[2];
+
+        let idx = notesSharp.indexOf(root);
+        if (idx === -1) idx = notesFlat.indexOf(root);
+        if (idx === -1) return chord;
+
+        let newIdx = (idx + semitones) % 12;
+        if (newIdx < 0) newIdx += 12;
+
+        const newRoot = useFlats ? notesFlat[newIdx] : notesSharp[newIdx];
+        return newRoot + suffix;
+    }
+
+    btn.addEventListener('click', function () {
+        const targetKey = targetKeySelect.value;
+        const shift = parseInt(shiftSelect.value, 10);
+        const currentKey = originalKeyInput ? originalKeyInput.value.trim() : '';
+
+        if (!currentKey) {
+            alert('Original key is empty. Please set it in Basic Settings first.');
+            return;
+        }
+
+        let semitones = 0;
+
+        // If a target key is selected, calculate the shift from current key to target
+        if (targetKey) {
+            const oldIdx = getKeyIndex(currentKey);
+            const newIdx = getKeyIndex(targetKey);
+            if (oldIdx === -1 || newIdx === -1) {
+                alert('Invalid key format.');
+                return;
+            }
+            semitones = newIdx - oldIdx;
+        } else if (shift !== 0) {
+            semitones = shift;
+        } else {
+            alert('Please select a Target Key or a Shift amount.');
+            return;
+        }
+
+        // Simplify to shortest path
+        if (semitones > 6) semitones -= 12;
+        if (semitones < -6) semitones += 12;
+
+        if (semitones === 0) {
+            alert('No transposition needed.');
+            return;
+        }
+
+        // Determine if new key uses flats
+        let newKeyIdx = (getKeyIndex(currentKey) + semitones) % 12;
+        if (newKeyIdx < 0) newKeyIdx += 12;
+        const newKeyRoot = notesFlat[newKeyIdx]; // Default to flat spelling for new key
+        const useFlats = flatKeys.includes(newKeyRoot) || notesFlat.includes(newKeyRoot);
+
+        let text = sourceTextarea.value;
+        text = text.replace(/\[([^\]]+)\]/g, function (match, chord) {
+            const parts = chord.split('/');
+            const transposedRoot = transposeChord(parts[0], semitones, useFlats);
+
+            if (parts.length > 1) {
+                const transposedBass = transposeChord(parts[1], semitones, useFlats);
+                return `[${transposedRoot}/${transposedBass}]`;
+            }
+            return `[${transposedRoot}]`;
+        });
+
+        sourceTextarea.value = text;
+
+        if (originalKeyInput) {
+            // Update original key to the new key
+            originalKeyInput.value = targetKey || (useFlats ? notesFlat[newKeyIdx] : notesSharp[newKeyIdx]);
+        }
+
+        targetKeySelect.value = '';
+        shiftSelect.value = '0';
+    });
+})();

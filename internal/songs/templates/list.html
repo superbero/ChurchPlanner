@@ -1,59 +1,108 @@
 {{define "content"}}
-<h1>Songs</h1>
-<p>
-    {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
-    <a class="button" href="/songs/new">Add song</a>
-    <a class="button" href="/songs/import">Import</a>
-    <a class="button-secondary" href="/songs/tags">Manage tags</a>
-    {{end}}
-    {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}<a class="button-secondary" href="/songs/reports/health">Health</a>{{end}}
-    <a class="button-secondary" href="/songs/suggest">Suggest</a>
-</p>
+<div class="page-header">
+    <div>
+        <h1>Songs</h1>
+        <p class="muted">Manage your song library, tags, and arrangements.</p>
+    </div>
+    <div class="action-bar">
+        <a class="button" href="/songs/new">Add song</a>
+        <a class="button" href="/songs/import">Import</a>
+        <a class="button-secondary" href="/songs/tags">Manage tags</a>
+        <a class="button-secondary" href="/songs/reports/health">Health</a>
+        <a class="button-secondary" href="/songs/suggest">Suggest</a>
+    </div>
+</div>
 
-<form method="get" action="/songs" class="filter-bar">
-    <input type="search" name="q" placeholder="Search title, author, lyrics…" value="{{.Filter.Query}}">
-    <input type="text" name="key" placeholder="Key" value="{{.Filter.Key}}" size="5">
-    <select name="tag" multiple size="3" class="tag-multi">
-        {{range .TagGroups}}
-            <optgroup label="{{.Group.Name}}">
-                {{range .Tags}}
-                    <option value="{{.Slug}}" {{if index $.SelectedTagSlugs .Slug}}selected{{end}}>{{.Name}}</option>
-                {{end}}
-            </optgroup>
-        {{end}}
-    </select>
-    <select name="sort">
-        <option value="title"   {{if or (eq .Filter.Sort "title")   (eq .Filter.Sort "")}}selected{{end}}>Title</option>
-        <option value="created" {{if eq .Filter.Sort "created"}}selected{{end}}>Newest</option>
-        <option value="updated" {{if eq .Filter.Sort "updated"}}selected{{end}}>Recently updated</option>
-    </select>
-    <label class="check"><input type="checkbox" name="archived" value="1" {{if .Filter.IncludeArchived}}checked{{end}}> Include archived</label>
-    <button type="submit">Filter</button>
-    <a href="/songs" class="button-secondary">Clear</a>
+<form method="get" action="/songs" class="filter-bar-horizontal">
+    <div class="filter-group search-group">
+        <input type="search" name="q" placeholder="Search title, author, lyrics…" value="{{.Filter.Query}}">
+    </div>
+    <div class="filter-group">
+        <input type="text" name="key" placeholder="Key (e.g. G)" value="{{.Filter.Key}}" size="10">
+    </div>
+    {{range .TagGroups}}
+    <div class="filter-group">
+        <select name="tag">
+            <option value="">Any {{.Group.Name}}</option>
+            {{range .Tags}}
+                <option value="{{.Slug}}" {{if index $.SelectedTagSlugs .Slug}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    {{end}}
+    <div class="filter-group">
+        <select name="sort">
+            <option value="title"   {{if or (eq .Filter.Sort "title") (eq .Filter.Sort "")}}selected{{end}}>Sort: Title</option>
+            <option value="created" {{if eq .Filter.Sort "created"}}selected{{end}}>Sort: Newest</option>
+            <option value="updated" {{if eq .Filter.Sort "updated"}}selected{{end}}>Sort: Updated</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label class="check"><input type="checkbox" name="archived" value="1" {{if .Filter.IncludeArchived}}checked{{end}}> Archived</label>
+    </div>
+    <div class="filter-group">
+        <button type="submit" class="button">Filter</button>
+        <a href="/songs" class="button-secondary">Entire Library</a>
+    </div>
 </form>
 
 <p class="muted">{{len .Songs}} song(s).</p>
 
-<table>
-    <thead><tr><th>Title</th><th>Author</th><th></th></tr></thead>
-    <tbody>
-    {{range .Songs}}
-        <tr {{if .Archived}}class="archived"{{end}}>
-            <td>
-                <a href="/songs/{{.ID}}">{{.Title}}</a>
-                {{if .Archived}}<span class="chip">archived</span>{{end}}
-            </td>
-            <td>{{.Author}}</td>
-            <td>
-                <a href="/songs/{{.ID}}">View</a> ·
-                <a href="/songs/{{.ID}}/pdf">PDF</a>
-                {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}· <a href="/songs/{{.ID}}/edit">Edit</a>{{end}}
-                {{if .YouTubeURL}}· <a href="{{.YouTubeURL}}" target="_blank" rel="noopener">YouTube</a>{{end}}
-            </td>
-        </tr>
-    {{else}}
-        <tr><td colspan="3">No songs match.</td></tr>
-    {{end}}
-    </tbody>
-</table>
+<div class="table-container">
+    <table>
+        <thead><tr><th>Title</th><th>Author</th><th style="text-align:right">Actions</th></tr></thead>
+        <tbody>
+        {{range .Songs}}
+            <tr {{if .Archived}}class="archived"{{end}}>
+                <td>
+                    <a href="/songs/{{.ID}}" class="song-title">{{.Title}}</a>
+                    {{if .Archived}}<span class="chip">archived</span>{{end}}
+                </td>
+                <td>{{.Author}}</td>
+                <td class="actions-cell">
+                    <button class="button-secondary" onclick="showPreview('{{.ID}}')">Quick View</button>
+                    <a href="/songs/{{.ID}}" style="margin-left: 0.5rem;">Details</a> ·
+                    <a href="/songs/{{.ID}}/pdf">PDF</a>
+                    {{if isEditorOrAdmin $.CurrentUser.Role}}· <a href="/songs/{{.ID}}/edit">Edit</a>{{end}}
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="3" style="text-align: center; padding: 2rem;">No songs found. Try clearing your filters or adding a new song.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+<!-- The Preview Modal -->
+<div id="preview-modal" class="modal-overlay" style="display: none;" onclick="closePreview(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-close" onclick="closePreview()">×</div>
+        <div id="preview-body">
+            <p style="text-align:center; padding: 2rem;">Loading…</p>
+        </div>
+    </div>
+</div>
+
+<script>
+async function showPreview(songId) {
+    const modal = document.getElementById('preview-modal');
+    const body = document.getElementById('preview-body');
+
+    // Show modal with loading state
+    modal.style.display = 'flex';
+    body.innerHTML = '<p style="text-align:center; padding: 2rem;">Loading…</p>';
+
+    try {
+        const resp = await fetch(`/songs/${songId}/preview`);
+        body.innerHTML = await resp.text();
+    } catch (err) {
+        body.innerHTML = '<p style="text-align:center; color: red;">Failed to load preview.</p>';
+    }
+}
+
+function closePreview(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('preview-modal').style.display = 'none';
+}
+</script>
 {{end}}

@@ -890,7 +890,15 @@ func (h *Handler) renderTranslationForm(w http.ResponseWriter, r *http.Request, 
 
 func (h *Handler) Suggestions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	tagSlugs := q["tag"]
+
+	// Filter out empty tags (which happen when a user leaves a dropdown on "Any Theme")
+	var cleanTags []string
+	for _, t := range q["tag"] {
+		if strings.TrimSpace(t) != "" {
+			cleanTags = append(cleanTags, t)
+		}
+	}
+	tagSlugs := cleanTags
 	key := strings.TrimSpace(q.Get("key"))
 	limit := 15
 	if n, _ := strconv.Atoi(q.Get("limit")); n > 0 {
@@ -1001,4 +1009,29 @@ func (h *Handler) publicBaseURL(r *http.Request) string {
 		scheme = "https"
 	}
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
+}
+
+
+// Preview renders a lightweight partial containing the lyrics and YouTube embed.
+func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	song, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		http.Error(w, "Song not found", http.StatusNotFound)
+		return
+	}
+
+	// Fetch the default arrangement to get the actual lyrics/chords
+	var chart []RenderedSection
+	arr, err := h.arr.Default(r.Context(), song.ID)
+	if err == nil {
+		// Pass the Arrangement ID, not the Song ID
+		chart, _, _ = h.arr.Chart(r.Context(), arr.ID, "")
+	}
+
+	h.renderer.RenderPartial(w, r, http.StatusOK, "songs_preview", map[string]any{
+		"Song":      song,
+		"YouTubeID": youtubeID(song.YouTubeURL),
+		"Chart":     chart,
+	})
 }
