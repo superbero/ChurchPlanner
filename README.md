@@ -26,6 +26,22 @@ Install Go 1.26 or newer, then run:
 GitHub Actions runs the race-enabled test suite and `go vet` on pushes and
 pull requests. Tests do not require a running database.
 
+## Roles and access
+
+- **Admin:** full access to plans, people, reports, songs, and team assignments.
+- **Team leader:** can view plans and manage positions/assignments only for teams
+  where they have the leader membership. They can assign only members of those
+  teams; editing plan details, times, and service order remains admin-only.
+- **Editor:** can manage songs and arrangements; plan management requires a
+  separate team-leader membership.
+- **Volunteer:** can view published calendar plans, manage their own unavailable
+  dates, see/respond to their own assignments, use songs, and access check-in
+  staff tools.
+- **Guest:** read-only calendar/song access and their own assigned-plan access.
+
+People, team memberships, and reports are admin-only. Unpublished plans are
+visible only to admins and team leaders.
+
 ## Module rules (enforced by `internal/`)
 
 - A module may import `internal/platform/*` and its own subpackages only.

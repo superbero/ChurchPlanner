@@ -86,15 +86,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	vLow := strings.TrimSpace(r.FormValue("vocal_low"))
 	vHigh := strings.TrimSpace(r.FormValue("vocal_high"))
 	userRole := strings.TrimSpace(r.FormValue("role"))
-
-	if err := h.repo.Update(r.Context(), id, phone, vLow, vHigh, userRole); err != nil {
-		httpx.ServerError(w, err)
-		return
-	}
-
-	positionIDs := r.Form["position_ids"]
-	if err := h.repo.SetPositions(r.Context(), id, positionIDs); err != nil {
-		httpx.ServerError(w, err)
+	if !validUserRole(userRole) {
+		http.Error(w, "invalid user role", http.StatusBadRequest)
 		return
 	}
 
@@ -107,9 +100,25 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		if teamRole == "" {
 			continue
 		}
+		if teamRole != "leader" && teamRole != "member" {
+			http.Error(w, "invalid team membership role", http.StatusBadRequest)
+			return
+		}
 		teamID := strings.TrimPrefix(key, "team_role_")
 		memberships[teamID] = teamRole
 	}
+
+	if err := h.repo.Update(r.Context(), id, phone, vLow, vHigh, userRole); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
+	positionIDs := r.Form["position_ids"]
+	if err := h.repo.SetPositions(r.Context(), id, positionIDs); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
 	if err := h.memberships.SetForUser(r.Context(), id, memberships); err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -130,6 +139,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if role == "" {
 		role = "volunteer"
 	}
+	if !validUserRole(role) {
+		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "people_form", map[string]any{
+			"Error": "invalid user role", "Name": name, "Email": email,
+		})
+		return
+	}
 
 	if _, err := h.repo.Create(r.Context(), name, email, password, role); err != nil {
 		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "people_form", map[string]any{
@@ -138,4 +153,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/people", http.StatusSeeOther)
+}
+
+func validUserRole(role string) bool {
+	switch role {
+	case "admin", "editor", "volunteer", "guest":
+		return true
+	default:
+		return false
+	}
 }

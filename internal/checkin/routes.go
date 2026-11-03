@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
@@ -37,11 +38,14 @@ func (m *Module) PublicRoutes(r chi.Router) {
 }
 
 // StaffRoutes are for logged-in admins/volunteers to manage family data.
-func (m *Module) StaffRoutes(r chi.Router) {
-	r.Get("/checkin/family", m.handler.ManageFamily)
-	r.Get("/checkin/child/{id}/edit", m.handler.EditChildForm)
-	r.Post("/checkin/child/{id}", m.handler.UpdateChild)
-	r.Post("/checkin/child/{id}/delete", m.handler.DeleteChild)
-	r.Post("/checkin/guardian", m.handler.AddGuardian)
-	r.Post("/checkin/guardian/{id}/delete", m.handler.DeleteGuardian)
+func (m *Module) StaffRoutes(r chi.Router, authn *auth.Authenticator) {
+	r.Group(func(r chi.Router) {
+		r.Use(authn.RequireRoles("volunteer"))
+		r.Get("/checkin/family", m.handler.ManageFamily)
+		r.Get("/checkin/child/{id}/edit", m.handler.EditChildForm)
+		r.Post("/checkin/child/{id}", m.handler.UpdateChild)
+		r.Post("/checkin/child/{id}/delete", m.handler.DeleteChild)
+		r.Post("/checkin/guardian", m.handler.AddGuardian)
+		r.Post("/checkin/guardian/{id}/delete", m.handler.DeleteGuardian)
+	})
 }

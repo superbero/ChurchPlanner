@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
@@ -33,34 +34,38 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	}}
 }
 
-func (m *Module) Routes(r chi.Router) {
+func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 	r.Route("/plans", func(r chi.Router) {
 		r.Get("/", m.handler.PlansIndex)
-		r.Get("/new", m.handler.NewPlan)
-		r.Post("/", m.handler.CreatePlan)
 		r.Get("/{id}", m.handler.ViewPlan)
-		r.Get("/{id}/edit", m.handler.EditPlan)
-		r.Post("/{id}", m.handler.UpdatePlan)
-		r.Post("/{id}/publish", m.handler.PublishPlan)
-		r.Post("/{id}/delete", m.handler.DeletePlan)
 
-		r.Post("/{id}/times", m.handler.AddTime)
-		r.Post("/{id}/times/reorder", m.handler.ReorderTimes)
-		r.Post("/{id}/times/{tid}/delete", m.handler.DeleteTime)
+		r.Group(func(r chi.Router) {
+			r.Use(authn.RequireRoles("admin"))
 
-		r.Post("/{id}/items", m.handler.AddItem)
-		r.Get("/{id}/items/{iid}/edit", m.handler.EditItemForm)
-		r.Post("/{id}/items/{iid}", m.handler.UpdateItem)
-		r.Post("/{id}/items/{iid}/delete", m.handler.DeleteItem)
-		r.Post("/{id}/items/reorder", m.handler.ReorderItems)
+			r.Get("/new", m.handler.NewPlan)
+			r.Post("/", m.handler.CreatePlan)
+			r.Get("/{id}/edit", m.handler.EditPlan)
+			r.Post("/{id}", m.handler.UpdatePlan)
+			r.Post("/{id}/publish", m.handler.PublishPlan)
+			r.Post("/{id}/delete", m.handler.DeletePlan)
+
+			r.Post("/{id}/times", m.handler.AddTime)
+			r.Post("/{id}/times/reorder", m.handler.ReorderTimes)
+			r.Post("/{id}/times/{tid}/delete", m.handler.DeleteTime)
+
+			r.Post("/{id}/items", m.handler.AddItem)
+			r.Get("/{id}/items/{iid}/edit", m.handler.EditItemForm)
+			r.Post("/{id}/items/{iid}", m.handler.UpdateItem)
+			r.Post("/{id}/items/{iid}/delete", m.handler.DeleteItem)
+			r.Post("/{id}/items/reorder", m.handler.ReorderItems)
+
+		})
 
 		r.Post("/{id}/people", m.handler.AssignPerson)
 		r.Post("/{id}/people/{pid}/delete", m.handler.RemovePerson)
-
 		r.Post("/{id}/positions", m.handler.AddNeededPosition)
 		r.Post("/{id}/positions/{posid}/delete", m.handler.RemoveNeededPosition)
 	})
-
 }
 
 // MyScheduleRoutes are accessible to everyone.

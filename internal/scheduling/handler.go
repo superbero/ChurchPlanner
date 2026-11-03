@@ -118,6 +118,48 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
+	u, hasUser := auth.UserFrom(r.Context())
+	isAdmin := hasUser && u.Role == "admin"
+	leaderTeamSet := make(map[string]bool)
+	memberSet := make(map[string]bool)
+	if !isAdmin {
+		leaderTeams, err := h.members.LeaderTeams(r.Context(), u.ID)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+		for _, teamID := range leaderTeams {
+			leaderTeamSet[teamID] = true
+		}
+		memberSet, err = h.members.MemberIDsForTeams(r.Context(), leaderTeams)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+		filteredTeams := tree[:0]
+		for _, team := range tree {
+			if leaderTeamSet[team.TeamID] {
+				filteredTeams = append(filteredTeams, team)
+			}
+		}
+		tree = filteredTeams
+
+		filteredPositions := allPositions[:0]
+		for _, position := range allPositions {
+			if leaderTeamSet[position.TeamID] {
+				filteredPositions = append(filteredPositions, position)
+			}
+		}
+		allPositions = filteredPositions
+
+		filteredUsers := users[:0]
+		for _, user := range users {
+			if memberSet[user.ID] {
+				filteredUsers = append(filteredUsers, user)
+			}
+		}
+		users = filteredUsers
+	}
 
 	// Group items by plan_time_id
 	byTime := map[string][]PlanItem{}
@@ -214,23 +256,16 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 	// Compute which positions the current user may edit.
 	var manageableIDs = map[string]bool{}
 	var manageablePositions []Position
-	if u, ok := auth.UserFrom(r.Context()); ok {
-		if u.Role == "admin" {
-			for _, pos := range allPositions {
+	if isAdmin {
+		for _, pos := range allPositions {
+			manageableIDs[pos.ID] = true
+		}
+		manageablePositions = allPositions
+	} else {
+		for _, pos := range allPositions {
+			if leaderTeamSet[pos.TeamID] {
 				manageableIDs[pos.ID] = true
-			}
-			manageablePositions = allPositions
-		} else {
-			leaderTeams, _ := h.members.LeaderTeams(r.Context(), u.ID)
-			teamSet := map[string]bool{}
-			for _, tid := range leaderTeams {
-				teamSet[tid] = true
-			}
-			for _, pos := range allPositions {
-				if teamSet[pos.TeamID] {
-					manageableIDs[pos.ID] = true
-					manageablePositions = append(manageablePositions, pos)
-				}
+				manageablePositions = append(manageablePositions, pos)
 			}
 		}
 	}
@@ -413,9 +448,24 @@ func (h *Handler) AssignPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	allowed, err := h.canManagePosition(r, positionID)
-	if err != nil || !allowed {
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	if !allowed {
 		forbid(w)
 		return
+	}
+	if user, ok := auth.UserFrom(r.Context()); ok && user.Role != "admin" {
+		eligible, err := h.members.IsMemberOfPositionTeam(r.Context(), personID, positionID)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+		if !eligible {
+			forbid(w)
+			return
+		}
 	}
 	if err := h.assign.AssignPerson(r.Context(), planID, personID, positionID); err != nil {
 		httpx.ServerError(w, err)
@@ -427,15 +477,28 @@ func (h *Handler) AssignPerson(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemovePerson(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	ppID := chi.URLParam(r, "pid")
-	posID, err := h.members.AssignmentPosition(r.Context(), ppID)
-	if err == nil {
-		allowed, _ := h.canManagePosition(r, posID)
-		if !allowed {
-			forbid(w)
-			return
-		}
+	posID, err := h.members.AssignmentPositionForPlan(r.Context(), ppID, planID)
+	if errors.Is(err, ErrPersonNotFound) {
+		http.NotFound(w, r)
+		return
 	}
-	_ = h.assign.RemovePerson(r.Context(), ppID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	allowed, err := h.canManagePosition(r, posID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	if !allowed {
+		forbid(w)
+		return
+	}
+	if err := h.assign.RemovePerson(r.Context(), ppID); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
 
@@ -683,12 +746,19 @@ func (h *Handler) AddNeededPosition(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	positionID := strings.TrimSpace(r.FormValue("position_id"))
 	if positionID != "" {
-		allowed, _ := h.canManagePosition(r, positionID)
+		allowed, err := h.canManagePosition(r, positionID)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
 		if !allowed {
 			forbid(w)
 			return
 		}
-		_ = h.assign.AddNeededPosition(r.Context(), planID, positionID)
+		if err := h.assign.AddNeededPosition(r.Context(), planID, positionID); err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
 	}
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
@@ -696,12 +766,19 @@ func (h *Handler) AddNeededPosition(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveNeededPosition(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	posID := chi.URLParam(r, "posid")
-	allowed, _ := h.canManagePosition(r, posID)
+	allowed, err := h.canManagePosition(r, posID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 	if !allowed {
 		forbid(w)
 		return
 	}
-	_ = h.assign.RemoveNeededPosition(r.Context(), planID, posID)
+	if err := h.assign.RemoveNeededPosition(r.Context(), planID, posID); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
 

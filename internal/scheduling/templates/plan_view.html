@@ -15,10 +15,13 @@
         </p>
     </div>
     <div>
+        {{if eq .CurrentUser.Role "admin"}}
         <a class="button-secondary" href="/plans/{{.Plan.ID}}/edit">Edit plan</a>
+        {{end}}
     </div>
 </header>
 
+{{if eq .CurrentUser.Role "admin"}}
 <h2>Add a time</h2>
 <form method="post" action="/plans/{{.Plan.ID}}/times" class="time-form">
     <div class="row">
@@ -48,6 +51,7 @@
     <button type="submit">Add time</button>
 </form>
 <p class="muted">Start defaults to the end of the latest time. The plan's overall service time is {{.Plan.ServiceAt.Format "15:04"}} → {{.Plan.ServiceEndsAt.Format "15:04"}} on {{.Plan.ServiceAt.Format "2 Jan"}}.</p>
+{{end}}
 
 <h2>Times &amp; order of service</h2>
 {{if .Times}}
@@ -62,10 +66,12 @@
                     <span class="muted">· {{.Time.StartsAt.Format "15:04" }} → {{.Time.EndsAt.Format "15:04"}}</span>
                 </h3>
             </div>
+            {{if eq $.CurrentUser.Role "admin"}}
             <form method="post" action="/plans/{{$.Plan.ID}}/times/{{.Time.ID}}/delete"
                   onsubmit="return confirm('Delete this time and all its items?')" style="display:inline">
                 <button class="link-btn" type="submit" title="Delete time">×</button>
             </form>
+            {{end}}
         </header>
 
         <ul class="item-list" id="list-{{.Time.ID}}">
@@ -88,11 +94,13 @@
                 <span class="item-key">{{.Key}}</span>
                 <span class="item-length">{{if .DurationMinutes}}{{.DurationMinutes}}m{{end}}</span>
                 <span class="item-actions">
+                    {{if eq $.CurrentUser.Role "admin"}}
                     <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" title="Edit">✎</a>
                     <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline"
                           onsubmit="return confirm('Remove this item?')">
                         <button class="link-btn" type="submit" title="Remove">×</button>
                     </form>
+                    {{end}}
                 </span>
             </li>
             {{else}}
@@ -100,6 +108,7 @@
             {{end}}
         </ul>
 
+        {{if eq $.CurrentUser.Role "admin"}}
         <details class="add-item">
             <summary>+ Add a song to {{.Time.Name}}</summary>
             <form method="post" action="/plans/{{$.Plan.ID}}/items" class="song-picker-form">
@@ -141,6 +150,7 @@
                     <button type="submit">Add</button>
                 </form>
             </details>
+            {{end}}
         </details>
     </section>
     {{end}}
@@ -159,7 +169,9 @@
             <span class="item-main">{{.Title}}</span>
             <span class="item-key">{{.Key}}</span>
             <span class="item-actions">
+                {{if eq $.CurrentUser.Role "admin"}}
                 <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit">✎</a>
+                {{end}}
             </span>
         </li>
         {{end}}

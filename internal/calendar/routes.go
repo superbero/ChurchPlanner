@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
@@ -27,8 +28,11 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	return &Module{handler: &Handler{db: db, renderer: renderer}}
 }
 
-func (m *Module) Routes(r chi.Router) {
+func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 	r.Get("/calendar", m.handler.Index)
-	r.Post("/calendar/blockouts", m.handler.AddBlockout)
-	r.Post("/calendar/blockouts/{id}/delete", m.handler.DeleteBlockout)
+	r.Group(func(r chi.Router) {
+		r.Use(authn.RequireRoles("volunteer"))
+		r.Post("/calendar/blockouts", m.handler.AddBlockout)
+		r.Post("/calendar/blockouts/{id}/delete", m.handler.DeleteBlockout)
+	})
 }

@@ -132,9 +132,12 @@ func NewRouter(d Deps) (http.Handler, error) {
 				return
 			}
 			var isLeader bool
-			_ = d.DB.QueryRow(r.Context(),
+			if err := d.DB.QueryRow(r.Context(),
 				`SELECT EXISTS(SELECT 1 FROM team_memberships WHERE user_id = $1 AND role = 'leader')`,
-				u.ID).Scan(&isLeader)
+				u.ID).Scan(&isLeader); err != nil {
+				httpx.ServerError(w, err)
+				return
+			}
 			if isLeader {
 				next.ServeHTTP(w, r)
 				return
@@ -155,9 +158,12 @@ func NewRouter(d Deps) (http.Handler, error) {
 				return
 			}
 			var isLeader bool
-			_ = d.DB.QueryRow(r.Context(),
+			if err := d.DB.QueryRow(r.Context(),
 				`SELECT EXISTS(SELECT 1 FROM team_memberships WHERE user_id = $1 AND role = 'leader')`,
-				u.ID).Scan(&isLeader)
+				u.ID).Scan(&isLeader); err != nil {
+				httpx.ServerError(w, err)
+				return
+			}
 			if isLeader {
 				http.Redirect(w, r, "/plans", http.StatusSeeOther)
 				return
@@ -167,14 +173,14 @@ func NewRouter(d Deps) (http.Handler, error) {
 
 		// Shared across all logged-in users
 		schedulingModule.MyScheduleRoutes(r)
-		calendar.New(d.DB, renderer).Routes(r)
-		checkinModule.StaffRoutes(r)
+		calendar.New(d.DB, renderer).Routes(r, authn)
+		checkinModule.StaffRoutes(r, authn)
 		songsModule.Routes(r, authn)
 
 		// /plans: admins + team leaders (per-position writes further scoped)
 		r.Group(func(r chi.Router) {
 			r.Use(teamLeaderOrAdmin)
-			schedulingModule.Routes(r)
+			schedulingModule.Routes(r, authn)
 		})
 
 		// Admin only

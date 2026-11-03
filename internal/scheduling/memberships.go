@@ -2,7 +2,9 @@ package scheduling
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -74,6 +76,43 @@ func (r *TeamMembershipRepository) CanManageTeam(ctx context.Context, userID, te
 	return b, err
 }
 
+func (r *TeamMembershipRepository) IsMemberOfPositionTeam(ctx context.Context, userID, positionID string) (bool, error) {
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM positions p
+			JOIN team_memberships tm ON tm.team_id = p.team_id
+			WHERE p.id = $1 AND tm.user_id = $2
+		)
+	`, positionID, userID).Scan(&allowed)
+	return allowed, err
+}
+
+func (r *TeamMembershipRepository) MemberIDsForTeams(ctx context.Context, teamIDs []string) (map[string]bool, error) {
+	out := make(map[string]bool)
+	if len(teamIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT user_id
+		FROM team_memberships
+		WHERE team_id::text = ANY($1)
+	`, teamIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		out[userID] = true
+	}
+	return out, rows.Err()
+}
+
 // SetForUser replaces all memberships for the given user.
 // `memberships` maps team_id -> role ("leader" or "member"). Empty map clears all.
 func (r *TeamMembershipRepository) SetForUser(ctx context.Context, userID string, memberships map[string]string) error {
@@ -83,13 +122,15 @@ func (r *TeamMembershipRepository) SetForUser(ctx context.Context, userID string
 	}
 	defer tx.Rollback(ctx)
 
+	for _, role := range memberships {
+		if role != "leader" && role != "member" {
+			return errors.New("invalid team membership role")
+		}
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM team_memberships WHERE user_id = $1`, userID); err != nil {
 		return err
 	}
 	for teamID, role := range memberships {
-		if role != "leader" && role != "member" {
-			role = "member"
-		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, $3)
 		`, userID, teamID, role); err != nil {
@@ -110,5 +151,19 @@ func (r *TeamMembershipRepository) PositionTeamID(ctx context.Context, positionI
 func (r *TeamMembershipRepository) AssignmentPosition(ctx context.Context, planPersonID string) (string, error) {
 	var posID string
 	err := r.db.QueryRow(ctx, `SELECT position_id FROM plan_people WHERE id = $1`, planPersonID).Scan(&posID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrPersonNotFound
+	}
+	return posID, err
+}
+
+func (r *TeamMembershipRepository) AssignmentPositionForPlan(ctx context.Context, planPersonID, planID string) (string, error) {
+	var posID string
+	err := r.db.QueryRow(ctx, `
+		SELECT position_id FROM plan_people WHERE id = $1 AND plan_id = $2
+	`, planPersonID, planID).Scan(&posID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrPersonNotFound
+	}
 	return posID, err
 }
