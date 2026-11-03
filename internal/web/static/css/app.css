@@ -1144,3 +1144,62 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     height: 1rem;
     margin: 0;
 }
+
+
+/* Key Dropdown Selector */
+.key-dropdown {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--accent);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    padding: 0 1.4rem 0 0;
+    margin-right: 0.5rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    /* Custom SVG chevron */
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%232f6feb%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: 0.6em auto;
+}
+.key-dropdown:focus { outline: none; }
+
+
+/* ── PDF Modal Form ───────────────────────────────────────────── */
+.modal-body {
+    padding: 2rem;
+}
+.pdf-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+.pdf-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.pdf-form label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #475467;
+    margin: 0;
+}
+.pdf-form select {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: inherit;
+    background-color: #fff;
+    cursor: pointer;
+}
+.pdf-form select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(47, 111, 235, 0.1);
+}

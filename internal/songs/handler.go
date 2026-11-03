@@ -2,7 +2,6 @@ package songs
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -373,21 +372,15 @@ func (h *Handler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		arrID = a.ID
-	} else {
-		a, err := h.arr.Get(r.Context(), arrID)
-		if errors.Is(err, ErrArrangementNotFound) || (err == nil && a.SongID != songID) {
-			http.NotFound(w, r)
-			return
-		}
-		if err != nil {
-			httpx.ServerError(w, err)
-			return
-		}
 	}
 	displayKey := r.URL.Query().Get("key")
 	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
+	pdfFormat := strings.TrimSpace(r.URL.Query().Get("format"))
+	if pdfFormat == "" {
+		pdfFormat = "chords"
+	}
 
-	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, "", lang)
+	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, "", lang, pdfFormat)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -395,6 +388,7 @@ func (h *Handler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	_, _ = w.Write(data)
+
 }
 
 // ---- Import ----
@@ -661,9 +655,13 @@ func (h *Handler) ViewPracticePDF(w http.ResponseWriter, r *http.Request) {
 		displayKey = pt.DisplayKey
 	}
 	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
+	pdfFormat := strings.TrimSpace(r.URL.Query().Get("format"))
+	if pdfFormat == "" {
+		pdfFormat = "chords"
+	}
 	qrURL := h.publicBaseURL(r) + "/practice/" + token
 
-	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, qrURL, lang)
+	data, filename, err := h.arr.RenderPDF(r.Context(), &song, arrID, displayKey, qrURL, lang, pdfFormat)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -671,6 +669,7 @@ func (h *Handler) ViewPracticePDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	_, _ = w.Write(data)
+
 }
 
 func (h *Handler) RevokePracticeLink(w http.ResponseWriter, r *http.Request) {

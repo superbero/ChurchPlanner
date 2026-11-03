@@ -9,6 +9,8 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
+// RenderSongPDF produces an A4 portrait chord chart PDF.
+// pdfFormat can be "chords" (default), "numbers" (Nashville), or "lyrics".
 func RenderSongPDF(title, author, key, arrangement, sequence string, chart []RenderedSection, qrURL, language, pdfFormat string) ([]byte, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(18, 18, 18)
@@ -46,6 +48,9 @@ func RenderSongPDF(title, author, key, arrangement, sequence string, chart []Ren
 	if language != "" && language != "en" {
 		sub += "  —  " + strings.ToUpper(language)
 	}
+	if pdfFormat == "numbers" {
+		sub += "  —  Nashville Numbers"
+	}
 	pdf.CellFormat(0, 6, sub, "", 1, "C", false, 0, "")
 
 	if sequence != "" {
@@ -72,7 +77,7 @@ func RenderSongPDF(title, author, key, arrangement, sequence string, chart []Ren
 			pdf.SetTextColor(0, 0, 0)
 		}
 
-		charW := pdf.GetStringWidth("M") // approx for Courier 10
+		charW := pdf.GetStringWidth("M")
 
 		for _, line := range sec.Lines {
 			if pdf.GetY() > 265 {
@@ -81,10 +86,16 @@ func RenderSongPDF(title, author, key, arrangement, sequence string, chart []Ren
 			x0 := pdf.GetX()
 			y0 := pdf.GetY()
 
-			pdf.SetFont("Courier", "B", 9)
-			for _, c := range line.Chords {
-				pdf.SetXY(x0+float64(c.Position)*charW, y0)
-				pdf.CellFormat(0, chordH, c.Chord, "", 0, "L", false, 0, "")
+			if pdfFormat != "lyrics" {
+				pdf.SetFont("Courier", "B", 9)
+				for _, c := range line.Chords {
+					chordToRender := c.Chord
+					if pdfFormat == "numbers" {
+						chordToRender = toNashville(c.Chord, key)
+					}
+					pdf.SetXY(x0+float64(c.Position)*charW, y0)
+					pdf.CellFormat(0, chordH, chordToRender, "", 0, "L", false, 0, "")
+				}
 			}
 
 			pdf.SetFont("Courier", "", 10)
@@ -103,42 +114,48 @@ func RenderSongPDF(title, author, key, arrangement, sequence string, chart []Ren
 	return buf.Bytes(), nil
 }
 
-
-// toNashville converts an absolute chord (e.g., Cmaj7) to its Nashville Number equivalent (e.g., 4maj7)
+// toNashville converts an absolute chord (e.g., Cmaj7) to its Nashville Number equivalent (e.g., 4maj7).
+// Handles slash chords like C/G → 1/5.
 func toNashville(chord, key string) string {
-	keyIdx, ok1 := KeyIndex(key)
-	if !ok1 {
+	keyIdx, ok := KeyIndex(key)
+	if !ok {
 		return chord
-	}
-	// Strip minor from key if present (we just need the root)
-	keyRoot := key
-	if len(key) > 1 && key[1] == 'm' {
-		keyRoot = key[:1]
 	}
 
 	match := chordRE.FindStringSubmatch(chord)
 	if match == nil {
 		return chord
 	}
-	root, suffix := match[1], match[2]
+	root := match[1]
+	suffix := match[2]
+	var bass string
+	if len(match) > 3 {
+		bass = match[3]
+	}
 
-	chordIdx, ok2 := KeyIndex(root)
-	if !ok2 {
+	chordIdx, ok := KeyIndex(root)
+	if !ok {
 		return chord
 	}
 
-	interval := (chordIdx - keyIdx + 12) % 12
-
-	// Map intervals to Nashville numbers
-	// 1=0, 2=2, 3=4, 4=5, 5=7, 6=9, 7=11
 	numberMap := map[int]string{
 		0: "1", 1: "b2", 2: "2", 3: "b3", 4: "3", 5: "4",
 		6: "b5", 7: "5", 8: "b6", 9: "6", 10: "b7", 11: "7",
 	}
 
+	interval := (chordIdx - keyIdx + 12) % 12
 	num := numberMap[interval]
 	if num == "" {
-		num = "?"
+		return chord
+	}
+
+	if bass != "" {
+		if bassIdx, ok := KeyIndex(bass); ok {
+			bassInterval := (bassIdx - keyIdx + 12) % 12
+			if bassNum, ok := numberMap[bassInterval]; ok {
+				return num + suffix + "/" + bassNum
+			}
+		}
 	}
 
 	return num + suffix

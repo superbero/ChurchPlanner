@@ -34,14 +34,33 @@
         <!-- Floating Toolbar -->
         <div class="chart-toolbar">
             <div class="toolbar-group">
-                <span class="current-key">{{.DisplayKey}}</span>
+                <form method="GET" action="" style="margin:0; display:flex;">
+                    {{if .ResolvedLang}}<input type="hidden" name="lang" value="{{.ResolvedLang}}">{{end}}
+                    <select name="key" class="key-dropdown" onchange="this.form.submit()">
+                        {{$k := .DisplayKey}}
+                        <option value="C" {{if eq $k "C"}}selected{{end}}>C</option>
+                        <option value="Db" {{if eq $k "Db"}}selected{{end}}>Db</option>
+                        <option value="D" {{if eq $k "D"}}selected{{end}}>D</option>
+                        <option value="Eb" {{if eq $k "Eb"}}selected{{end}}>Eb</option>
+                        <option value="E" {{if eq $k "E"}}selected{{end}}>E</option>
+                        <option value="F" {{if eq $k "F"}}selected{{end}}>F</option>
+                        <option value="F#" {{if eq $k "F#"}}selected{{end}}>F#</option>
+                        <option value="G" {{if eq $k "G"}}selected{{end}}>G</option>
+                        <option value="Ab" {{if eq $k "Ab"}}selected{{end}}>Ab</option>
+                        <option value="A" {{if eq $k "A"}}selected{{end}}>A</option>
+                        <option value="Bb" {{if eq $k "Bb"}}selected{{end}}>Bb</option>
+                        <option value="B" {{if eq $k "B"}}selected{{end}}>B</option>
+                    </select>
+                </form>
+
                 <div class="transpose-nav">
                     <a href="?key={{.DisplayKey}}&semitones=-1{{if .ResolvedLang}}&lang={{.ResolvedLang}}{{end}}" title="Transpose down 1 semitone">−</a>
                     <a href="?key={{.DisplayKey}}&semitones=0{{if .ResolvedLang}}&lang={{.ResolvedLang}}{{end}}" title="Reset to original key">Reset</a>
                     <a href="?key={{.DisplayKey}}&semitones=1{{if .ResolvedLang}}&lang={{.ResolvedLang}}{{end}}" title="Transpose up 1 semitone">+</a>
                 </div>
             </div>
-            {{if .Offset}}
+
+            {{if ne .DisplayKey .Arrangement.OriginalKey}}
             <div class="toolbar-group muted" style="font-size:0.9em;">
                 Shifted from original ({{.Arrangement.OriginalKey}})
             </div>
