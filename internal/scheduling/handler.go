@@ -78,15 +78,11 @@ func (h *Handler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	p, err := h.plans.Create(r.Context(), in)
+	p, err := h.plans.CreateWithServiceTime(r.Context(), in)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
-	// Auto-create the primary "Service" time from the plan's service_at.
-	// Volunteers never have to re-enter the same date/time.
-	_, _ = h.plans.CreateTime(r.Context(), p.ID, "service", "Service",
-		p.ServiceAt, p.ServiceAt.Add(90*time.Minute))
 	http.Redirect(w, r, "/plans/"+p.ID, http.StatusSeeOther)
 }
 
@@ -152,26 +148,59 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		SELECT user_id FROM user_blockouts
 		WHERE starts_on <= $1 AND ends_on >= $1
 	`, plan.ServiceAt.Format("2006-01-02"))
-	if err == nil {
-		for brows.Next() {
-			var uid string
-			brows.Scan(&uid)
-			blockedMap[uid] = true
-		}
-		brows.Close()
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
 	}
+	for brows.Next() {
+		var uid string
+		if err := brows.Scan(&uid); err != nil {
+			brows.Close()
+			httpx.ServerError(w, err)
+			return
+		}
+		blockedMap[uid] = true
+	}
+	if err := brows.Err(); err != nil {
+		brows.Close()
+		httpx.ServerError(w, err)
+		return
+	}
+	brows.Close()
 
 	// Build a map of PositionID -> []User (only those with the skill)
+	userPositions, err := h.plans.DB().Query(r.Context(), `
+		SELECT user_id, position_id FROM user_positions
+	`)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	skillsByPosition := make(map[string]map[string]bool)
+	for userPositions.Next() {
+		var userID, positionID string
+		if err := userPositions.Scan(&userID, &positionID); err != nil {
+			userPositions.Close()
+			httpx.ServerError(w, err)
+			return
+		}
+		if skillsByPosition[positionID] == nil {
+			skillsByPosition[positionID] = make(map[string]bool)
+		}
+		skillsByPosition[positionID][userID] = true
+	}
+	if err := userPositions.Err(); err != nil {
+		userPositions.Close()
+		httpx.ServerError(w, err)
+		return
+	}
+	userPositions.Close()
+
 	usersByPos := make(map[string][]auth.User)
 	for _, pos := range allPositions {
 		var eligible []auth.User
 		for _, u := range users {
-			// Check if user has this skill
-			var hasSkill bool
-			err := h.plans.DB().QueryRow(r.Context(),
-				`SELECT EXISTS(SELECT 1 FROM user_positions WHERE user_id = $1 AND position_id = $2)`,
-				u.ID, pos.ID).Scan(&hasSkill)
-			if err == nil && hasSkill {
+			if skillsByPosition[pos.ID][u.ID] {
 				eligible = append(eligible, u)
 			}
 		}

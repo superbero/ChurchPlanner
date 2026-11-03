@@ -2,6 +2,7 @@ package songs
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,7 +115,11 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 	}
 	var rows []arrRow
 	for _, a := range arrangements {
-		keys, _ := h.arr.Keys(r.Context(), a.ID)
+		keys, err := h.arr.Keys(r.Context(), a.ID)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
 		rows = append(rows, arrRow{Arrangement: a, Keys: keys})
 	}
 
@@ -157,15 +162,18 @@ func (h *Handler) AddHistory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	t, err := time.Parse("2006-01-02", r.FormValue("used_on"))
 	if err != nil {
-		httpx.ServerError(w, err)
+		http.Error(w, "used_on must be a valid date", http.StatusBadRequest)
 		return
 	}
-	_ = h.svc.AddHistory(r.Context(), KeyHistory{
+	if err := h.svc.AddHistory(r.Context(), KeyHistory{
 		SongID: id,
 		UsedOn: t,
 		Key:    strings.TrimSpace(r.FormValue("key")),
 		Notes:  strings.TrimSpace(r.FormValue("notes")),
-	})
+	}); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 	http.Redirect(w, r, "/songs/"+id, http.StatusSeeOther)
 }
 
@@ -365,6 +373,16 @@ func (h *Handler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		arrID = a.ID
+	} else {
+		a, err := h.arr.Get(r.Context(), arrID)
+		if errors.Is(err, ErrArrangementNotFound) || (err == nil && a.SongID != songID) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
 	}
 	displayKey := r.URL.Query().Get("key")
 	lang := strings.TrimSpace(r.URL.Query().Get("lang"))
@@ -508,19 +526,19 @@ func parseArrangementInput(r *http.Request) CreateArrangementInput {
 		format = "chordpro"
 	}
 	return CreateArrangementInput{
-		Name:          strings.TrimSpace(r.FormValue("name")),
-		BPM:           bpm,
-		Meter:         strings.TrimSpace(r.FormValue("meter")),
-		LengthSeconds: length,
-		Sequence:      strings.TrimSpace(r.FormValue("sequence")),
-		Notes:         strings.TrimSpace(r.FormValue("notes")),
-		OriginalKey:   strings.TrimSpace(r.FormValue("original_key")),
-		SourceContent: r.FormValue("source_content"),
-		Format:        format,
-		Archived:      r.FormValue("archived") == "1",
+		Name:            strings.TrimSpace(r.FormValue("name")),
+		BPM:             bpm,
+		Meter:           strings.TrimSpace(r.FormValue("meter")),
+		LengthSeconds:   length,
+		Sequence:        strings.TrimSpace(r.FormValue("sequence")),
+		Notes:           strings.TrimSpace(r.FormValue("notes")),
+		OriginalKey:     strings.TrimSpace(r.FormValue("original_key")),
+		SourceContent:   r.FormValue("source_content"),
+		Format:          format,
+		PrimaryLanguage: strings.TrimSpace(r.FormValue("primary_language")),
+		Archived:        r.FormValue("archived") == "1",
 	}
 }
-
 
 // ---- Practice links ----
 
@@ -595,7 +613,11 @@ func (h *Handler) ViewPractice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	translations, _ := h.arr.ListTranslations(r.Context(), arrID)
+	translations, err := h.arr.ListTranslations(r.Context(), arrID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 
 	h.renderer.Render(w, r, http.StatusOK, "songs_practice", map[string]any{
 		"Token":              token,
@@ -698,11 +720,12 @@ func (h *Handler) RestoreRevision(w http.ResponseWriter, r *http.Request) {
 // ---- Health ----
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	items, err := h.health.Compute(r.Context())
+	all, err := h.health.Compute(r.Context())
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
+	items := all
 	// Optional filter by category
 	cat := r.URL.Query().Get("cat")
 	if cat != "" {
@@ -716,7 +739,6 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 
 	counts := map[string]int{}
-	all, _ := h.health.Compute(r.Context())
 	for _, it := range all {
 		counts[it.Category]++
 	}
@@ -853,13 +875,13 @@ func (h *Handler) renderTranslationForm(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 	h.renderer.Render(w, r, http.StatusOK, "songs_translation_form", map[string]any{
-		"Song":             song,
-		"Arrangement":      a,
-		"Language":         lang,
-		"SourceContent":    source,
-		"Format":           format,
-		"Notes":            notes,
-		"Error":            errMsg,
+		"Song":              song,
+		"Arrangement":       a,
+		"Language":          lang,
+		"SourceContent":     source,
+		"Format":            format,
+		"Notes":             notes,
+		"Error":             errMsg,
 		"TranslatorEnabled": h.trans != nil && h.trans.Enabled(),
 	})
 }

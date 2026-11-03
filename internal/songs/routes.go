@@ -56,6 +56,7 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 		// --- Read-Only (All Users) ---
 		r.Get("/", m.handler.List)
 		r.Get("/search", m.handler.SearchArrangementsJSON)
+		r.Get("/suggest", m.handler.Suggestions)
 		r.Get("/{id}", m.handler.View)
 		r.Get("/{id}/pdf", m.handler.DownloadPDF)
 		r.Get("/{id}/arrangements/{aid}", m.handler.ViewArrangement)

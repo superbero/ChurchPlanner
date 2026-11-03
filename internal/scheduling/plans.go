@@ -82,6 +82,39 @@ func (r *PlanRepository) Create(ctx context.Context, in CreatePlanInput) (Plan, 
 		in.ServiceTypeID, in.Title, in.ServiceAt, in.ServiceEndsAt, in.Notes))
 }
 
+func (r *PlanRepository) CreateWithServiceTime(ctx context.Context, in CreatePlanInput) (Plan, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return Plan{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	plan, err := scanPlan(tx.QueryRow(ctx, `
+		INSERT INTO plans (service_type_id, title, service_at, service_ends_at, notes)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING `+planColumns,
+		in.ServiceTypeID, in.Title, in.ServiceAt, in.ServiceEndsAt, in.Notes))
+	if err != nil {
+		return Plan{}, err
+	}
+
+	var serviceTimeID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO plan_times (plan_id, kind, name, starts_at, ends_at)
+		VALUES ($1, 'service', 'Service', $2, $3)
+		RETURNING id
+	`, plan.ID, in.ServiceAt, in.ServiceEndsAt).Scan(&serviceTimeID); err != nil {
+		return Plan{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE plans SET service_time_id = $2 WHERE id = $1
+	`, plan.ID, serviceTimeID); err != nil {
+		return Plan{}, err
+	}
+	plan.ServiceTimeID = serviceTimeID
+	return plan, tx.Commit(ctx)
+}
+
 func (r *PlanRepository) Update(ctx context.Context, id string, in CreatePlanInput) (Plan, error) {
 	p, err := scanPlan(r.db.QueryRow(ctx, `
 		UPDATE plans SET
@@ -157,7 +190,6 @@ func (r *PlanRepository) DeleteTime(ctx context.Context, id string) error {
 	return err
 }
 
-
 // ReorderTimes renumbers the times of a plan in the given order.
 func (r *PlanRepository) ReorderTimes(ctx context.Context, planID string, timeIDs []string) error {
 	tx, err := r.db.Begin(ctx)
@@ -176,7 +208,6 @@ func (r *PlanRepository) ReorderTimes(ctx context.Context, planID string, timeID
 	}
 	return tx.Commit(ctx)
 }
-
 
 // DB returns the underlying pool (used by the handler for skill lookups).
 func (r *PlanRepository) DB() *pgxpool.Pool { return r.db }

@@ -13,7 +13,7 @@
 
 {{if .TranslationMissing}}
 <p class="error">No translation in {{languageLabel .RequestedLang}} yet. Showing primary ({{languageLabel .ResolvedLang}}).
-    {{if isEditorOrAdmin .CurrentUser.Role}}
+    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
     <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new?lang={{.RequestedLang}}">Add one →</a>
     {{end}}
 </p>
@@ -24,7 +24,7 @@
 <p>
     <a class="button" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf?key={{.DisplayKey}}&lang={{.ResolvedLang}}">Download PDF ({{.DisplayKey}}{{if .ResolvedLang}} · {{languageLabel .ResolvedLang}}{{end}})</a>
 
-    {{if isEditorOrAdmin .CurrentUser.Role}}
+    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
     <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>
     <a class="button-secondary" href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/history">History</a>
     {{end}}
@@ -40,7 +40,7 @@
     <a href="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}?lang={{.Language}}"
        class="lang-chip {{if eq .Language $.ResolvedLang}}active{{end}}">
         {{languageLabel .Language}}
-        {{if isEditorOrAdmin $.CurrentUser.Role}}
+        {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
         <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/translations/{{.ID}}/delete"
               style="display:inline" onsubmit="return confirm('Delete {{languageLabel .Language}} translation?')">
             <button type="submit" class="link-btn">×</button>
@@ -48,7 +48,7 @@
         {{end}}
     </a>
     {{end}}
-    {{if isEditorOrAdmin .CurrentUser.Role}}
+    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
     <a href="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/translations/new" class="button-secondary">+ Add translation</a>
     {{end}}
 </div>
@@ -70,7 +70,7 @@
     {{range .Keys}}
     <li>
         <span class="chip">{{.Name}}: {{.Key}}{{if .IsDefault}} (default){{end}}</span>
-        {{if isEditorOrAdmin $.CurrentUser.Role}}
+        {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
             {{if not .IsDefault}}
                 <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{$.Arrangement.ID}}/keys/{{.ID}}/set-default" style="display:inline">
                     <button class="link-btn" type="submit">★</button>
@@ -87,7 +87,7 @@
 <p class="muted">No named keys.</p>
 {{end}}
 
-{{if isEditorOrAdmin .CurrentUser.Role}}
+{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
 <form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/keys" class="inline-form">
     <input type="text" name="name" placeholder="e.g. Female Key" required>
     <input type="text" name="key" placeholder="A" required size="4">
@@ -115,7 +115,7 @@
 
 {{if .Arrangement.Notes}}<h2>Notes</h2><p>{{.Arrangement.Notes}}</p>{{end}}
 
-{{if isEditorOrAdmin .CurrentUser.Role}}
+{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
 <form method="post" action="/songs/{{.Song.ID}}/arrangements/{{.Arrangement.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete this arrangement and its keys/translations?')">
     <button type="submit" class="link-btn" style="color:#b42318">Delete arrangement</button>
 </form>

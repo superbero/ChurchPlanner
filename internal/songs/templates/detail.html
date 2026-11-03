@@ -14,8 +14,8 @@
 {{if .Song.YouTubeURL}}<p><a href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">▶ Watch on YouTube</a></p>{{end}}
 
 <p>
-    {{if isEditorOrAdmin .CurrentUser.Role}}<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>{{end}}
-    {{if isEditorOrAdmin .CurrentUser.Role}}<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>{{end}}
+    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}<a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add arrangement</a>{{end}}
+    {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}<a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit metadata</a>{{end}}
     <a class="button-secondary" href="/songs/{{.Song.ID}}/pdf">Download PDF (default)</a>
 </p>
 
@@ -35,10 +35,10 @@
             <td class="tags-cell">{{range .Keys}}<span class="chip">{{.Name}}: {{.Key}}</span>{{end}}</td>
             <td>{{if .Arrangement.BPM}}{{.Arrangement.BPM}}{{end}}</td>
             <td>
-                <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}">View</a> ·
-                <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a> ·
+                <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}">View</a>
+                {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}· <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a>{{end}} ·
                 <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf">PDF</a>
-                {{if not .Arrangement.IsDefault}}
+                {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role) (not .Arrangement.IsDefault)}}
                     · <form method="post" action="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/set-default" style="display:inline">
                         <button type="submit" class="link-btn">set default</button>
                     </form>
@@ -52,6 +52,7 @@
 <p class="muted">No arrangements yet. Add one to enter the chord chart.</p>
 {{end}}
 
+{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
 <h2>Share for practice</h2>
 <p class="muted">Generate a link volunteers can open without logging in. They'll see the chart, YouTube video, and a PDF download. Link expires in 30 days.</p>
 <form method="post" action="/songs/{{.Song.ID}}/practice-links" class="inline-form">
@@ -63,9 +64,11 @@
 {{if .PracticeToken}}
 <p><strong>New practice link:</strong> <a href="/practice/{{.PracticeToken}}">/practice/{{.PracticeToken}}</a></p>
 {{end}}
+{{end}}
 
 {{if .Song.Notes}}<h2>Notes</h2><p>{{.Song.Notes}}</p>{{end}}
 
+{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
 <h2>Key history</h2>
 <form method="post" action="/songs/{{.Song.ID}}/history">
     <label>Date used <input type="date" name="used_on" required></label>
@@ -87,4 +90,5 @@
 <form method="post" action="/songs/{{.Song.ID}}/delete" style="margin-top:2rem" onsubmit="return confirm('Delete song and all arrangements?')">
     <button type="submit" class="link-btn" style="color:#b42318">Delete song</button>
 </form>
+{{end}}
 {{end}}

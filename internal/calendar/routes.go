@@ -29,5 +29,6 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/calendar", m.handler.Index)
-		r.Post("/calendar/blockouts", m.handler.AddBlockout)
+	r.Post("/calendar/blockouts", m.handler.AddBlockout)
+	r.Post("/calendar/blockouts/{id}/delete", m.handler.DeleteBlockout)
 }

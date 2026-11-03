@@ -20,20 +20,30 @@
     {{range .Days}}
     <div class="cal-day {{if .IsOther}}cal-other{{end}} {{if .IsToday}}cal-today{{end}}">
         <div class="cal-date">
-            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan">+</a>
+            {{if $.CanManagePlans}}<a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan">+</a>{{end}}
+            {{if $.CanManagePlans}}
             <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-day-num">{{.Date.Format "2"}}</a>
+            {{else}}
+            <span class="cal-day-num">{{.Date.Format "2"}}</span>
+            {{end}}
         </div>
 
         <div class="cal-events">
             {{range .Plans}}
+            {{if $.CanManagePlans}}
             <a href="/plans/{{.ID}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
                 <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
             </a>
+            {{else}}
+            <span class="cal-event">
+                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
+            </span>
+            {{end}}
             {{end}}
 
             {{range .Blockouts}}
             <div class="cal-blockout" title="{{.Reason}}">
-                🚫 {{.UserName}}
+                Unavailable{{if .Reason}}: {{.Reason}}{{end}}
             </div>
             {{end}}
         </div>
@@ -50,4 +60,24 @@
         <button type="submit">Save Blockout</button>
     </form>
 </details>
+
+<section class="my-blockouts">
+    <h2>Your unavailable dates</h2>
+    {{if .MyBlockouts}}
+    <ul>
+        {{range .MyBlockouts}}
+        <li>
+            {{.Starts.Format "2 Jan 2006"}} – {{.Ends.Format "2 Jan 2006"}}
+            {{if .Reason}}<span class="muted">· {{.Reason}}</span>{{end}}
+            <form method="post" action="/calendar/blockouts/{{.ID}}/delete" style="display:inline"
+                  onsubmit="return confirm('Remove this unavailable date?')">
+                <button class="link-btn" type="submit" aria-label="Remove unavailable dates">Remove</button>
+            </form>
+        </li>
+        {{end}}
+    </ul>
+    {{else}}
+    <p class="muted">No unavailable dates overlap this month.</p>
+    {{end}}
+</section>
 {{end}}
