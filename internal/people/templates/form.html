@@ -8,10 +8,15 @@
     <label>Email <input type="email" name="email" value="{{.Email}}" required placeholder="jane@example.com"></label>
     <label>Initial Password <input type="password" name="password" required minlength="6" placeholder="••••••••"></label>
 
-    <label>Role
+    <label>Permission level
         <select name="role">
-            <option value="volunteer" {{if eq .Role "volunteer"}}selected{{end}}>Volunteer</option>
-            <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+            {{if .CanAssignPrivilegedRoles}}
+            <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Organization Administrator</option>
+            <option value="manager" {{if eq .Role "manager"}}selected{{end}}>Manager</option>
+            {{end}}
+            <option value="editor" {{if eq .Role "editor"}}selected{{end}}>Editor</option>
+            <option value="viewer" {{if eq .Role "viewer"}}selected{{end}}>Viewer</option>
+            <option value="scheduled_viewer" {{if eq .Role "scheduled_viewer"}}selected{{end}}>Scheduled Viewer</option>
         </select>
     </label>
 

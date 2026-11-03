@@ -40,7 +40,7 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 		r.Get("/{id}", m.handler.ViewPlan)
 
 		r.Group(func(r chi.Router) {
-			r.Use(authn.RequireRoles("admin"))
+			r.Use(authn.RequireRoles(auth.RoleEditor))
 
 			r.Get("/new", m.handler.NewPlan)
 			r.Post("/", m.handler.CreatePlan)

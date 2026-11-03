@@ -32,6 +32,7 @@ type Plan struct {
 	Title     string
 	TimeStr   string
 	Published bool
+	URL       string
 }
 
 type Blockout struct {
@@ -55,14 +56,14 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
 	}
-	canManagePlans := u.Role == "admin"
-	if !canManagePlans {
+	canViewDrafts := auth.CanEditContent(u.Role)
+	if !canViewDrafts && u.Role != auth.RoleScheduledViewer {
 		if err := h.db.QueryRow(r.Context(), `
 			SELECT EXISTS(
 				SELECT 1 FROM team_memberships
 				WHERE user_id = $1 AND role = 'leader'
 			)
-		`, u.ID).Scan(&canManagePlans); err != nil {
+		`, u.ID).Scan(&canViewDrafts); err != nil {
 			httpx.ServerError(w, err)
 			return
 		}
@@ -71,23 +72,37 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	firstOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 	firstOfNext := firstOfMonth.AddDate(0, 1, 0)
 
-	// Volunteers only see plans once published; leaders and admins can see drafts.
+	// Plan readers only see published plans; editors and leaders can see drafts.
 	query := `
-		SELECT id, title, service_at, published
+		SELECT id, title, service_at, published, ''::text
 		FROM plans
 		WHERE service_at >= $1 AND service_at < $2 AND published = TRUE
 		ORDER BY service_at
 	`
-	if canManagePlans {
+	var queryArgs []any
+	switch {
+	case canViewDrafts:
 		query = `
-			SELECT id, title, service_at, published
+			SELECT id, title, service_at, published, ''::text
 			FROM plans
 			WHERE service_at >= $1 AND service_at < $2
 			ORDER BY service_at
 		`
+	case u.Role == auth.RoleScheduledViewer:
+		query = `
+			SELECT pl.id, pl.title, pl.service_at, pl.published, MIN(pp.id::text)
+			FROM plans pl
+			JOIN plan_people pp ON pp.plan_id = pl.id
+			WHERE pl.service_at >= $1 AND pl.service_at < $2 AND pp.person_id = $3
+			GROUP BY pl.id
+			ORDER BY pl.service_at
+		`
+		queryArgs = append(queryArgs, u.ID)
 	}
 
-	rows, err := h.db.Query(r.Context(), query, firstOfMonth, firstOfNext)
+	args := []any{firstOfMonth, firstOfNext}
+	args = append(args, queryArgs...)
+	rows, err := h.db.Query(r.Context(), query, args...)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -97,12 +112,18 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p Plan
 		var date time.Time
-		if err := rows.Scan(&p.ID, &p.Title, &date, &p.Published); err != nil {
+		var assignmentID string
+		if err := rows.Scan(&p.ID, &p.Title, &date, &p.Published, &assignmentID); err != nil {
 			rows.Close()
 			httpx.ServerError(w, err)
 			return
 		}
 		p.TimeStr = date.Format("15:04")
+		if u.Role == auth.RoleScheduledViewer {
+			p.URL = "/my-schedule/" + assignmentID
+		} else {
+			p.URL = "/plans/" + p.ID
+		}
 		plansByDay[date.Day()] = append(plansByDay[date.Day()], p)
 	}
 	if err := rows.Err(); err != nil {
@@ -180,7 +201,8 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		"NextMonth":      firstOfMonth.AddDate(0, 1, 0),
 		"Days":           days,
 		"MyBlockouts":    myBlockouts,
-		"CanManagePlans": canManagePlans,
+		"CanManagePlans": auth.CanEditContent(u.Role),
+		"CanOpenPlans":   auth.CanViewPlans(u.Role) || canViewDrafts || u.Role == auth.RoleScheduledViewer,
 	})
 }
 

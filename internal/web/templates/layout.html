@@ -19,20 +19,35 @@
                     <a href="/songs">Songs</a>
                     <a href="/calendar">Calendar</a>
                     <a href="/reports/ccli">Reports</a>
+                {{else if eq .CurrentUser.Role "manager"}}
+                    <a href="/plans">Plans</a>
+                    <a href="/people">People</a>
+                    <a href="/calendar">Calendar</a>
+                    <a href="/songs">Songs</a>
                 {{else if eq .CurrentUser.Role "editor"}}
+                    <a href="/plans">Plans</a>
                     <a href="/songs">Songs</a>
                     <a href="/calendar">Calendar</a>
+                    <a href="/my-schedule">My schedule</a>
+                {{else if eq .CurrentUser.Role "viewer"}}
+                    <a href="/plans">Plans</a>
+                    <a href="/calendar">Calendar</a>
+                    <a href="/songs">Songs</a>
+                    <a href="/my-schedule">My schedule</a>
                 {{else}}
                     <a href="/my-schedule">My Schedule</a>
                     <a href="/calendar">Calendar</a>
                     <a href="/songs">Songs</a>
                 {{end}}
-                <a href="/checkin" target="_blank" title="Opens kiosk in a new tab">Check-in</a>
+                {{if or (eq .CurrentUser.Role "admin") (eq .CurrentUser.Role "manager")}}
+                <a href="/checkin/family">Family records</a>
+                <a href="/checkin" target="_blank" title="Opens kiosk in a new tab">Check-in kiosk</a>
+                {{end}}
             {{end}}
         </nav>
         {{if .CurrentUser}}
         <div class="user-menu">
-            <span class="user-name">{{.CurrentUser.Name}}</span>
+            <span class="user-name">{{.CurrentUser.Name}} · {{roleLabel .CurrentUser.Role}}</span>
             <form method="post" action="/logout" class="logout"><button>Sign out</button></form>
         </div>
         {{end}}

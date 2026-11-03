@@ -79,7 +79,7 @@ func (r *Repository) Create(ctx context.Context, name, email, password, role str
 
 func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh, role string) error {
 	if role == "" {
-		role = "volunteer"
+		role = auth.RoleScheduledViewer
 	}
 	_, err := r.db.Exec(ctx, `
 		UPDATE users SET phone = $2, vocal_low = $3, vocal_high = $4, role = $5

@@ -32,7 +32,7 @@ func scanPlan(row pgx.Row) (Plan, error) {
 	return p, err
 }
 
-func (r *PlanRepository) ListUpcoming(ctx context.Context, serviceTypeID string, limit int) ([]Plan, error) {
+func (r *PlanRepository) ListUpcoming(ctx context.Context, serviceTypeID string, limit int, includeDrafts bool) ([]Plan, error) {
 	if limit <= 0 {
 		limit = 30
 	}
@@ -42,14 +42,16 @@ func (r *PlanRepository) ListUpcoming(ctx context.Context, serviceTypeID string,
 		rows, err = r.db.Query(ctx, `
 			SELECT `+planColumns+` FROM plans
 			WHERE service_at >= now() - interval '30 days'
-			ORDER BY service_at ASC LIMIT $1
-		`, limit)
+			  AND ($1 OR published = TRUE)
+			ORDER BY service_at ASC LIMIT $2
+		`, includeDrafts, limit)
 	} else {
 		rows, err = r.db.Query(ctx, `
 			SELECT `+planColumns+` FROM plans
 			WHERE service_type_id = $1 AND service_at >= now() - interval '30 days'
-			ORDER BY service_at ASC LIMIT $2
-		`, serviceTypeID, limit)
+			  AND ($2 OR published = TRUE)
+			ORDER BY service_at ASC LIMIT $3
+		`, serviceTypeID, includeDrafts, limit)
 	}
 	if err != nil {
 		return nil, err

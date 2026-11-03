@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 )
@@ -34,6 +35,16 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 	user, err := h.repo.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+	requester, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if requester.Role == auth.RoleManager &&
+		(user.Role == auth.RoleAdmin || user.Role == auth.RoleManager) {
+		http.Error(w, "only an organization administrator can view administrator or manager profiles", http.StatusForbidden)
 		return
 	}
 
@@ -72,22 +83,39 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderer.Render(w, r, http.StatusOK, "people_view", map[string]any{
-		"User":            user,
-		"Positions":       positions,
-		"SkillMap":        skillMap,
-		"Teams":           teams,
-		"MembershipRoles": membershipRoles,
+		"User":                     user,
+		"Positions":                positions,
+		"SkillMap":                 skillMap,
+		"Teams":                    teams,
+		"MembershipRoles":          membershipRoles,
+		"CanAssignPrivilegedRoles": canAssignPrivilegedRoles(r),
 	})
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	requester, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	target, err := h.repo.Get(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 	phone := strings.TrimSpace(r.FormValue("phone"))
 	vLow := strings.TrimSpace(r.FormValue("vocal_low"))
 	vHigh := strings.TrimSpace(r.FormValue("vocal_high"))
 	userRole := strings.TrimSpace(r.FormValue("role"))
 	if !validUserRole(userRole) {
 		http.Error(w, "invalid user role", http.StatusBadRequest)
+		return
+	}
+	if requester.Role != auth.RoleAdmin &&
+		(target.Role == auth.RoleAdmin || target.Role == auth.RoleManager ||
+			userRole == auth.RoleAdmin || userRole == auth.RoleManager) {
+		http.Error(w, "only an organization administrator can manage administrator or manager roles", http.StatusForbidden)
 		return
 	}
 
@@ -128,7 +156,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
-	h.renderer.Render(w, r, http.StatusOK, "people_form", nil)
+	h.renderer.Render(w, r, http.StatusOK, "people_form", map[string]any{
+		"Role":                     auth.RoleScheduledViewer,
+		"CanAssignPrivilegedRoles": canAssignPrivilegedRoles(r),
+	})
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -137,12 +168,22 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	role := strings.TrimSpace(r.FormValue("role"))
 	if role == "" {
-		role = "volunteer"
+		role = auth.RoleScheduledViewer
 	}
 	if !validUserRole(role) {
 		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "people_form", map[string]any{
 			"Error": "invalid user role", "Name": name, "Email": email,
 		})
+		return
+	}
+	requester, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if requester.Role != auth.RoleAdmin &&
+		(role == auth.RoleAdmin || role == auth.RoleManager) {
+		http.Error(w, "only an organization administrator can create administrator or manager accounts", http.StatusForbidden)
 		return
 	}
 
@@ -157,9 +198,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 func validUserRole(role string) bool {
 	switch role {
-	case "admin", "editor", "volunteer", "guest":
+	case auth.RoleAdmin, auth.RoleManager, auth.RoleEditor,
+		auth.RoleViewer, auth.RoleScheduledViewer:
 		return true
 	default:
 		return false
 	}
+}
+
+func canAssignPrivilegedRoles(r *http.Request) bool {
+	u, ok := auth.UserFrom(r.Context())
+	return ok && auth.CanAssignPrivilegedRoles(u.Role)
 }

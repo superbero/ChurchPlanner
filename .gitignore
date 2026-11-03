@@ -4,3 +4,4 @@ deploy/.env
 *.log
 .DS_Store
 coverage.out
+.github

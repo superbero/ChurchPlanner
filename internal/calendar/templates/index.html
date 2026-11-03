@@ -30,8 +30,8 @@
 
         <div class="cal-events">
             {{range .Plans}}
-            {{if $.CanManagePlans}}
-            <a href="/plans/{{.ID}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
+            {{if $.CanOpenPlans}}
+            <a href="{{.URL}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
                 <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
             </a>
             {{else}}

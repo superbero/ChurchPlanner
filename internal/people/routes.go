@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 )
@@ -33,12 +34,15 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	}}
 }
 
-func (m *Module) Routes(r chi.Router) {
-	r.Route("/people", func(r chi.Router) {
-		r.Get("/", m.handler.List)
-		r.Get("/new", m.handler.New)
-		r.Post("/", m.handler.Create)
-		r.Get("/{id}", m.handler.View)
-		r.Post("/{id}", m.handler.Update)
+func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
+	r.Group(func(r chi.Router) {
+		r.Use(authn.RequireRoles(auth.RoleManager))
+		r.Route("/people", func(r chi.Router) {
+			r.Get("/", m.handler.List)
+			r.Get("/new", m.handler.New)
+			r.Post("/", m.handler.Create)
+			r.Get("/{id}", m.handler.View)
+			r.Post("/{id}", m.handler.Update)
+		})
 	})
 }

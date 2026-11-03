@@ -117,18 +117,21 @@ func NewRouter(d Deps) (http.Handler, error) {
 	songsModule.PublicRoutes(r)
 	checkinModule.PublicRoutes(r)
 
-	// teamLeaderOrAdmin: allows admin OR any user with a leader row in team_memberships.
-	// Used only to gate the /plans subrouter — per-position writes are further
-	// restricted inside the scheduling handlers via canManagePosition().
-	teamLeaderOrAdmin := func(next http.Handler) http.Handler {
+	// Plan readers can view all plans. Team leaders can also enter the planning
+	// area for scoped team assignments; scheduled viewers remain assignment-only.
+	planAccess := func(next http.Handler) http.Handler {
 		return authn.RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u, ok := auth.UserFrom(r.Context())
 			if !ok {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
-			if u.Role == "admin" {
+			if auth.CanViewPlans(u.Role) {
 				next.ServeHTTP(w, r)
+				return
+			}
+			if u.Role == auth.RoleScheduledViewer {
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			var isLeader bool
@@ -153,8 +156,20 @@ func NewRouter(d Deps) (http.Handler, error) {
 		// Dashboard
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			u, _ := auth.UserFrom(r.Context())
-			if u.Role == "admin" {
+			if u.Role == auth.RoleManager {
+				http.Redirect(w, r, "/people", http.StatusSeeOther)
+				return
+			}
+			if auth.CanViewPlans(u.Role) {
 				http.Redirect(w, r, "/plans", http.StatusSeeOther)
+				return
+			}
+			if auth.CanManagePeople(u.Role) {
+				http.Redirect(w, r, "/people", http.StatusSeeOther)
+				return
+			}
+			if u.Role == auth.RoleScheduledViewer {
+				http.Redirect(w, r, "/my-schedule", http.StatusSeeOther)
 				return
 			}
 			var isLeader bool
@@ -177,16 +192,22 @@ func NewRouter(d Deps) (http.Handler, error) {
 		checkinModule.StaffRoutes(r, authn)
 		songsModule.Routes(r, authn)
 
-		// /plans: admins + team leaders (per-position writes further scoped)
+		// /plans: content viewers/editors and team leaders. Team assignment
+		// mutations remain scoped by canManagePosition.
 		r.Group(func(r chi.Router) {
-			r.Use(teamLeaderOrAdmin)
+			r.Use(planAccess)
 			schedulingModule.Routes(r, authn)
 		})
 
-		// Admin only
+		// People managers and organization administrators.
 		r.Group(func(r chi.Router) {
-			r.Use(authn.RequireRoles("admin"))
-			people.New(d.DB, renderer).Routes(r)
+			r.Use(authn.RequireRoles(auth.RoleManager))
+			people.New(d.DB, renderer).Routes(r, authn)
+		})
+
+		// Organization administrators only.
+		r.Group(func(r chi.Router) {
+			r.Use(authn.RequireRoles(auth.RoleAdmin))
 			reports.New(d.DB, renderer).Routes(r)
 		})
 	})

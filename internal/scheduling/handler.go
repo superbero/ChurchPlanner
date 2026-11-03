@@ -30,7 +30,21 @@ func (h *Handler) PlansIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	selectedType := r.URL.Query().Get("type")
-	plans, err := h.plans.ListUpcoming(r.Context(), selectedType, 40)
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	canViewDrafts := auth.CanEditContent(u.Role)
+	if !canViewDrafts {
+		var err error
+		canViewDrafts, err = h.members.IsLeaderOfAnyTeam(r.Context(), u.ID)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+	}
+	plans, err := h.plans.ListUpcoming(r.Context(), selectedType, 40, canViewDrafts)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -93,6 +107,22 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if !auth.CanEditContent(u.Role) && !plan.Published {
+		isLeader, err := h.members.IsLeaderOfAnyTeam(r.Context(), u.ID)
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+		if !isLeader {
+			http.NotFound(w, r)
+			return
+		}
+	}
 	times, err := h.plans.ListTimes(r.Context(), planID)
 	if err != nil {
 		httpx.ServerError(w, err)
@@ -118,8 +148,7 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	u, hasUser := auth.UserFrom(r.Context())
-	isAdmin := hasUser && u.Role == "admin"
+	isAdmin := u.Role == auth.RoleAdmin
 	leaderTeamSet := make(map[string]bool)
 	memberSet := make(map[string]bool)
 	if !isAdmin {
@@ -287,8 +316,8 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
-	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
-		http.Error(w, "admin required", http.StatusForbidden)
+	if u, ok := auth.UserFrom(r.Context()); !ok || !auth.CanEditContent(u.Role) {
+		http.Error(w, "editor access required", http.StatusForbidden)
 		return
 	}
 	plan, err := h.plans.Get(r.Context(), chi.URLParam(r, "id"))
@@ -305,8 +334,8 @@ func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
-	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
-		http.Error(w, "admin required", http.StatusForbidden)
+	if u, ok := auth.UserFrom(r.Context()); !ok || !auth.CanEditContent(u.Role) {
+		http.Error(w, "editor access required", http.StatusForbidden)
 		return
 	}
 	id := chi.URLParam(r, "id")
@@ -335,8 +364,8 @@ func (h *Handler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PublishPlan(w http.ResponseWriter, r *http.Request) {
-	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
-		http.Error(w, "admin required", http.StatusForbidden)
+	if u, ok := auth.UserFrom(r.Context()); !ok || !auth.CanEditContent(u.Role) {
+		http.Error(w, "editor access required", http.StatusForbidden)
 		return
 	}
 	id := chi.URLParam(r, "id")
@@ -349,8 +378,8 @@ func (h *Handler) PublishPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeletePlan(w http.ResponseWriter, r *http.Request) {
-	if u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {
-		http.Error(w, "admin required", http.StatusForbidden)
+	if u, ok := auth.UserFrom(r.Context()); !ok || !auth.CanEditContent(u.Role) {
+		http.Error(w, "editor access required", http.StatusForbidden)
 		return
 	}
 	if err := h.plans.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
@@ -456,7 +485,7 @@ func (h *Handler) AssignPerson(w http.ResponseWriter, r *http.Request) {
 		forbid(w)
 		return
 	}
-	if user, ok := auth.UserFrom(r.Context()); ok && user.Role != "admin" {
+	if user, ok := auth.UserFrom(r.Context()); ok && user.Role != auth.RoleAdmin {
 		eligible, err := h.members.IsMemberOfPositionTeam(r.Context(), personID, positionID)
 		if err != nil {
 			httpx.ServerError(w, err)
@@ -803,7 +832,7 @@ func (h *Handler) canManagePosition(r *http.Request, positionID string) (bool, e
 	if !ok {
 		return false, nil
 	}
-	if u.Role == "admin" {
+	if u.Role == auth.RoleAdmin {
 		return true, nil
 	}
 	teamID, err := h.members.PositionTeamID(r.Context(), positionID)

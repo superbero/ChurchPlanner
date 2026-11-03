@@ -28,19 +28,24 @@ pull requests. Tests do not require a running database.
 
 ## Roles and access
 
-- **Admin:** full access to plans, people, reports, songs, and team assignments.
-- **Team leader:** can view plans and manage positions/assignments only for teams
-  where they have the leader membership. They can assign only members of those
-  teams; editing plan details, times, and service order remains admin-only.
-- **Editor:** can manage songs and arrangements; plan management requires a
-  separate team-leader membership.
-- **Volunteer:** can view published calendar plans, manage their own unavailable
-  dates, see/respond to their own assignments, use songs, and access check-in
-  staff tools.
-- **Guest:** read-only calendar/song access and their own assigned-plan access.
+- **Organization Administrator (`admin`):** full access, including People,
+  permissions, reports, plan and song management, and team assignments. Billing
+  and subscription management are not implemented.
+- **Manager (`manager`):** manages People profiles and permissions but cannot
+  grant administrator or manager access, and has read-only access to published
+  plans and songs. A separate team-leader membership grants team-scoped
+  assignment management.
+- **Editor (`editor`):** creates and edits songs and plans, but cannot manage
+  People or system-level access.
+- **Viewer (`viewer`):** read-only access to published plans and songs.
+- **Scheduled Viewer (`scheduled_viewer`):** sees only plans and assignments
+  where they are specifically scheduled, plus songs and their own availability.
 
-People, team memberships, and reports are admin-only. Unpublished plans are
-visible only to admins and team leaders.
+Team-leader membership is an additional capability, not a global role. Leaders
+can view plans and manage positions/assignments only for their teams. Editors
+and administrators can view unpublished plans; team leaders can view drafts
+when leading a team on the plan. Legacy `volunteer` accounts migrate to
+Scheduled Viewer and `guest` accounts to Viewer.
 
 ## Module rules (enforced by `internal/`)
 

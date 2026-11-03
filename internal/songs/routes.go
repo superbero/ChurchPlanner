@@ -48,12 +48,12 @@ func (m *Module) PublicRoutes(r chi.Router) {
 	r.Get("/practice/{token}/pdf", m.handler.ViewPracticePDF)
 }
 
-// Routes registers all song paths. Read-only paths are available to everyone.
-// Modify paths are gated behind an Admin role check.
+// Routes registers song paths. Read-only paths are available to authenticated
+// users; modifying paths require editor or administrator access.
 func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 	r.Route("/songs", func(r chi.Router) {
 
-		// --- Read-Only (All Users) ---
+		// --- Read-Only ---
 		r.Get("/", m.handler.List)
 		r.Get("/search", m.handler.SearchArrangementsJSON)
 		r.Get("/suggest", m.handler.Suggestions)
@@ -62,9 +62,9 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 		r.Get("/{id}/arrangements/{aid}", m.handler.ViewArrangement)
 		r.Get("/{id}/arrangements/{aid}/pdf", m.handler.DownloadPDF)
 
-		// --- Admin Only (Modifying Data) ---
+		// --- Editors and administrators ---
 		r.Group(func(r chi.Router) {
-			r.Use(authn.RequireRoles("admin", "editor"))
+			r.Use(authn.RequireRoles(auth.RoleEditor))
 
 			r.Get("/new", m.handler.New)
 			r.Post("/", m.handler.Create)

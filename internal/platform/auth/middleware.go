@@ -24,6 +24,30 @@ type User struct {
 	VocalHigh string
 }
 
+const (
+	RoleAdmin           = "admin"
+	RoleManager         = "manager"
+	RoleEditor          = "editor"
+	RoleViewer          = "viewer"
+	RoleScheduledViewer = "scheduled_viewer"
+)
+
+func CanManagePeople(role string) bool {
+	return role == RoleAdmin || role == RoleManager
+}
+
+func CanAssignPrivilegedRoles(role string) bool {
+	return role == RoleAdmin
+}
+
+func CanEditContent(role string) bool {
+	return role == RoleAdmin || role == RoleEditor
+}
+
+func CanViewPlans(role string) bool {
+	return role == RoleAdmin || role == RoleManager || role == RoleEditor || role == RoleViewer
+}
+
 type Authenticator struct {
 	DB       *pgxpool.Pool
 	Sessions *scs.SessionManager
@@ -59,12 +83,12 @@ func (a *Authenticator) RequireUser(next http.Handler) http.Handler {
 }
 
 // RequireRoles ensures the logged-in user has one of the allowed roles.
-// Admin always passes, regardless of the requested roles.
+// Organization administrators always pass.
 func (a *Authenticator) RequireRoles(allowedRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return a.RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			u, _ := UserFrom(r.Context())
-			if u.Role == "admin" {
+			if u.Role == RoleAdmin {
 				next.ServeHTTP(w, r)
 				return
 			}

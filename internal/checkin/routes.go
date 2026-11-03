@@ -37,10 +37,10 @@ func (m *Module) PublicRoutes(r chi.Router) {
 	r.Get("/checkin/retrieve", m.handler.RetrieveCode)
 }
 
-// StaffRoutes are for logged-in admins/volunteers to manage family data.
+// StaffRoutes are restricted to managers and administrators.
 func (m *Module) StaffRoutes(r chi.Router, authn *auth.Authenticator) {
 	r.Group(func(r chi.Router) {
-		r.Use(authn.RequireRoles("volunteer"))
+		r.Use(authn.RequireRoles(auth.RoleManager))
 		r.Get("/checkin/family", m.handler.ManageFamily)
 		r.Get("/checkin/child/{id}/edit", m.handler.EditChildForm)
 		r.Post("/checkin/child/{id}", m.handler.UpdateChild)

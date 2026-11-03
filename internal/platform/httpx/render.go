@@ -17,6 +17,23 @@ func isEditorOrAdmin(role string) bool {
 	return role == "admin" || role == "editor"
 }
 
+func roleLabel(role string) string {
+	switch role {
+	case "admin":
+		return "Organization Administrator"
+	case "manager":
+		return "Manager"
+	case "editor":
+		return "Editor"
+	case "viewer":
+		return "Viewer"
+	case "scheduled_viewer":
+		return "Scheduled Viewer"
+	default:
+		return "Unknown role"
+	}
+}
+
 func funcMap() template.FuncMap {
 	return template.FuncMap{
 		"contains":   strings.Contains,
@@ -30,6 +47,7 @@ func funcMap() template.FuncMap {
 		"upper":      strings.ToUpper,
 		"languageLabel":   languageLabel,
 		"isEditorOrAdmin": isEditorOrAdmin,
+		"roleLabel":       roleLabel,
 		"languageOptions": languageOptions,
 	}
 }

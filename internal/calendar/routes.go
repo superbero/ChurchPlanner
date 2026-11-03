@@ -31,7 +31,8 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 	r.Get("/calendar", m.handler.Index)
 	r.Group(func(r chi.Router) {
-		r.Use(authn.RequireRoles("volunteer"))
+		r.Use(authn.RequireRoles(
+			auth.RoleManager, auth.RoleEditor, auth.RoleViewer, auth.RoleScheduledViewer))
 		r.Post("/calendar/blockouts", m.handler.AddBlockout)
 		r.Post("/calendar/blockouts/{id}/delete", m.handler.DeleteBlockout)
 	})
