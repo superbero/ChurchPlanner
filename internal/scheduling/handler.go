@@ -832,7 +832,7 @@ func (h *Handler) canManagePosition(r *http.Request, positionID string) (bool, e
 	if !ok {
 		return false, nil
 	}
-	if u.Role == auth.RoleAdmin {
+	if auth.CanEditContent(u.Role) {
 		return true, nil
 	}
 	teamID, err := h.members.PositionTeamID(r.Context(), positionID)
