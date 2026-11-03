@@ -1,98 +1,169 @@
 #!/usr/bin/env bash
-set -uo pipefail
+# Diagnostic + apply missing fixes. Explicitly disables -e so no step aborts.
+set +e
 
 [ -f go.mod ] || { echo "✗ run from project root"; exit 1; }
 
-echo "▸ 1/3  Move /checkin out of the auth group (make it public)"
-python3 - <<'PYEOF'
+echo "════════════════════════════════════════════════════════════════"
+echo "  Diagnostic: what's already applied?"
+echo "════════════════════════════════════════════════════════════════"
+
+NEED2A=0; NEED2B=0; NEED3A=0; NEED3B=0; NEED4=0
+
+if grep -q 'u.Role == "admin" || u.Role == "editor"' internal/scheduling/handler.go 2>/dev/null; then
+    echo "  ✓ [2a] canManagePosition allows editor"
+else
+    echo "  ✗ [2a] canManagePosition does NOT allow editor"
+    NEED2A=1
+fi
+
+if grep -q 'u.Role != "admin" && u.Role != "editor"' internal/scheduling/handler.go 2>/dev/null; then
+    echo "  ✓ [2b] Plan mutation handlers allow editor"
+else
+    echo "  ✗ [2b] Plan mutation handlers do NOT allow editor"
+    NEED2B=1
+fi
+
+if grep -q 'u.Role == "admin" || u.Role == "editor"' internal/web/router.go 2>/dev/null; then
+    echo "  ✓ [3a] /plans middleware allows editor"
+else
+    echo "  ✗ [3a] /plans middleware does NOT allow editor"
+    NEED3A=1
+fi
+
+if grep -q 'if u.Role == "admin" || u.Role == "editor" {' internal/web/router.go 2>/dev/null; then
+    echo "  ✓ [3b] Dashboard redirect handles editor"
+else
+    echo "  ✗ [3b] Dashboard redirect does NOT handle editor"
+    NEED3B=1
+fi
+
+if grep -q 'value="editor"' internal/people/templates/form.html 2>/dev/null; then
+    echo "  ✓ [4]  New Person form has all 4 roles"
+else
+    echo "  ✗ [4]  New Person form missing roles"
+    NEED4=1
+fi
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "  Applying missing fixes"
+echo "════════════════════════════════════════════════════════════════"
+
+if [ "$NEED2A" = "1" ] || [ "$NEED2B" = "1" ]; then
+    echo ""
+    echo "▸ [2/4] Patch scheduling/handler.go"
+    python3 <<'PYEOF' 2>&1 | sed 's/^/    /'
+from pathlib import Path
+p = Path("internal/scheduling/handler.go")
+src = p.read_text()
+changed = 0
+
+# 2a — canManagePosition
+old1 = '\tif u.Role == "admin" {\n\t\treturn true, nil\n\t}'
+new1 = '\tif u.Role == "admin" || u.Role == "editor" {\n\t\treturn true, nil\n\t}'
+if old1 in src:
+    src = src.replace(old1, new1, 1)
+    changed += 1
+    print("✓ canManagePosition now allows editor")
+
+# 2b — admin-required plan mutation handlers
+old2 = '\tif u, ok := auth.UserFrom(r.Context()); !ok || u.Role != "admin" {\n\t\thttp.Error(w, "admin required", http.StatusForbidden)\n\t\treturn\n\t}'
+new2 = '\tif u, ok := auth.UserFrom(r.Context()); !ok || (u.Role != "admin" && u.Role != "editor") {\n\t\thttp.Error(w, "admin or editor required", http.StatusForbidden)\n\t\treturn\n\t}'
+n = src.count(old2)
+if n > 0:
+    src = src.replace(old2, new2)
+    changed += n
+    print(f"✓ Updated {n} admin-required block(s)")
+elif 'admin or editor required' in src:
+    print("· Plan mutation handlers already updated")
+
+p.write_text(src)
+if changed == 0:
+    print("· Nothing needed")
+PYEOF
+fi
+
+if [ "$NEED3A" = "1" ] || [ "$NEED3B" = "1" ]; then
+    echo ""
+    echo "▸ [3/4] Patch web/router.go"
+    python3 <<'PYEOF' 2>&1 | sed 's/^/    /'
 from pathlib import Path
 p = Path("internal/web/router.go")
 src = p.read_text()
+changed = 0
 
-old = '\t\tcheckin.New(d.DB, renderer).Routes(r)\n'
-if old not in src:
-    if '\tcheckin.New(d.DB, renderer).Routes(r)\n' in src:
-        print("  · checkin already public")
-        raise SystemExit(0)
-    print("  ! checkin route mount not found")
-    raise SystemExit(1)
+# 3a — teamLeaderOrAdmin middleware
+old1 = '\t\t\tif u.Role == "admin" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}'
+new1 = '\t\t\tif u.Role == "admin" || u.Role == "editor" {\n\t\t\t\tnext.ServeHTTP(w, r)\n\t\t\t\treturn\n\t\t\t}'
+if old1 in src:
+    src = src.replace(old1, new1, 1)
+    changed += 1
+    print("✓ /plans middleware allows editor")
 
-src = src.replace(old, '', 1)
+# 3b — dashboard redirect
+old2 = '\t\t\tif u.Role == "admin" {\n\t\t\t\thttp.Redirect(w, r, "/plans", http.StatusSeeOther)\n\t\t\t\treturn\n\t\t\t}'
+new2 = '\t\t\tif u.Role == "admin" || u.Role == "editor" {\n\t\t\t\thttp.Redirect(w, r, "/plans", http.StatusSeeOther)\n\t\t\t\treturn\n\t\t\t}'
+if old2 in src:
+    src = src.replace(old2, new2, 1)
+    changed += 1
+    print("✓ Dashboard redirect handles editor")
 
-marker = '\tsongsModule.PublicRoutes(r)'
-if marker not in src:
-    print("  ! PublicRoutes marker not found")
-    raise SystemExit(1)
-
-addition = '''\tsongsModule.PublicRoutes(r)
-
-\t// Kiosk check-in: intentionally public. Parents walk up to a lobby
-\t// tablet and check in kids without a staff login.
-\tcheckin.New(d.DB, renderer).Routes(r)'''
-
-src = src.replace(marker, addition, 1)
 p.write_text(src)
-print("  ✓ /checkin is now public")
+if changed == 0:
+    print("· Nothing needed")
 PYEOF
+fi
 
-echo ""
-echo "▸ 2/3  Add Check-in link to the nav bar"
-python3 - <<'PYEOF'
+if [ "$NEED4" = "1" ]; then
+    echo ""
+    echo "▸ [4/4] Patch people/templates/form.html"
+    python3 <<'PYEOF' 2>&1 | sed 's/^/    /'
 from pathlib import Path
-p = Path("internal/web/templates/layout.html")
+p = Path("internal/people/templates/form.html")
 src = p.read_text()
 
-if 'href="/checkin"' in src:
-    print("  · already present")
-    raise SystemExit(0)
+old = '''        <select name="role">
+            <option value="volunteer" {{if eq .Role "volunteer"}}selected{{end}}>Volunteer</option>
+            <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+        </select>'''
+new = '''        <select name="role">
+            <option value="volunteer" {{if eq .Role "volunteer"}}selected{{end}}>Volunteer (Scheduled Viewer)</option>
+            <option value="guest"     {{if eq .Role "guest"}}selected{{end}}>Guest</option>
+            <option value="editor"    {{if eq .Role "editor"}}selected{{end}}>Editor</option>
+            <option value="admin"     {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+        </select>'''
 
-# Add "Check-in" right before the closing {{end}} of {{if .CurrentUser}}
-marker = '''                {{end}}
-            {{end}}'''
-
-replacement = '''                {{end}}
-                <a href="/checkin" target="_blank" title="Opens kiosk in a new tab">Check-in</a>
-            {{end}}'''
-
-if marker in src:
-    src = src.replace(marker, replacement, 1)
-    p.write_text(src)
-    print("  ✓ Check-in link added to nav")
+if old in src:
+    p.write_text(src.replace(old, new, 1))
+    print("✓ Form now has all 4 roles")
 else:
-    # Fallback: add after Reports for admin
-    fb = '<a href="/reports/ccli">Reports</a>'
-    if fb in src:
-        src = src.replace(fb, fb + '\n                    <a href="/checkin" target="_blank">Check-in</a>', 1)
-        p.write_text(src)
-        print("  ✓ Check-in link added (fallback)")
-    else:
-        print("  ! could not find nav marker")
+    print("! Could not match current select block")
+    print("  Open internal/people/templates/form.html and look for:")
+    print("    <select name=\"role\">")
 PYEOF
+fi
 
-# Bump CSS/JS cache so layout changes take effect
-python3 - <<'PYEOF'
-from pathlib import Path
-import re
-p = Path("internal/web/templates/layout.html")
-src = p.read_text()
-for asset in ("app.css", "app.js"):
-    pat = rf'{re.escape(asset)}\?v=(\d+)'
-    m = re.search(pat, src)
-    if m:
-        new_v = int(m.group(1)) + 1
-        src = src.replace(m.group(0), f'{asset}?v={new_v}')
-p.write_text(src)
-print("  ✓ cache bumped")
-PYEOF
-
+# ═══════════════════════════════════════════════════════════════════
 echo ""
-echo "▸ 3/3  Build & restart"
-if ! go build ./...; then
-    echo "✗ build failed — paste errors"
+echo "════════════════════════════════════════════════════════════════"
+echo "  Build"
+echo "════════════════════════════════════════════════════════════════"
+
+go build ./... 2>&1
+BUILD_STATUS=$?
+
+if [ $BUILD_STATUS -ne 0 ]; then
+    echo ""
+    echo "✗ Build failed — see errors above"
     exit 1
 fi
 echo "✓ build OK"
 
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "  Restart"
+echo "════════════════════════════════════════════════════════════════"
 docker compose -f deploy/docker-compose.yml up -d --build
 
 echo ""
@@ -104,15 +175,9 @@ echo "════════════════════════�
 echo "  Verify"
 echo "════════════════════════════════════════════════════════════════"
 cat <<'CHECKLIST'
-  1. Open /checkin in a fresh incognito window.
-     → Should load the kiosk form WITHOUT redirecting to /login.
-
-  2. Logged in as admin:
-     → Nav bar now shows a "Check-in" link (opens in new tab).
-
-  3. Try the full flow:
-     → Enter 555-0199 → family screen → check a kid in → see QR code.
-
-  4. Log out (POST /logout), then hit /checkin again.
-     → Should still load. No more 303 redirect to /login.
+  1. /people → "Add new person" → dropdown shows 4 roles
+  2. Log in as Jane (Editor) → lands on /plans
+  3. As Jane: add song, assign, publish, delete → all work
+  4. As Jane: /people → 403
+  5. As Jane: no People/Reports in nav
 CHECKLIST
