@@ -16,15 +16,19 @@ type Repository struct{ db *pgxpool.Pool }
 
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
-const songColumns = `id, title, author, youtube_url, ccli_number,
-	copyright_holder, copyright_date, publisher, scripture, notes,
-	archived, created_at, updated_at`
+const songColumns = `s.id, s.title, s.author, s.youtube_url, s.ccli_number,
+	s.copyright_holder, s.copyright_date, s.publisher, s.scripture, s.notes,
+	s.archived, s.created_at, s.updated_at,
+	COALESCE(a.original_key, '') AS original_key,
+	COALESCE(a.bpm, 0) AS bpm,
+	COALESCE((SELECT key FROM song_key_history h WHERE h.song_id = s.id ORDER BY used_on DESC LIMIT 1), '') AS last_used_key`
 
 func scanSong(row pgx.Row) (Song, error) {
 	var s Song
 	err := row.Scan(&s.ID, &s.Title, &s.Author, &s.YouTubeURL, &s.CCLINumber,
 		&s.CopyrightHolder, &s.CopyrightDate, &s.Publisher, &s.Scripture,
-		&s.Notes, &s.Archived, &s.CreatedAt, &s.UpdatedAt)
+		&s.Notes, &s.Archived, &s.CreatedAt, &s.UpdatedAt,
+		&s.OriginalKey, &s.BPM, &s.LastUsedKey)
 	return s, err
 }
 
@@ -38,28 +42,28 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
 
 	if q := strings.TrimSpace(f.Query); q != "" {
 		args = append(args, q)
-		conds = append(conds, fmt.Sprintf("search_vector @@ plainto_tsquery('english', $%d)", len(args)))
+		conds = append(conds, fmt.Sprintf("s.search_vector @@ plainto_tsquery('english', $%d)", len(args)))
 	}
 	if k := strings.TrimSpace(f.Key); k != "" {
 		args = append(args, k)
 		conds = append(conds, fmt.Sprintf(`EXISTS (
-			SELECT 1 FROM song_arrangements a
-			WHERE a.song_id = songs.id AND a.original_key = $%d
+			SELECT 1 FROM song_arrangements sa
+			WHERE sa.song_id = s.id AND sa.original_key = $%d
 			UNION
-			SELECT 1 FROM song_arrangements a
-			JOIN arrangement_keys ak ON ak.arrangement_id = a.id
-			WHERE a.song_id = songs.id AND ak.key = $%d
+			SELECT 1 FROM song_arrangements sa
+			JOIN arrangement_keys ak ON ak.arrangement_id = sa.id
+			WHERE sa.song_id = s.id AND ak.key = $%d
 		)`, len(args), len(args)))
 	}
 	if !f.IncludeArchived {
-		conds = append(conds, "archived = FALSE")
+		conds = append(conds, "s.archived = FALSE")
 	}
 	if len(f.TagSlugs) > 0 {
 		args = append(args, f.TagSlugs)
 		args = append(args, len(f.TagSlugs))
 		conds = append(conds, fmt.Sprintf(
 			`(SELECT COUNT(*) FROM song_tags st JOIN tags t ON t.id = st.tag_id
-			  WHERE st.song_id = songs.id AND t.slug = ANY($%d)) = $%d`,
+			  WHERE st.song_id = s.id AND t.slug = ANY($%d)) = $%d`,
 			len(args)-1, len(args)))
 	}
 
@@ -75,7 +79,11 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
 		orderBy = "updated_at DESC"
 	}
 
-	q := fmt.Sprintf(`SELECT %s FROM songs WHERE %s ORDER BY %s`, songColumns, where, orderBy)
+	// We must alias 'songs' as 's' and join the default arrangement as 'a'
+	baseQuery := `SELECT %s FROM songs s
+		LEFT JOIN song_arrangements a ON a.song_id = s.id AND a.is_default = TRUE
+		WHERE %s ORDER BY %s`
+	q := fmt.Sprintf(baseQuery, songColumns, where, orderBy)
 	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -94,7 +102,7 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
 }
 
 func (r *Repository) Get(ctx context.Context, id string) (Song, error) {
-	s, err := scanSong(r.db.QueryRow(ctx, `SELECT `+songColumns+` FROM songs WHERE id = $1`, id))
+	s, err := scanSong(r.db.QueryRow(ctx, `SELECT `+songColumns+` FROM songs s LEFT JOIN song_arrangements a ON a.song_id = s.id AND a.is_default = TRUE WHERE s.id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Song{}, ErrNotFound
 	}

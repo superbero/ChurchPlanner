@@ -1,0 +1,92 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Review Import</h1>
+        <p class="muted">We've attempted to infer the chords. Review and edit before saving.</p>
+    </div>
+</div>
+
+{{with .Error}}<div class="error" style="margin-bottom: 1.5rem;">{{.}}</div>{{end}}
+
+<form method="post" action="/songs/import/save">
+    <input type="hidden" name="raw_text" value="{{.RawText}}">
+
+    <div class="review-workspace">
+        <!-- Left: Raw PDF Text -->
+        <div class="review-panel">
+            <div class="panel-header">
+                <h3>Original Text (Read-only)</h3>
+            </div>
+            <textarea class="code-editor" readonly>{{.RawText}}</textarea>
+        </div>
+
+        <!-- Right: Editable ChordPro + Preview -->
+        <div class="review-panel">
+            <div class="panel-header">
+                <h3>ChordPro Source</h3>
+            </div>
+
+            <label>Song Title
+                <input type="text" name="title" value="{{.Title}}" required style="margin-bottom: 1rem;">
+            </label>
+
+            <textarea name="source_content" id="chordpro-editor" class="code-editor" style="margin-bottom: 1rem;">{{.Inferred}}</textarea>
+
+            <div class="panel-header">
+                <h3>Live Preview</h3>
+            </div>
+            <div class="chart-paper" id="live-preview" style="min-height: 200px;">
+                <p class="muted">Type in the ChordPro source above to see the preview.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="action-bar" style="margin-top: 2rem; justify-content: flex-end;">
+        <a href="/songs/import" class="button-secondary">Cancel</a>
+        <button type="submit" class="button">Save Song to Library</button>
+    </div>
+</form>
+
+<script>
+    const editor = document.getElementById('chordpro-editor');
+    const preview = document.getElementById('live-preview');
+
+    function renderPreview() {
+        const text = editor.value;
+        const lines = text.split('\n');
+        let html = '';
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            if (line.trim() === '') {
+                html += '<div style="height: 1.5em;"></div>';
+                continue;
+            }
+
+            // Basic chord extraction [C]lyric
+            let lyricHtml = '';
+            let chordHtml = '';
+            let pos = 0;
+
+            line.replace(/\[([^\]]+)\]/g, (match, chord, offset) => {
+                const textBefore = line.substring(pos, offset);
+                lyricHtml += textBefore;
+                const currentLen = lyricHtml.length;
+                chordHtml += `<span class="chord" style="left: ${currentLen}ch">${chord}</span>`;
+                pos = offset + match.length;
+            });
+            lyricHtml += line.substring(pos);
+
+            if (chordHtml) {
+                html += `<div class="chart-line" style="margin-bottom:1.4em;"><div style="position:relative; height:0;">${chordHtml}</div><span class="lyric" style="display:block; padding-top:1.3em; white-space:pre;">${lyricHtml}</span></div>`;
+            } else {
+                html += `<div class="chart-line"><span class="lyric" style="display:block; white-space:pre; margin-bottom: 0.5em;">${lyricHtml}</span></div>`;
+            }
+        }
+        preview.innerHTML = html;
+    }
+
+    editor.addEventListener('input', renderPreview);
+    renderPreview(); // Initial render
+</script>
+{{end}}

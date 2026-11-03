@@ -213,3 +213,44 @@ func (r *PlanRepository) ReorderTimes(ctx context.Context, planID string, timeID
 
 // DB returns the underlying pool (used by the handler for skill lookups).
 func (r *PlanRepository) DB() *pgxpool.Pool { return r.db }
+
+
+// DuplicateTime copies a time block and all its plan items to a new time.
+func (r *PlanRepository) DuplicateTime(ctx context.Context, planID, timeID string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var kind, name string
+	var startsAt, endsAt time.Time
+	err = tx.QueryRow(ctx, `
+		SELECT kind, name, starts_at, ends_at FROM plan_times WHERE id = $1
+	`, timeID).Scan(&kind, &name, &startsAt, &endsAt)
+	if err != nil {
+		return err
+	}
+
+	// Shift the new time to start 1 hour after the original ends
+	newStarts := endsAt.Add(1 * time.Hour)
+	newEnds := newStarts.Add(endsAt.Sub(startsAt))
+
+	var newTimeID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO plan_times (plan_id, kind, name, starts_at, ends_at)
+		VALUES ($1, $2, $3, $4, $5) RETURNING id
+	`, planID, kind, name + " (Copy)", newStarts, newEnds).Scan(&newTimeID)
+	if err != nil {
+		return err
+	}
+
+	// Copy all items from the old time to the new time
+	_, err = tx.Exec(ctx, `
+		INSERT INTO plan_items (plan_id, plan_time_id, position, kind, title, arrangement_id, key_id, key, duration_minutes, notes)
+		SELECT plan_id, $1, position, kind, title, arrangement_id, key_id, key, duration_minutes, notes
+		FROM plan_items WHERE plan_time_id = $2
+	`, newTimeID, timeID)
+
+	return tx.Commit(ctx)
+}

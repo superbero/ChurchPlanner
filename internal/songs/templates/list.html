@@ -50,7 +50,16 @@
 
 <div class="table-container">
     <table>
-        <thead><tr><th>Title</th><th>Author</th><th style="text-align:right">Actions</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Key</th>
+                <th>Last Used</th>
+                <th>BPM</th>
+                <th style="text-align:right">Actions</th>
+            </tr>
+        </thead>
         <tbody>
         {{range .Songs}}
             <tr {{if .Archived}}class="archived"{{end}}>
@@ -59,15 +68,30 @@
                     {{if .Archived}}<span class="chip">archived</span>{{end}}
                 </td>
                 <td>{{.Author}}</td>
+                <td>
+                    <span class="key-badge">{{if .OriginalKey}}{{.OriginalKey}}{{else}}—{{end}}</span>
+                </td>
+                <td>
+                    {{if .LastUsedKey}}
+                        <span class="key-badge" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">{{.LastUsedKey}}</span>
+                    {{else}}
+                        <span class="muted">—</span>
+                    {{end}}
+                </td>
+                <td>{{if .BPM}}{{.BPM}}{{else}}—{{end}}</td>
                 <td class="actions-cell">
-                    <button class="button-secondary" onclick="showPreview('{{.ID}}')">Quick View</button>
-                    <a href="/songs/{{.ID}}" style="margin-left: 0.5rem;">Details</a> ·
-                    <a href="#" onclick="showPdfModal('{{.ID}}', '{{.Title}}', event); return false;">PDF</a>
-                    {{if isEditorOrAdmin $.CurrentUser.Role}}· <a href="/songs/{{.ID}}/edit">Edit</a>{{end}}
+                    <div class="action-group">
+                        <button class="button-secondary btn-sm" onclick="showPreview('{{.ID}}')">Quick View</button>
+                        <a href="/songs/{{.ID}}" class="action-link">Details</a>
+                        <a href="#" onclick="showPdfModal('{{.ID}}', '{{.Title}}', event); return false;" class="action-link">PDF</a>
+                        {{if isEditorOrAdmin $.CurrentUser.Role}}
+                        <a href="/songs/{{.ID}}/edit" class="action-link">Edit</a>
+                        {{end}}
+                    </div>
                 </td>
             </tr>
         {{else}}
-            <tr><td colspan="3" style="text-align: center; padding: 2rem;">No songs found. Try clearing your filters or adding a new song.</td></tr>
+            <tr><td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-muted);">No songs found. Try clearing your filters or adding a new song.</td></tr>
         {{end}}
         </tbody>
     </table>

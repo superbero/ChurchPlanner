@@ -1,34 +1,66 @@
 {{define "content"}}
-<h1>People</h1>
-<p class="muted">Directory of volunteers and staff.</p>
-<p><a class="button" href="/people/new">Add new person</a></p>
+<div class="page-header">
+    <div>
+        <h1>People</h1>
+        <p class="muted">Directory of volunteers and staff.</p>
+    </div>
+    <div class="action-bar">
+        <a class="button" href="/people/new">Add Person</a>
+    </div>
+</div>
 
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Vocal Range</th>
-            <th>Team(s)</th>
-            <th>Skills / Instruments</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    {{range .Users}}
-        <tr>
-            <td><a href="/people/{{.ID}}"><strong>{{.Name}}</strong></a> <span class="chip">{{.Role}}</span></td>
-            <td>{{.Email}}</td>
-            <td>{{.Phone}}</td>
-            <td>{{if .VocalLow}}{{.VocalLow}} – {{.VocalHigh}}{{end}}</td>
-            <td class="team-cell">{{if .TeamRoles}}{{.TeamRoles}}{{else}}<span class="muted">—</span>{{end}}</td>
-            <td class="skills-cell">{{if .Skills}}{{.Skills}}{{else}}<span class="muted">—</span>{{end}}</td>
-            <td><a href="/people/{{.ID}}">Edit</a></td>
-        </tr>
-    {{else}}
-        <tr><td colspan="7">No people found.</td></tr>
-    {{end}}
-    </tbody>
-</table>
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Team(s)</th>
+                <th>Skills</th>
+                <th style="text-align:right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Users}}
+            <tr>
+                <td>
+                    <a href="/people/{{.ID}}" style="font-weight: 600; font-size: 1.05em; color: var(--text-main);">{{.Name}}</a>
+                    <div style="margin-top: 0.25rem;">
+                        <span class="chip">{{.Role}}</span>
+                    </div>
+                </td>
+                <td>
+                    <div style="font-size: 0.9em;">{{.Email}}</div>
+                    {{if .Phone}}<div class="muted" style="font-size: 0.85em;">{{.Phone}}</div>{{end}}
+                </td>
+                <td class="team-cell">
+                    {{if .TeamRoles}}
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                        {{range split .TeamRoles ", "}}
+                            <span class="chip" style="background: var(--brand-50); color: var(--brand-600);">{{.}}</span>
+                        {{end}}
+                        </div>
+                    {{else}}
+                        <span class="muted">—</span>
+                    {{end}}
+                </td>
+                <td class="skills-cell">
+                    {{if .Skills}}
+                        <div style="font-size: 0.85em; color: var(--text-muted); line-height: 1.4;">{{.Skills}}</div>
+                    {{else}}
+                        <span class="muted">—</span>
+                    {{end}}
+                </td>
+                <td class="actions-cell">
+                    <div class="action-group">
+                        <a href="/people/{{.ID}}" class="button-secondary btn-sm">Edit Profile</a>
+                    </div>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="5" style="text-align: center; padding: 3rem; color: var(--text-muted);">No people found.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
 {{end}}

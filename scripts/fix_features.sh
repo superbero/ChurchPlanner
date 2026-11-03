@@ -4,162 +4,200 @@ set -uo pipefail
 [ -f go.mod ] || { echo "✗ run from project root"; exit 1; }
 
 echo "════════════════════════════════════════════════════════════════"
-echo "  Polishing the PDF Modal UI"
+echo "  Applying Professional Layout to Core Pages"
 echo "════════════════════════════════════════════════════════════════"
 
-echo "▸ [1/2] Updating list.html (PDF Modal layout)"
+echo "▸ [1/3] Polishing Songs List"
 python3 - <<'PYEOF'
 from pathlib import Path
 p = Path("internal/songs/templates/list.html")
 src = p.read_text()
 
-old_modal = '''<!-- PDF Modal -->
-<div id="pdf-modal" class="modal-overlay" style="display: none;" onclick="closePdfModal(event)">
-    <div class="modal-content" style="max-width: 400px;" onclick="event.stopPropagation()">
-        <div class="modal-close" onclick="closePdfModal()">×</div>
-        <h2 style="margin-top: 0;">Download PDF</h2>
-        <p id="pdf-modal-title" class="muted" style="margin-bottom: 1.5rem;"></p>
+# Update the empty state
+src = src.replace(
+    '<tr><td colspan="3" style="text-align: center; padding: 2rem;">No songs found. Try clearing your filters or adding a new song.</td></tr>',
+    '<tr><td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-muted);">No songs found. Try clearing your filters or adding a new song.</td></tr>'
+)
 
-        <form id="pdf-form" method="GET" action="">
-            <label>Key
-                <select name="key">
-                    <option value="">Original Key (Default)</option>
-                    <option value="C">C</option>
-                    <option value="Db">Db (C#)</option>
-                    <option value="D">D</option>
-                    <option value="Eb">Eb (D#)</option>
-                    <option value="E">E</option>
-                    <option value="F">F</option>
-                    <option value="F#">F# (Gb)</option>
-                    <option value="G">G</option>
-                    <option value="Ab">Ab (G#)</option>
-                    <option value="A">A</option>
-                    <option value="Bb">Bb (A#)</option>
-                    <option value="B">B</option>
-                </select>
-            </label>
-
-            <label>Format
-                <select name="format">
-                    <option value="chords">Chords & Lyrics</option>
-                    <option value="numbers">Nashville Numbers</option>
-                    <option value="lyrics">Lyrics Only</option>
-                </select>
-            </label>
-
-            <button type="submit" class="button" style="width: 100%; margin-top: 1rem;">Download PDF</button>
-        </form>
-    </div>
-</div>'''
-
-new_modal = '''<!-- PDF Modal -->
-<div id="pdf-modal" class="modal-overlay" style="display: none;" onclick="closePdfModal(event)">
-    <div class="modal-content" style="max-width: 450px;" onclick="event.stopPropagation()">
-        <div class="modal-close" onclick="closePdfModal()">×</div>
-        <div class="modal-body">
-            <h2 style="margin-top: 0;">Download PDF</h2>
-            <p id="pdf-modal-title" class="muted" style="margin-bottom: 1.5rem; font-size: 1.1em;"></p>
-
-            <form id="pdf-form" method="GET" action="" class="pdf-form">
-                <div class="form-group">
-                    <label>Key</label>
-                    <select name="key">
-                        <option value="">Original Key (Default)</option>
-                        <option value="C">C</option>
-                        <option value="Db">Db (C#)</option>
-                        <option value="D">D</option>
-                        <option value="Eb">Eb (D#)</option>
-                        <option value="E">E</option>
-                        <option value="F">F</option>
-                        <option value="F#">F# (Gb)</option>
-                        <option value="G">G</option>
-                        <option value="Ab">Ab (G#)</option>
-                        <option value="A">A</option>
-                        <option value="Bb">Bb (A#)</option>
-                        <option value="B">B</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Format</label>
-                    <select name="format">
-                        <option value="chords">Chords & Lyrics</option>
-                        <option value="numbers">Nashville Numbers</option>
-                        <option value="lyrics">Lyrics Only</option>
-                    </select>
-                </div>
-
-                <button type="submit" class="button" style="width: 100%; margin-top: 1rem; padding: 0.75rem;">Download PDF</button>
-            </form>
-        </div>
-    </div>
-</div>'''
-
-if old_modal in src:
-    p.write_text(src.replace(old_modal, new_modal, 1))
-    print("  ✓ Modal HTML rewritten with proper classes")
-else:
-    print("  ! Could not find exact old modal block. Trying regex...")
-    import re
-    src = re.sub(
-        r'<!-- PDF Modal -->.*?<!-- PDF Modal -->',
-        new_modal,
-        src,
-        flags=re.DOTALL
-    )
-    p.write_text(src)
+# Update the actions cell to use clean links
+old_actions = '''                <td class="actions-cell">
+                    <button class="button-secondary" onclick="showPreview('{{.ID}}')">Quick View</button>
+                    <a href="/songs/{{.ID}}" style="margin-left: 0.5rem;">Details</a> ·
+                    <a href="#" onclick="showPdfModal('{{.ID}}', '{{.Title}}', event); return false;">PDF</a>
+                    {{if isEditorOrAdmin $.CurrentUser.Role}}· <a href="/songs/{{.ID}}/edit">Edit</a>{{end}}
+                </td>'''
+new_actions = '''                <td class="actions-cell">
+                    <div class="action-group">
+                        <button class="button-secondary btn-sm" onclick="showPreview('{{.ID}}')">Quick View</button>
+                        <a href="/songs/{{.ID}}" class="action-link">Details</a>
+                        <a href="#" onclick="showPdfModal('{{.ID}}', '{{.Title}}', event); return false;" class="action-link">PDF</a>
+                        {{if isEditorOrAdmin $.CurrentUser.Role}}
+                        <a href="/songs/{{.ID}}/edit" class="action-link">Edit</a>
+                        {{end}}
+                    </div>
+                </td>'''
+src = src.replace(old_actions, new_actions)
+p.write_text(src)
+print("  ✓ Songs list polished")
 PYEOF
 
-echo "▸ [2/2] Adding specific CSS for the PDF Modal"
-python3 - <<'PYEOF'
-from pathlib import Path
-p = Path("internal/web/static/css/app.css")
-src = p.read_text()
+echo "▸ [2/3] Polishing Plans List"
+cat > internal/scheduling/templates/plans.html <<'HTMLEOF'
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Plans</h1>
+        <p class="muted">Schedule services and manage team assignments.</p>
+    </div>
+    <div class="action-bar">
+        <a class="button" href="/plans/new">New Plan</a>
+        <a class="button-secondary" href="/my-schedule">My Schedule</a>
+    </div>
+</div>
 
-if '.pdf-form' not in src:
-    src += '''
+<form method="get" action="/plans" class="filter-bar-horizontal">
+    <div class="filter-group">
+        <select name="type" style="min-width: 200px;">
+            <option value="">All Service Types</option>
+            {{range .ServiceTypes}}
+            <option value="{{.ID}}" {{if eq .ID $.SelectedType}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    <div class="filter-group" style="margin-left: auto;">
+        <button type="submit" class="button-secondary">Filter</button>
+        <a href="/plans" class="button-secondary">Clear</a>
+    </div>
+</form>
 
-/* ── PDF Modal Form ───────────────────────────────────────────── */
-.modal-body {
-    padding: 2rem;
-}
-.pdf-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-}
-.pdf-form .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-.pdf-form label {
-    font-size: 0.9em;
-    font-weight: 600;
-    color: #475467;
-    margin: 0;
-}
-.pdf-form select {
-    width: 100%;
-    padding: 0.6rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 1rem;
-    font-family: inherit;
-    background-color: #fff;
-    cursor: pointer;
-}
-.pdf-form select:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(47, 111, 235, 0.1);
-}
-'''
-    p.write_text(src)
-    print("  ✓ CSS added for .pdf-form")
-else:
-    print("  · CSS already present")
-PYEOF
+{{if .TypeName}}<p class="muted" style="margin-bottom: 1rem;">Showing: <strong>{{.TypeName}}</strong></p>{{end}}
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Service</th>
+                <th>Status</th>
+                <th style="text-align:right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Plans}}
+            <tr>
+                <td style="white-space: nowrap;">
+                    <strong>{{.ServiceAt.Format "Mon, Jan 2"}}</strong>
+                    <span class="muted" style="margin-left: 0.5rem;">{{.ServiceAt.Format "3:04 PM"}}</span>
+                </td>
+                <td>
+                    <a href="/plans/{{.ID}}" style="font-weight: 500; font-size: 1.05em;">{{.Title}}</a>
+                </td>
+                <td>
+                    {{if .Published}}
+                        <span class="chip" style="background: var(--success-bg); color: var(--success);">Published</span>
+                    {{else}}
+                        <span class="chip" style="background: var(--warning-bg); color: var(--warning);">Draft</span>
+                    {{end}}
+                </td>
+                <td class="actions-cell">
+                    <div class="action-group">
+                        <a href="/plans/{{.ID}}" class="button-secondary btn-sm">Open Plan</a>
+                        <a href="/plans/{{.ID}}/edit" class="action-link">Edit</a>
+                    </div>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">No plans found. Click "New Plan" to get started.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+HTMLEOF
+echo "  ✓ Plans list polished"
+
+echo "▸ [3/3] Polishing People List"
+cat > internal/people/templates/list.html <<'HTMLEOF'
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>People</h1>
+        <p class="muted">Directory of volunteers and staff.</p>
+    </div>
+    <div class="action-bar">
+        <a class="button" href="/people/new">Add Person</a>
+    </div>
+</div>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Team(s)</th>
+                <th>Skills</th>
+                <th style="text-align:right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Users}}
+            <tr>
+                <td>
+                    <a href="/people/{{.ID}}" style="font-weight: 600; font-size: 1.05em; color: var(--text-main);">{{.Name}}</a>
+                    <div style="margin-top: 0.25rem;">
+                        <span class="chip">{{.Role}}</span>
+                    </div>
+                </td>
+                <td>
+                    <div style="font-size: 0.9em;">{{.Email}}</div>
+                    {{if .Phone}}<div class="muted" style="font-size: 0.85em;">{{.Phone}}</div>{{end}}
+                </td>
+                <td class="team-cell">
+                    {{if .TeamRoles}}
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                        {{range split .TeamRoles ", "}}
+                            <span class="chip" style="background: var(--brand-50); color: var(--brand-600);">{{.}}</span>
+                        {{end}}
+                        </div>
+                    {{else}}
+                        <span class="muted">—</span>
+                    {{end}}
+                </td>
+                <td class="skills-cell">
+                    {{if .Skills}}
+                        <div style="font-size: 0.85em; color: var(--text-muted); line-height: 1.4;">{{.Skills}}</div>
+                    {{else}}
+                        <span class="muted">—</span>
+                    {{end}}
+                </td>
+                <td class="actions-cell">
+                    <div class="action-group">
+                        <a href="/people/{{.ID}}" class="button-secondary btn-sm">Edit Profile</a>
+                    </div>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="5" style="text-align: center; padding: 3rem; color: var(--text-muted);">No people found.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+HTMLEOF
+echo "  ✓ People list polished"
+
+echo "▸ Appending final UI helper CSS"
+cat >> internal/web/static/css/app.css <<'CSSEOF'
+
+/* ── Professional Table Helpers ────────────────────────────────── */
+.actions-cell { text-align: right; white-space: nowrap; }
+.action-group { display: flex; justify-content: flex-end; gap: 0.75rem; align-items: center; }
+.action-link { font-size: 0.9em; color: var(--text-muted); text-decoration: none; }
+.action-link:hover { color: var(--text-main); text-decoration: underline; }
+.btn-sm { padding: 0.35rem 0.75rem; font-size: 0.85rem; }
+.team-cell, .skills-cell { max-width: 250px; vertical-align: top; }
+CSSEOF
 
 # Bump cache
 python3 - <<'PYEOF'

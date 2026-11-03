@@ -2,9 +2,9 @@
 <header class="calendar-header">
     <h1>{{.MonthName}}</h1>
     <div class="calendar-nav">
-        <a href="/calendar?year={{.PrevMonth.Year}}&month={{.PrevMonth.Month}}" class="button-secondary">← Prev</a>
+        <a href="/calendar?year={{.PrevYear}}&amp;month={{.PrevMonth}}" class="button-secondary">← Prev</a>
         <a href="/calendar" class="button-secondary">Today</a>
-        <a href="/calendar?year={{.NextMonth.Year}}&month={{.NextMonth.Month}}" class="button-secondary">Next →</a>
+        <a href="/calendar?year={{.NextYear}}&amp;month={{.NextMonth}}" class="button-secondary">Next →</a>
     </div>
 </header>
 

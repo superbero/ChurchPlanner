@@ -17,6 +17,11 @@ type Song struct {
 	Archived        bool      `json:"archived"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+
+	// Metadata from default arrangement / history
+	OriginalKey string `json:"original_key"`
+	BPM         int    `json:"bpm"`
+	LastUsedKey string `json:"last_used_key"`
 }
 
 type CreateSongInput struct {

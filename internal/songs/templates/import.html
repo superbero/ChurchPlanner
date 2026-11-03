@@ -1,18 +1,67 @@
 {{define "content"}}
-<h1>Import songs</h1>
-{{with .Error}}<p class="error">{{.}}</p>{{end}}
-<p>Supported formats:</p>
-<ul>
-    <li><strong>ChordPro</strong> — <code>.cho</code>, <code>.pro</code>, <code>.chordpro</code>, <code>.txt</code></li>
-    <li><strong>OpenSong XML</strong> — files exported from the OpenSong desktop app</li>
-    <li><strong>OpenLyrics XML</strong> — the OpenLyrics 0.8+ standard</li>
-    <li><strong>Plain text</strong> — lyrics only</li>
-</ul>
-<form method="post" action="/songs/import" enctype="multipart/form-data">
-    <label>Choose a file
-        <input type="file" name="file" accept=".cho,.pro,.chordpro,.txt,.xml" required>
-    </label>
-    <button type="submit">Import</button>
-</form>
-<p><a href="/songs">Back to songs</a></p>
+<div class="page-header">
+    <div>
+        <h1>Import Songs</h1>
+        <p class="muted">Add songs from PDFs, ChordPro, XML, or raw text.</p>
+    </div>
+    <div class="action-bar">
+        <a href="/songs" class="button-secondary">Back to Library</a>
+    </div>
+</div>
+
+{{with .Error}}<div class="error" style="margin-bottom: 1.5rem;">{{.}}</div>{{end}}
+
+<div class="import-grid">
+    <!-- File Upload -->
+    <div class="import-card">
+        <h2>Upload a File</h2>
+        <p class="muted">Supported: PDF, ChordPro (.cho), OpenSong XML, Plain Text.</p>
+        <form method="post" action="/songs/import" enctype="multipart/form-data" class="import-form">
+            <div class="dropzone" id="dropzone">
+                <input type="file" name="file" id="file-input" accept=".pdf,.cho,.pro,.chordpro,.txt,.xml" style="display:none;">
+                <div class="dropzone-content">
+                    <div class="dropzone-icon">📄</div>
+                    <p><strong>Click to browse</strong> or drag and drop</p>
+                </div>
+                <div class="file-info" id="file-info" style="display:none;"></div>
+            </div>
+            <button type="submit" class="button" style="width: 100%; margin-top: 1rem;">Process File</button>
+        </form>
+    </div>
+
+    <!-- Paste Text -->
+    <div class="import-card">
+        <h2>Paste Raw Text</h2>
+        <p class="muted">Copy and paste lyrics and chords.</p>
+        <form method="post" action="/songs/import" class="import-form">
+            <label>Song Title
+                <input type="text" name="title" placeholder="e.g. Amazing Grace" required>
+            </label>
+            <label>Raw Content
+                <textarea name="raw_text" rows="6" class="code-editor" placeholder="G C G&#10;Amazing grace how sweet the sound"></textarea>
+            </label>
+            <button type="submit" class="button-secondary" style="width: 100%;">Process Text</button>
+        </form>
+    </div>
+</div>
+<script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault(); dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; updateFileInfo(); }
+    });
+    fileInput.addEventListener('change', updateFileInfo);
+    function updateFileInfo() {
+        if (fileInput.files.length) {
+            fileInfo.textContent = `Selected: ${fileInput.files[0].name}`;
+            fileInfo.style.display = 'block';
+            dropzone.querySelector('.dropzone-content').style.display = 'none';
+        }
+    }
+</script>
 {{end}}

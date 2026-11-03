@@ -845,3 +845,69 @@ func (h *Handler) canManagePosition(r *http.Request, positionID string) (bool, e
 func forbid(w http.ResponseWriter) {
 	http.Error(w, "forbidden: not a leader of this team", http.StatusForbidden)
 }
+
+
+func (h *Handler) DuplicateTime(w http.ResponseWriter, r *http.Request) {
+	planID := chi.URLParam(r, "id")
+	timeID := chi.URLParam(r, "tid")
+	if err := h.plans.DuplicateTime(r.Context(), planID, timeID); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
+}
+
+func (h *Handler) BatchAddItems(w http.ResponseWriter, r *http.Request) {
+	planID := chi.URLParam(r, "id")
+	if err := r.ParseForm(); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
+	planTimeID := strings.TrimSpace(r.FormValue("plan_time_id"))
+	arrIDs := r.Form["arrangement_id"]
+	keys := r.Form["key"]
+	durations := r.Form["duration"]
+
+	for i, arrID := range arrIDs {
+		if arrID == "" {
+			continue
+		}
+
+		// Safety check: does this song already exist in this specific time block?
+		var exists bool
+		err := h.plans.DB().QueryRow(r.Context(), `
+			SELECT EXISTS(
+				SELECT 1 FROM plan_items
+				WHERE plan_id = $1 AND plan_time_id = $2 AND arrangement_id = $3
+			)
+		`, planID, planTimeID, arrID).Scan(&exists)
+
+		if err != nil || exists {
+			continue // Skip if already exists or on error
+		}
+
+		key := ""
+		if i < len(keys) {
+			key = keys[i]
+		}
+		duration := 0
+		if i < len(durations) {
+			duration, _ = strconv.Atoi(durations[i])
+		}
+
+		in := CreatePlanItemInput{
+			Kind:            "song",
+			ArrangementID:   arrID,
+			Key:             key,
+			DurationMinutes: duration,
+			PlanTimeID:      planTimeID,
+		}
+		if _, err := h.assign.CreateItem(r.Context(), planID, in); err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
+	}
+
+	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
+}

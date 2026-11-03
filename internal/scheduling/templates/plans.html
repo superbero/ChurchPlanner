@@ -1,43 +1,70 @@
 {{define "content"}}
-<h1>Plans</h1>
-<p>
-    {{if or (eq .CurrentUser.Role "admin") (eq .CurrentUser.Role "editor")}}
-    <a class="button" href="/plans/new">New plan</a>
-    {{end}}
-    <a class="button-secondary" href="/my-schedule">My schedule</a>
-</p>
+<div class="page-header">
+    <div>
+        <h1>Plans</h1>
+        <p class="muted">Schedule services and manage team assignments.</p>
+    </div>
+    <div class="action-bar">
+        <a class="button" href="/plans/new">New Plan</a>
+        <a class="button-secondary" href="/my-schedule">My Schedule</a>
+    </div>
+</div>
 
-<form method="get" action="/plans" class="filter-bar">
-    <select name="type">
-        <option value="">All service types</option>
-        {{range .ServiceTypes}}
-        <option value="{{.ID}}" {{if eq .ID $.SelectedType}}selected{{end}}>{{.Name}}</option>
-        {{end}}
-    </select>
-    <button type="submit">Filter</button>
-    <a href="/plans" class="button-secondary">Clear</a>
+<form method="get" action="/plans" class="filter-bar-horizontal">
+    <div class="filter-group">
+        <select name="type" style="min-width: 200px;">
+            <option value="">All Service Types</option>
+            {{range .ServiceTypes}}
+            <option value="{{.ID}}" {{if eq .ID $.SelectedType}}selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    <div class="filter-group" style="margin-left: auto;">
+        <button type="submit" class="button-secondary">Filter</button>
+        <a href="/plans" class="button-secondary">Clear</a>
+    </div>
 </form>
 
-{{if .TypeName}}<p class="muted">Showing: {{.TypeName}}</p>{{end}}
+{{if .TypeName}}<p class="muted" style="margin-bottom: 1rem;">Showing: <strong>{{.TypeName}}</strong></p>{{end}}
 
-<table>
-    <thead><tr><th>Date</th><th>Title</th><th>Published</th><th></th></tr></thead>
-    <tbody>
-    {{range .Plans}}
-        <tr>
-            <td>{{.ServiceAt.Format "Mon 2 Jan 2006 15:04"}}</td>
-            <td><a href="/plans/{{.ID}}">{{.Title}}</a></td>
-            <td>{{if .Published}}✓{{else}}—{{end}}</td>
-            <td>
-                <a href="/plans/{{.ID}}">Open</a> ·
-                {{if or (eq $.CurrentUser.Role "admin") (eq $.CurrentUser.Role "editor")}}
-                <a href="/plans/{{.ID}}/edit">Edit</a>
-                {{end}}
-            </td>
-        </tr>
-    {{else}}
-        <tr><td colspan="4">No plans yet. <a href="/plans/new">Create one</a>.</td></tr>
-    {{end}}
-    </tbody>
-</table>
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Service</th>
+                <th>Status</th>
+                <th style="text-align:right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Plans}}
+            <tr>
+                <td style="white-space: nowrap;">
+                    <strong>{{.ServiceAt.Format "Mon, Jan 2"}}</strong>
+                    <span class="muted" style="margin-left: 0.5rem;">{{.ServiceAt.Format "3:04 PM"}}</span>
+                </td>
+                <td>
+                    <a href="/plans/{{.ID}}" style="font-weight: 500; font-size: 1.05em;">{{.Title}}</a>
+                </td>
+                <td>
+                    {{if .Published}}
+                        <span class="chip" style="background: var(--success-bg); color: var(--success);">Published</span>
+                    {{else}}
+                        <span class="chip" style="background: var(--warning-bg); color: var(--warning);">Draft</span>
+                    {{end}}
+                </td>
+                <td class="actions-cell">
+                    <div class="action-group">
+                        <a href="/plans/{{.ID}}" class="button-secondary btn-sm">Open Plan</a>
+                        <a href="/plans/{{.ID}}/edit" class="action-link">Edit</a>
+                    </div>
+                </td>
+            </tr>
+        {{else}}
+            <tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">No plans found. Click "New Plan" to get started.</td></tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
 {{end}}

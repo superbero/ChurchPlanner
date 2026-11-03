@@ -70,7 +70,8 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 			r.Get("/new", m.handler.New)
 			r.Post("/", m.handler.Create)
 			r.Get("/import", m.handler.ShowImport)
-			r.Post("/import", m.handler.Import)
+			r.Post("/import", m.handler.ProcessImport)
+		r.Post("/import/save", m.handler.SaveImport)
 
 			// Health dashboard is an admin insight tool
 			r.Get("/reports/health", m.handler.Health)
