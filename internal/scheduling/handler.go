@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
@@ -100,8 +99,7 @@ func (h *Handler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/plans/"+p.ID, http.StatusSeeOther)
 }
 
-func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
-	planID := chi.URLParam(r, "id")
+func (h *Handler) renderPlan(w http.ResponseWriter, r *http.Request, planID string, errMsg string) {
 	plan, err := h.plans.Get(r.Context(), planID)
 	if err != nil {
 		http.NotFound(w, r)
@@ -212,6 +210,15 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 	// separately if they want one — it will usually be earlier than this,
 	// not later, so defaulting to "end of the latest time" was confusing.
 	nextStart := plan.ServiceAt
+	if len(times) > 0 {
+		latest := times[0]
+		for _, planTime := range times[1:] {
+			if planTime.EndsAt.After(latest.EndsAt) {
+				latest = planTime
+			}
+		}
+		nextStart = latest.EndsAt
+	}
 
 	// Fetch users who are blocked out on the plan's date
 	blockedMap := make(map[string]bool)
@@ -312,24 +319,7 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 		"BlockedUsers":          blockedMap,
 		"NextStart":             nextStart,
 		"HasMultiple":           len(times) > 1,
-	})
-}
-
-func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
-	if u, ok := auth.UserFrom(r.Context()); !ok || !auth.CanEditContent(u.Role) {
-		http.Error(w, "editor access required", http.StatusForbidden)
-		return
-	}
-	plan, err := h.plans.Get(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	types, _ := h.svcTypes.List(r.Context())
-	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
-		"ServiceTypes": types,
-		"IsNew":        false,
-		"Plan":         plan,
+		"Error":                 errMsg,
 	})
 }
 
@@ -390,36 +380,6 @@ func (h *Handler) DeletePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- Times ----
-
-func (h *Handler) AddTime(w http.ResponseWriter, r *http.Request) {
-	planID := chi.URLParam(r, "id")
-	starts, err := time.Parse("2006-01-02T15:04", r.FormValue("starts_at"))
-	if err != nil {
-		httpx.ServerError(w, err)
-		return
-	}
-	// Duration-first: accept duration_minutes; fall back to ends_at for older clients.
-	var ends time.Time
-	if rawEnds := r.FormValue("ends_at"); rawEnds != "" {
-		ends, err = time.Parse("2006-01-02T15:04", rawEnds)
-		if err != nil {
-			httpx.ServerError(w, err)
-			return
-		}
-	} else {
-		duration, _ := strconv.Atoi(r.FormValue("duration_minutes"))
-		if duration <= 0 {
-			duration = 60
-		}
-		ends = starts.Add(time.Duration(duration) * time.Minute)
-	}
-	if _, err := h.plans.CreateTime(r.Context(), planID,
-		r.FormValue("kind"), strings.TrimSpace(r.FormValue("name")), starts, ends); err != nil {
-		httpx.ServerError(w, err)
-		return
-	}
-	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
-}
 
 func (h *Handler) DeleteTime(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
@@ -846,7 +806,6 @@ func forbid(w http.ResponseWriter) {
 	http.Error(w, "forbidden: not a leader of this team", http.StatusForbidden)
 }
 
-
 func (h *Handler) DuplicateTime(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	timeID := chi.URLParam(r, "tid")
@@ -909,5 +868,63 @@ func (h *Handler) BatchAddItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
+}
+
+func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
+	h.renderPlan(w, r, chi.URLParam(r, "id"), "")
+}
+
+func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
+	if u, ok := auth.UserFrom(r.Context()); !ok || !auth.CanEditContent(u.Role) {
+		http.Error(w, "editor access required", http.StatusForbidden)
+		return
+	}
+	plan, err := h.plans.Get(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	types, _ := h.svcTypes.List(r.Context())
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
+		"ServiceTypes": types,
+		"IsNew":        false,
+		"Plan":         plan,
+	})
+}
+
+func (h *Handler) AddTime(w http.ResponseWriter, r *http.Request) {
+	planID := chi.URLParam(r, "id")
+	starts, err := time.Parse("2006-01-02T15:04", r.FormValue("starts_at"))
+	if err != nil {
+		h.renderPlan(w, r, planID, "Invalid start time format.")
+		return
+	}
+
+	var ends time.Time
+	if rawEnds := r.FormValue("ends_at"); rawEnds != "" {
+		ends, err = time.Parse("2006-01-02T15:04", rawEnds)
+		if err != nil {
+			h.renderPlan(w, r, planID, "Invalid end time format.")
+			return
+		}
+	} else {
+		duration, _ := strconv.Atoi(r.FormValue("duration_minutes"))
+		if duration <= 0 {
+			duration = 60
+		}
+		ends = starts.Add(time.Duration(duration) * time.Minute)
+	}
+
+	if err := h.plans.CheckTimeConflict(r.Context(), planID, starts, ends); err != nil {
+		h.renderPlan(w, r, planID, err.Error())
+		return
+	}
+
+	if _, err := h.plans.CreateTime(r.Context(), planID,
+		r.FormValue("kind"), strings.TrimSpace(r.FormValue("name")), starts, ends); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }

@@ -1,5 +1,52 @@
 {{define "content"}}
 <div class="page-header">
+    <!-- Error banner -->
+    {{if .Error}}
+    <div class="error" style="position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 50; box-shadow: var(--shadow-md);">
+        <strong>Cannot add time:</strong> {{.Error}}
+    </div>
+    
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
     <div>
         <p class="breadcrumb"><a href="/plans">← All plans</a></p>
         <h1>{{.Plan.Title}}</h1>
@@ -9,17 +56,181 @@
                 <span class="chip" style="background: var(--success-bg); color: var(--success); margin-left: 0.5rem;">Published</span>
             {{else}}
                 <span class="chip" style="background: var(--warning-bg); color: var(--warning); margin-left: 0.5rem;">Draft</span>
-            {{end}}
+            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
         </p>
     </div>
     <div class="header-actions">
         <a class="button-secondary" href="/plans/{{.Plan.ID}}/edit">Edit Details</a>
         {{if isEditorOrAdmin .CurrentUser.Role}}
         <form method="post" action="/plans/{{.Plan.ID}}/publish" style="display:inline">
-            <input type="hidden" name="published" value="{{if .Plan.Published}}0{{else}}1{{end}}">
-            <button type="submit" class="button">{{if .Plan.Published}}Unpublish{{else}}Publish Plan{{end}}</button>
+            <input type="hidden" name="published" value="{{if .Plan.Published}}0{{else}}1
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}">
+            <button type="submit" class="button">{{if .Plan.Published}}Unpublish{{else}}Publish Plan
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}</button>
         </form>
-        {{end}}
+        
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
     </div>
 </div>
 
@@ -40,7 +251,91 @@
         {{if .Times}}
             {{range .Times}}
             <div class="time-block" data-time-id="{{.Time.ID}}"
-     data-existing="{{range .Items}}{{if eq .Kind "song"}}{{.ArrangementID}},{{end}}{{end}}">
+     data-starts="{{.Time.StartsAt.Format "2006-01-02T15:04"}}"
+     data-ends="{{.Time.EndsAt.Format "2006-01-02T15:04"}}"
+     data-existing="{{range .Items}}{{if eq .Kind "song"}}{{.ArrangementID}},
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}">
                 <div class="time-block-header draggable-time" draggable="true" data-time-id="{{.Time.ID}}">
                     <div class="time-title">
                         <span class="drag-handle" title="Drag to reorder time">⋮⋮</span>
@@ -69,13 +364,136 @@
                                     <span class="muted">— {{.ArrangementName}}</span>
                                 {{else}}
                                     {{.Title}}
-                                {{end}}
+                                
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                             {{else}}
                                 <span class="item-{{.Kind}}">{{.Title}}</span>
-                            {{end}}
+                            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                         </span>
                         <span class="item-key">{{.Key}}</span>
-                        <span class="item-length">{{if .DurationMinutes}}{{.DurationMinutes}}m{{end}}</span>
+                        <span class="item-length">{{if .DurationMinutes}}{{.DurationMinutes}}m
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}</span>
                         <div class="item-actions">
                             <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" class="action-link">Edit</a>
                             <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove this item?')">
@@ -85,7 +503,48 @@
                     </li>
                     {{else}}
                     <li class="empty-items">No items yet.</li>
-                    {{end}}
+                    
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                 </ul>
 
                 <div class="add-item-container" style="display: flex; gap: 0.5rem;">
@@ -122,12 +581,94 @@
                     </details>
                 </div>
             </div>
-            {{end}}
+            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
         {{else}}
             <div class="empty-state">
                 <p>No service times added yet.</p>
             </div>
-        {{end}}
+        
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
 
         <!-- Service End Boundary -->
         <div class="service-boundary">
@@ -189,10 +730,92 @@
                                     <span class="status-dot status-{{.Status}}"></span>
                                     <span>{{.PersonName}}</span>
                                 </div>
-                                {{end}}
+                                
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                             {{else}}
                                 <span class="status-badge status-open">Open</span>
-                            {{end}}
+                            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                         </div>
 
                         <div class="position-actions">
@@ -203,30 +826,358 @@
                                     <option value="">Assign…</option>
                                     {{$eligible := index $.UsersByPos .PositionID}}
                                     {{range $eligible}}
-                                    <option value="{{.ID}}">{{.Name}}{{if index $.BlockedUsers .ID}} 🚫{{end}}</option>
-                                    {{end}}
+                                    <option value="{{.ID}}">{{.Name}}{{if index $.BlockedUsers .ID}} 🚫
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}</option>
+                                    
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                                 </select>
                             </form>
-                            {{end}}
+                            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
 
                             {{if .Assignees}}
                                 {{range .Assignees}}
                                 <form method="post" action="/plans/{{$.Plan.ID}}/people/{{.PlanPersonID}}/delete" style="display:inline;">
                                     <button class="link-btn" type="submit" style="color: var(--danger);" title="Remove">×</button>
                                 </form>
-                                {{end}}
-                            {{end}}
+                                
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
+                            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                         </div>
                     </div>
-                    {{end}}
+                    
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                 </div>
             </div>
-            {{end}}
+            
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
         {{else}}
             <div class="empty-state">
                 <p>No positions required yet.</p>
             </div>
-        {{end}}
+        
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
 
         {{if .ManageablePositions}}
         <div class="add-position-card">
@@ -236,12 +1187,94 @@
                     <option value="">— pick a position —</option>
                     {{range .ManageablePositions}}
                     <option value="{{.ID}}">{{.TeamName}} · {{.Name}}</option>
-                    {{end}}
+                    
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
                 </select>
                 <button type="submit" class="button-secondary">Add</button>
             </form>
         </div>
-        {{end}}
+        
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
+{{end}}
     </div>
 </div>
 
@@ -282,4 +1315,45 @@
         </div>
     </div>
 </div>
+
+<script>
+    const timeForm = document.querySelector('.time-form');
+    if (timeForm) {
+        const planStart = new Date('{{.Plan.ServiceAt.Format "2006-01-02T15:04"}}');
+        const planEnd = new Date('{{.Plan.ServiceEndsAt.Format "2006-01-02T15:04"}}');
+
+        timeForm.addEventListener('submit', function(e) {
+            const startInput = document.getElementById('time-starts').value;
+            if (!startInput) return;
+
+            const start = new Date(startInput);
+            const duration = parseInt(document.getElementById('time-duration').value) || 60;
+            const end = new Date(start.getTime() + duration * 60000);
+
+            // 1. Check overall bounds
+            if (start < planStart || end > planEnd) {
+                e.preventDefault();
+                alert("Invalid time: Subsections must be within the Service Bounds (" +
+                    planStart.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + " - " +
+                    planEnd.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ").");
+                return;
+            }
+
+            // 2. Check overlaps
+            const blocks = document.querySelectorAll('.time-block');
+            for (let block of blocks) {
+                const bStart = new Date(block.dataset.starts);
+                const bEnd = new Date(block.dataset.ends);
+
+                // Standard overlap logic: start < bEnd AND end > bStart
+                if (start < bEnd && end > bStart) {
+                    e.preventDefault();
+                    alert("Time overlap: This overlaps with the existing subsection '" +
+                          block.querySelector('strong').textContent + "'.");
+                    return;
+                }
+            }
+        });
+    }
+</script>
 {{end}}

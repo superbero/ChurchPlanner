@@ -10,9 +10,11 @@ import (
 )
 
 var (
-	ErrPlanNotFound   = errors.New("plan not found")
-	ErrItemNotFound   = errors.New("plan item not found")
-	ErrPersonNotFound = errors.New("assignment not found")
+	ErrTimeConflict     = errors.New("time overlaps with an existing time")
+	ErrInvalidTimeRange = errors.New("end time must be after start time")
+	ErrPlanNotFound     = errors.New("plan not found")
+	ErrItemNotFound     = errors.New("plan item not found")
+	ErrPersonNotFound   = errors.New("assignment not found")
 )
 
 type PlanRepository struct{ db *pgxpool.Pool }
@@ -214,7 +216,6 @@ func (r *PlanRepository) ReorderTimes(ctx context.Context, planID string, timeID
 // DB returns the underlying pool (used by the handler for skill lookups).
 func (r *PlanRepository) DB() *pgxpool.Pool { return r.db }
 
-
 // DuplicateTime copies a time block and all its plan items to a new time.
 func (r *PlanRepository) DuplicateTime(ctx context.Context, planID, timeID string) error {
 	tx, err := r.db.Begin(ctx)
@@ -240,7 +241,7 @@ func (r *PlanRepository) DuplicateTime(ctx context.Context, planID, timeID strin
 	err = tx.QueryRow(ctx, `
 		INSERT INTO plan_times (plan_id, kind, name, starts_at, ends_at)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id
-	`, planID, kind, name + " (Copy)", newStarts, newEnds).Scan(&newTimeID)
+	`, planID, kind, name+" (Copy)", newStarts, newEnds).Scan(&newTimeID)
 	if err != nil {
 		return err
 	}
@@ -253,4 +254,29 @@ func (r *PlanRepository) DuplicateTime(ctx context.Context, planID, timeID strin
 	`, newTimeID, timeID)
 
 	return tx.Commit(ctx)
+}
+
+// CheckTimeConflict verifies that the requested time is valid and does not
+// overlap with any existing plan time.
+func (r *PlanRepository) CheckTimeConflict(ctx context.Context, planID string, starts, ends time.Time) error {
+	if !ends.After(starts) {
+		return ErrInvalidTimeRange
+	}
+
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM plan_times
+		WHERE plan_id = $1
+		  AND starts_at < $3
+		  AND ends_at > $2
+	`, planID, starts, ends).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return ErrTimeConflict
+	}
+
+	return nil
 }

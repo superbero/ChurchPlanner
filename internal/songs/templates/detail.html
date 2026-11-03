@@ -17,8 +17,8 @@
         {{if .Song.YouTubeURL}}
         <a class="button-secondary" href="{{.Song.YouTubeURL}}" target="_blank" rel="noopener">▶ Watch Video</a>
         {{end}}
+        {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
         <a class="button" href="/songs/{{.Song.ID}}/arrangements/new">Add Arrangement</a>
-        {{if isEditorOrAdmin .CurrentUser.Role}}
         <a class="button-secondary" href="/songs/{{.Song.ID}}/edit">Edit Metadata</a>
         {{end}}
     </div>
@@ -53,7 +53,7 @@
 
                 <div class="arrangement-actions">
                     <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}" class="button">View Chart</a>
-                    {{if isEditorOrAdmin $.CurrentUser.Role}}
+                    {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
                     <div class="secondary-actions">
                         <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/edit">Edit</a> ·
                         <a href="/songs/{{$.Song.ID}}/arrangements/{{.Arrangement.ID}}/pdf">PDF</a>
@@ -75,7 +75,9 @@
         {{else}}
         <div class="empty-state">
             <p>No arrangements yet. You need an arrangement to start building a chord chart.</p>
+            {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
             <a href="/songs/{{.Song.ID}}/arrangements/new" class="button">Create First Arrangement</a>
+            {{end}}
         </div>
         {{end}}
 
@@ -94,6 +96,7 @@
             <p class="muted" style="font-size: 0.9em; margin-bottom: 1rem;">
                 Generate a link volunteers can open without logging in. They'll see the chart, YouTube video, and a PDF download.
             </p>
+            {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
             <form method="post" action="/songs/{{.Song.ID}}/practice-links" class="practice-form">
                 <div class="input-group">
                     <input type="number" name="ttl_days" value="30" min="1" max="365" required style="width: 70px;">
@@ -101,6 +104,7 @@
                     <button type="submit" class="button" style="margin-left:auto;">Generate Link</button>
                 </div>
             </form>
+            {{end}}
             {{if .PracticeToken}}
             <div class="practice-result">
                 <strong>New link:</strong> <a href="/practice/{{.PracticeToken}}" target="_blank">/practice/{{.PracticeToken}}</a>
@@ -113,6 +117,7 @@
             <h3>Key History</h3>
             <p class="muted" style="font-size: 0.9em; margin-bottom: 1rem;">Record which key was used on a specific date.</p>
 
+            {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
             <form method="post" action="/songs/{{.Song.ID}}/history" class="history-form">
                 <div class="form-row">
                     <div class="form-group">
@@ -130,6 +135,7 @@
                 </div>
                 <button type="submit" class="button-secondary" style="width: 100%; margin-top: 0.5rem;">Record Key</button>
             </form>
+            {{end}}
 
             {{if .History}}
             <table class="history-table">
@@ -149,7 +155,7 @@
             {{end}}
         </div>
 
-        {{if isEditorOrAdmin .CurrentUser.Role}}
+        {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
         <form method="post" action="/songs/{{.Song.ID}}/delete" onsubmit="return confirm('Delete song and all arrangements?')">
             <button type="submit" class="link-btn" style="color:#b42318; width: 100%; margin-top: 1rem;">Delete Song</button>
         </form>

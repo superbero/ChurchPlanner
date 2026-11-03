@@ -1,6 +1,7 @@
 package calendar
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,14 +41,12 @@ type Blockout struct {
 }
 
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	// Default to current month
-	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
-	month, _ := strconv.Atoi(r.URL.Query().Get("month"))
-
 	now := time.Now()
-	if year == 0 || month == 0 || month < 1 || month > 12 {
-		year = now.Year()
-		month = int(now.Month())
+	year, month, err := requestedMonth(
+		r.URL.Query().Get("year"), r.URL.Query().Get("month"), now)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	firstOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
@@ -111,6 +110,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 			curr = curr.AddDate(0, 0, 1)
 		}
 	}
+
 	brows.Close()
 
 	// 3. Build the grid
@@ -151,6 +151,27 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func requestedMonth(yearValue, monthValue string, now time.Time) (int, int, error) {
+	if yearValue == "" && monthValue == "" {
+		return now.Year(), int(now.Month()), nil
+	}
+	if yearValue == "" || monthValue == "" {
+		return 0, 0, fmt.Errorf("year and month are both required")
+	}
+	year, err := strconv.Atoi(yearValue)
+	if err != nil {
+		return 0, 0, fmt.Errorf("year and month must be valid numbers")
+	}
+	month, err := strconv.Atoi(monthValue)
+	if err != nil {
+		return 0, 0, fmt.Errorf("year and month must be valid numbers")
+	}
+	if month < 1 || month > 12 || year < 1 || year > 9999 {
+		return 0, 0, fmt.Errorf("year or month is out of range")
+	}
+	return year, month, nil
+}
+
 func (h *Handler) AddBlockout(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFrom(r.Context())
 	startStr := r.FormValue("starts_on")
@@ -180,7 +201,6 @@ func (h *Handler) AddBlockout(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/calendar?year="+start.Format("2006")+"&month="+start.Format("1"), http.StatusSeeOther)
 }
-
 
 func (h *Handler) DeleteBlockout(w http.ResponseWriter, r *http.Request) {
 	// We get the blockout ID from the URL, usually defined in routes.go as /calendar/blockouts/{id}/delete
