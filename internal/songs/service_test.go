@@ -7,7 +7,7 @@ import (
 )
 
 func TestCreate_RejectsEmptyTitle(t *testing.T) {
-	s := NewService(nil) // repo not needed: validation fails first
+	s := NewService(nil, nil) // repositories are not needed before validation
 	_, err := s.Create(context.Background(), CreateSongInput{Title: "   "})
 	if err != ErrInvalidInput {
 		t.Fatalf("want ErrInvalidInput, got %v", err)

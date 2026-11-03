@@ -28,6 +28,7 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 		svcTypes: NewServiceTypeRepository(db),
 		plans:    NewPlanRepository(db),
 		assign:   NewAssignmentRepository(db),
+		members:  NewTeamMembershipRepository(db),
 		renderer: renderer,
 	}}
 }
@@ -60,12 +61,11 @@ func (m *Module) Routes(r chi.Router) {
 		r.Post("/{id}/positions/{posid}/delete", m.handler.RemoveNeededPosition)
 	})
 
-
 }
-
 
 // MyScheduleRoutes are accessible to everyone.
 func (m *Module) MyScheduleRoutes(r chi.Router) {
 	r.Get("/my-schedule", m.handler.MySchedule)
+	r.Get("/my-schedule/{ppid}", m.handler.ViewAssignedPlan)
 	r.Post("/my-schedule/{ppid}/respond", m.handler.RespondToAssignment)
 }

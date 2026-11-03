@@ -252,9 +252,15 @@ func (r *AssignmentRepository) MySchedule(ctx context.Context, personID string) 
 func (r *AssignmentRepository) GetPlanPersonForUser(ctx context.Context, planPersonID, personID string) (PlanPerson, error) {
 	var p PlanPerson
 	err := r.db.QueryRow(ctx, `
-		SELECT id, plan_id, person_id, position_id, status, decline_note
-		FROM plan_people WHERE id = $1 AND person_id = $2
-	`, planPersonID, personID).Scan(&p.ID, &p.PlanID, &p.PersonID, &p.PositionID, &p.Status, &p.DeclineNote)
+		SELECT pp.id, pp.plan_id, pp.person_id, pp.position_id,
+		       pp.status, pp.decline_note, pos.name, t.name
+		FROM plan_people pp
+		JOIN positions pos ON pos.id = pp.position_id
+		JOIN teams t ON t.id = pos.team_id
+		WHERE pp.id = $1 AND pp.person_id = $2
+	`, planPersonID, personID).Scan(
+		&p.ID, &p.PlanID, &p.PersonID, &p.PositionID,
+		&p.Status, &p.DeclineNote, &p.PositionName, &p.TeamName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PlanPerson{}, ErrPersonNotFound
 	}
@@ -301,7 +307,6 @@ func (r *AssignmentRepository) ListPositions(ctx context.Context) ([]Position, e
 	return out, rows.Err()
 }
 
-
 // ListAllUsers returns everyone who can be assigned, with their profile info.
 func (r *AssignmentRepository) ListAllUsers(ctx context.Context) ([]auth.User, error) {
 	rows, err := r.db.Query(ctx, `SELECT id, name, email, role, phone, vocal_low, vocal_high FROM users ORDER BY name`)
@@ -319,7 +324,6 @@ func (r *AssignmentRepository) ListAllUsers(ctx context.Context) ([]auth.User, e
 	}
 	return out, rows.Err()
 }
-
 
 // GetItem fetches a single plan item by id.
 func (r *AssignmentRepository) GetItem(ctx context.Context, id string) (PlanItem, error) {
@@ -369,7 +373,6 @@ func (r *AssignmentRepository) CountTimes(ctx context.Context, planID string) (i
 		`SELECT COUNT(*) FROM plan_times WHERE plan_id = $1`, planID).Scan(&n)
 	return n, err
 }
-
 
 // PeopleServingTree returns teams → positions → current assignees + last-served
 // data, scoped to a specific plan. `currentPlanDate` is used as the "now" cutoff
@@ -515,7 +518,6 @@ func (r *AssignmentRepository) PeopleServingTree(ctx context.Context, planID str
 	return out, nil
 }
 
-
 // AddNeededPosition marks a position as required for this plan.
 func (r *AssignmentRepository) AddNeededPosition(ctx context.Context, planID, positionID string) error {
 	_, err := r.db.Exec(ctx, `
@@ -547,7 +549,6 @@ func (r *AssignmentRepository) RemoveNeededPosition(ctx context.Context, planID,
 	}
 	return tx.Commit(ctx)
 }
-
 
 // PendingNotification carries the data needed to send an email.
 type PendingNotification struct {

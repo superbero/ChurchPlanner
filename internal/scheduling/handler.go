@@ -207,18 +207,18 @@ func (h *Handler) ViewPlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_view", map[string]any{
-		"Plan":                   plan,
-		"Times":                  timeGroups,
-		"Unassigned":             unassigned,
-		"Teams":                  tree,
-		"Users":                  users,
-		"UsersByPos":             usersByPos,
-		"AllPositions":           allPositions,
-		"ManageablePositions":    manageablePositions,
-		"ManageablePositionIDs":  manageableIDs,
-		"BlockedUsers":           blockedMap,
-		"NextStart":              nextStart,
-		"HasMultiple":            len(times) > 1,
+		"Plan":                  plan,
+		"Times":                 timeGroups,
+		"Unassigned":            unassigned,
+		"Teams":                 tree,
+		"Users":                 users,
+		"UsersByPos":            usersByPos,
+		"AllPositions":          allPositions,
+		"ManageablePositions":   manageablePositions,
+		"ManageablePositionIDs": manageableIDs,
+		"BlockedUsers":          blockedMap,
+		"NextStart":             nextStart,
+		"HasMultiple":           len(times) > 1,
 	})
 }
 
@@ -425,6 +425,69 @@ func (h *Handler) MySchedule(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ViewAssignedPlan exposes a read-only service plan only through one of the
+// current user's own assignments. Management controls remain on /plans.
+func (h *Handler) ViewAssignedPlan(w http.ResponseWriter, r *http.Request) {
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	assignment, err := h.assign.GetPlanPersonForUser(
+		r.Context(), chi.URLParam(r, "ppid"), u.ID)
+	if err != nil {
+		if errors.Is(err, ErrPersonNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		httpx.ServerError(w, err)
+		return
+	}
+
+	plan, err := h.plans.Get(r.Context(), assignment.PlanID)
+	if err != nil {
+		if errors.Is(err, ErrPlanNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		httpx.ServerError(w, err)
+		return
+	}
+	times, err := h.plans.ListTimes(r.Context(), plan.ID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	items, err := h.assign.ListItems(r.Context(), plan.ID)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
+	byTime := make(map[string][]PlanItem)
+	var unassigned []PlanItem
+	for _, item := range items {
+		if item.PlanTimeID == "" {
+			unassigned = append(unassigned, item)
+		} else {
+			byTime[item.PlanTimeID] = append(byTime[item.PlanTimeID], item)
+		}
+	}
+	groups := make([]PlanTimeWithItems, 0, len(times))
+	for _, planTime := range times {
+		groups = append(groups, PlanTimeWithItems{
+			Time: planTime, Items: byTime[planTime.ID],
+		})
+	}
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_assigned_plan",
+		map[string]any{
+			"Plan":       plan,
+			"Assignment": assignment,
+			"Times":      groups,
+			"Unassigned": unassigned,
+		})
+}
+
 func (h *Handler) RespondToAssignment(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFrom(r.Context())
 	ppID := chi.URLParam(r, "ppid")
@@ -437,7 +500,9 @@ func (h *Handler) RespondToAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if status != "C" && status != "D" {
-		status = "U"
+		http.Error(w, "status must be C (confirm) or D (decline)",
+			http.StatusBadRequest)
+		return
 	}
 	if err := h.assign.SetStatus(r.Context(), ppID, status, note); err != nil {
 		httpx.ServerError(w, err)
@@ -512,7 +577,6 @@ func parsePlanInput(r *http.Request) (CreatePlanInput, error) {
 	}, nil
 }
 
-
 // ---- Item edit ----
 
 func (h *Handler) EditItemForm(w http.ResponseWriter, r *http.Request) {
@@ -575,7 +639,6 @@ func (h *Handler) ReorderItems(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-
 // nextSunday10AM returns the next Sunday at 10:00 local time.
 func nextSunday10AM() time.Time {
 	now := time.Now()
@@ -586,7 +649,6 @@ func nextSunday10AM() time.Time {
 	d := now.AddDate(0, 0, daysAhead)
 	return time.Date(d.Year(), d.Month(), d.Day(), 10, 0, 0, 0, d.Location())
 }
-
 
 func (h *Handler) AddNeededPosition(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
@@ -614,7 +676,6 @@ func (h *Handler) RemoveNeededPosition(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
 
-
 func (h *Handler) ReorderTimes(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	if err := r.ParseForm(); err != nil {
@@ -628,7 +689,6 @@ func (h *Handler) ReorderTimes(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
 
 // canManagePosition returns true if the current user can manage assignments
 // and position mutations for this position. Admins always pass.

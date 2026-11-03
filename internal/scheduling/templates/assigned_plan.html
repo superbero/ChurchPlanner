@@ -1,0 +1,89 @@
+{{define "content"}}
+<p><a href="/my-schedule">← My schedule</a></p>
+
+<header class="plan-header">
+    <div>
+        <h1>{{.Plan.Title}}</h1>
+        <p class="meta">
+            <strong>{{.Plan.ServiceAt.Format "Mon 2 Jan 2006"}}</strong>
+            · {{.Plan.ServiceAt.Format "15:04"}} → {{.Plan.ServiceEndsAt.Format "15:04"}}
+        </p>
+        <p class="muted">
+            Your assignment: <strong>{{.Assignment.TeamName}} · {{.Assignment.PositionName}}</strong>
+        </p>
+    </div>
+    <div>
+        {{if eq .Assignment.Status "C"}}
+        <span class="chip chip-published">Confirmed</span>
+        {{else if eq .Assignment.Status "D"}}
+        <span class="chip chip-draft">Declined</span>
+        {{else}}
+        <span class="chip chip-draft">Awaiting response</span>
+        {{end}}
+    </div>
+</header>
+
+{{if .Plan.Notes}}
+<section class="time-section">
+    <h2>Service notes</h2>
+    <p>{{.Plan.Notes}}</p>
+</section>
+{{end}}
+
+<h2>Order of service</h2>
+{{range .Times}}
+<section class="time-section">
+    <header class="time-header">
+        <h3>{{.Time.Name}} <span class="muted">· {{.Time.StartsAt.Format "15:04"}}–{{.Time.EndsAt.Format "15:04"}}</span></h3>
+    </header>
+    <ol class="item-list">
+        {{range .Items}}
+        <li class="item-row">
+            <span class="item-position">{{.Position}}</span>
+            <span class="item-main">
+                {{if and (eq .Kind "song") .SongTitle}}
+                    <a href="/songs/{{.SongID}}">{{.SongTitle}}</a>
+                    <span class="muted">— {{.ArrangementName}}</span>
+                {{else}}
+                    {{.Title}}
+                {{end}}
+            </span>
+            {{if .Key}}<span class="item-key">Key {{.Key}}</span>{{end}}
+            {{if .DurationMinutes}}<span class="item-length">{{.DurationMinutes}}m</span>{{end}}
+            {{if .Notes}}<p class="muted">{{.Notes}}</p>{{end}}
+        </li>
+        {{else}}
+        <li class="item-empty">No items listed for this time.</li>
+        {{end}}
+    </ol>
+</section>
+{{end}}
+
+{{if .Unassigned}}
+<section class="time-section">
+    <h3>Other plan items</h3>
+    <ul class="item-list">
+        {{range .Unassigned}}
+        <li class="item-row"><span class="item-main">{{.Title}}</span></li>
+        {{end}}
+    </ul>
+</section>
+{{end}}
+
+<section class="time-section">
+    <h2>Your response</h2>
+    {{if ne .Assignment.Status "C"}}
+    <form method="post" action="/my-schedule/{{.Assignment.ID}}/respond" style="display:inline">
+        <input type="hidden" name="status" value="C">
+        <button type="submit">Accept assignment</button>
+    </form>
+    {{end}}
+    {{if ne .Assignment.Status "D"}}
+    <form method="post" action="/my-schedule/{{.Assignment.ID}}/respond" style="display:inline">
+        <input type="hidden" name="status" value="D">
+        <input name="decline_note" placeholder="Reason (optional)" aria-label="Reason for declining">
+        <button type="submit" class="button-secondary">Decline</button>
+    </form>
+    {{end}}
+</section>
+{{end}}

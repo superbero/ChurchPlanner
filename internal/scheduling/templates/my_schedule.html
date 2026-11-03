@@ -9,7 +9,7 @@
     {{range .Assignments}}
         <tr>
             <td>{{.ServiceAt.Format "Mon 2 Jan 15:04"}}</td>
-            <td><a href="/plans/{{.PlanID}}">{{.PlanTitle}}</a><br><span class="muted">{{.ServiceType}}</span></td>
+            <td><a href="/my-schedule/{{.PlanPersonID}}">{{.PlanTitle}}</a><br><span class="muted">{{.ServiceType}}</span></td>
             <td>{{.TeamName}} · {{.PositionName}}</td>
             <td>
                 {{if eq .Status "C"}}✓ confirmed

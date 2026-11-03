@@ -14,6 +14,18 @@ Open http://localhost:8080 — sign in with `admin@example.com` / `changeme`.
 **Change that password immediately** (edit `migrations/00001_init.sql` before first run, or
 delete the seeded row and create your own).
 
+## Tests
+
+Install Go 1.26 or newer, then run:
+
+    make test        # all unit and template tests
+    make test-race   # run tests with the race detector
+    make test-cover  # report package and total coverage
+    make vet         # run go vet
+
+GitHub Actions runs the race-enabled test suite and `go vet` on pushes and
+pull requests. Tests do not require a running database.
+
 ## Module rules (enforced by `internal/`)
 
 - A module may import `internal/platform/*` and its own subpackages only.
