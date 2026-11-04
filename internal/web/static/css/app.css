@@ -832,6 +832,38 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 }
 .song-title-cell .song-expand-button[aria-expanded="true"]::before { content: "−"; font-weight: 700; }
 .song-title-cell .song-expand-button[aria-expanded="false"]::before { content: "+"; font-weight: 700; }
+.song-status-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: .2rem .45rem;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.song-status-new { color: #175cd3; background: #eff8ff; border-color: #b2ddff; }
+.song-status-unused { color: #93370d; background: #fff7ed; border-color: #fed7aa; }
+.song-list-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+    margin: .25rem 0 .75rem;
+}
+.song-list-summary p { margin: 0; }
+.song-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .65rem;
+    color: #475467;
+    font-size: .875rem;
+    white-space: nowrap;
+}
+.song-pagination-bottom { margin: 1rem 0 2rem; }
 .quick-view-chart .preview-lyrics { max-height: 48vh; overflow: auto; }
 .quick-view-chart .preview-lyrics .chart-line { min-height: 2.8em; margin-bottom: .25rem; }
 .quick-view-chart .preview-lyrics .lyric { display: block; padding-top: 1.3em; white-space: pre; }
@@ -2110,6 +2142,10 @@ table input[type="checkbox"] { width: 1rem; height: 1rem; }
 }
 @media (max-width: 900px) {
     .plan-top-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+    .song-list-summary { align-items: flex-start; flex-direction: column; }
+    .song-pagination { justify-content: flex-start; }
 }
 
 /* ── People Serving Tabs (Bottom) ──────────────────────────────── */

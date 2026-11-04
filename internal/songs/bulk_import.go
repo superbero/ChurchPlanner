@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -21,11 +22,13 @@ const (
 
 type bulkImportRecord struct {
 	CSVRow        int    `json:"csv_row"`
+	SourceName    string `json:"source_name"`
 	Title         string `json:"title"`
 	Author        string `json:"author"`
 	Key           string `json:"key"`
 	Tempo         int    `json:"tempo"`
 	SourceContent string `json:"source_content"`
+	ImportError   string `json:"import_error"`
 }
 
 type bulkImportPreviewRow struct {
@@ -57,19 +60,97 @@ func (h *Handler) DownloadBulkImportTemplate(w http.ResponseWriter, r *http.Requ
 func (h *Handler) PreviewBulkImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBulkImportSize)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		writeImportRequestError(w, err, "The CSV file could not be read.")
+		writeImportRequestError(w, err, "The uploaded files could not be read.")
 		return
 	}
-	file, _, err := r.FormFile("csv_file")
-	if err != nil {
-		h.renderBulkImport(w, r, http.StatusBadRequest, "Choose a CSV file to continue.", nil, "", nil)
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 {
+		files = r.MultipartForm.File["csv_file"]
+	}
+	if len(files) == 0 {
+		h.renderBulkImport(w, r, http.StatusBadRequest, "Choose one or more song files to continue.", nil, "", nil)
 		return
 	}
-	defer file.Close()
+	if len(files) > maxBulkImportRows {
+		h.renderBulkImport(w, r, http.StatusUnprocessableEntity,
+			fmt.Sprintf("A bulk import can contain at most %d files or songs.", maxBulkImportRows),
+			nil, "", nil)
+		return
+	}
+	csvCount := 0
+	for _, file := range files {
+		if strings.EqualFold(filepath.Ext(file.Filename), ".csv") {
+			csvCount++
+		}
+	}
+	if csvCount > 0 && (csvCount != 1 || len(files) != 1) {
+		h.renderBulkImport(w, r, http.StatusUnprocessableEntity,
+			"Upload a CSV by itself, or select multiple song files without a CSV.", nil, "", nil)
+		return
+	}
 
-	records, err := parseBulkImportCSV(file)
+	var records []bulkImportRecord
+	var err error
+	if csvCount == 1 {
+		file, openErr := files[0].Open()
+		if openErr != nil {
+			httpx.ServerError(w, openErr)
+			return
+		}
+		records, err = parseBulkImportCSV(file)
+		closeErr := file.Close()
+		if err == nil && closeErr != nil {
+			err = closeErr
+		}
+		for i := range records {
+			records[i].SourceName = filepath.Base(files[0].Filename)
+		}
+	} else {
+		records = make([]bulkImportRecord, 0, len(files))
+		for i, header := range files {
+			file, openErr := header.Open()
+			if openErr != nil {
+				httpx.ServerError(w, openErr)
+				return
+			}
+			rawBytes, readErr := io.ReadAll(file)
+			closeErr := file.Close()
+			if readErr != nil {
+				httpx.ServerError(w, readErr)
+				return
+			}
+			if closeErr != nil {
+				httpx.ServerError(w, closeErr)
+				return
+			}
+			parsed, sourceContent, _, parseErr := parseUploadedSong(header.Filename, rawBytes)
+			title := strings.TrimSpace(parsed.Title)
+			if title == "" {
+				title = strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename))
+			}
+			record := bulkImportRecord{
+				CSVRow:        i + 1,
+				SourceName:    filepath.Base(header.Filename),
+				Title:         title,
+				Author:        parsed.Author,
+				Key:           parsed.Key,
+				Tempo:         parsed.Tempo,
+				SourceContent: sourceContent,
+			}
+			if parseErr != nil {
+				record.ImportError = fmt.Sprintf("%s: %s", filepath.Base(header.Filename), parseErr)
+			}
+			records = append(records, record)
+		}
+	}
 	if err != nil {
 		h.renderBulkImport(w, r, http.StatusUnprocessableEntity, err.Error(), nil, "", nil)
+		return
+	}
+	if len(records) > maxBulkImportRows {
+		h.renderBulkImport(w, r, http.StatusUnprocessableEntity,
+			fmt.Sprintf("A bulk import can contain at most %d files or songs.", maxBulkImportRows),
+			nil, "", nil)
 		return
 	}
 	rows := validateBulkImportRecords(records)
@@ -275,6 +356,9 @@ func allCSVFieldsBlank(fields []string) bool {
 }
 
 func validateBulkImportRecord(record bulkImportRecord) error {
+	if record.ImportError != "" {
+		return errors.New(record.ImportError)
+	}
 	if strings.TrimSpace(record.Title) == "" {
 		return errors.New("title is required")
 	}

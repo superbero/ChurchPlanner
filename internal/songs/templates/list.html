@@ -35,6 +35,14 @@
             <option value="title"   {{if or (eq .Filter.Sort "title") (eq .Filter.Sort "")}}selected{{end}}>Sort: Title</option>
             <option value="created" {{if eq .Filter.Sort "created"}}selected{{end}}>Sort: Newest</option>
             <option value="updated" {{if eq .Filter.Sort "updated"}}selected{{end}}>Sort: Updated</option>
+            <option value="unused" {{if eq .Filter.Sort "unused"}}selected{{end}}>Sort: Never used first</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label for="song-page-size">Per page</label>
+        <select id="song-page-size" name="page_size">
+            <option value="10" {{if eq .Page.PageSize 10}}selected{{end}}>10</option>
+            <option value="15" {{if eq .Page.PageSize 15}}selected{{end}}>15</option>
         </select>
     </div>
     <div class="filter-group">
@@ -51,7 +59,16 @@
     {{if eq .DeletedCount 1}}Song removed from the library.{{else}}{{.DeletedCount}} songs removed from the library.{{end}}
 </p>
 {{end}}
-<p class="muted">{{len .Songs}} song(s).</p>
+<div class="song-list-summary">
+    <p class="muted">{{.Page.Total}} song(s) · {{.Page.PageSize}} per page · Page {{.Page.Page}} of {{.PageCount}} · Search or sort to find songs faster.</p>
+    {{if gt .PageCount 1}}
+    <nav class="song-pagination" aria-label="Song list pages">
+        {{if gt .Page.Page 1}}<a class="button-secondary btn-sm" href="{{.PreviousURL}}" rel="prev">Previous</a>{{end}}
+        <span>Page {{.Page.Page}} / {{.PageCount}}</span>
+        {{if lt .Page.Page .PageCount}}<a class="button-secondary btn-sm" href="{{.NextURL}}" rel="next">Next</a>{{end}}
+    </nav>
+    {{end}}
+</div>
 
 {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
 <form id="bulk-delete-form" method="post" action="/songs/bulk-delete"
@@ -91,6 +108,11 @@
                     <div class="song-title-cell">
                     <a href="/songs/{{.ID}}" class="song-title">{{.Title}}</a>
                     {{if .Archived}}<span class="chip">archived</span>{{end}}
+                    {{if .RecentlyAddedUnused}}
+                    <span class="song-status-badge song-status-new" title="Added in the last 30 days and not yet used in a service plan">New · not used</span>
+                    {{else if .NeverUsed}}
+                    <span class="song-status-badge song-status-unused" title="This song has not been used in a service plan">Never used</span>
+                    {{end}}
                     <button type="button" class="action-link song-expand-button"
                             data-song-id="{{.ID}}" aria-controls="song-panel-{{.ID}}"
                             aria-expanded="false">Chart &amp; transpose</button>
@@ -136,6 +158,13 @@
         </tbody>
     </table>
 </div>
+{{if gt .PageCount 1}}
+<nav class="song-pagination song-pagination-bottom" aria-label="Song list pages">
+    {{if gt .Page.Page 1}}<a class="button-secondary btn-sm" href="{{.PreviousURL}}" rel="prev">Previous</a>{{end}}
+    <span>Page {{.Page.Page}} / {{.PageCount}}</span>
+    {{if lt .Page.Page .PageCount}}<a class="button-secondary btn-sm" href="{{.NextURL}}" rel="next">Next</a>{{end}}
+</nav>
+{{end}}
 
 <!-- PDF Modal -->
 <div id="pdf-modal" class="modal-overlay" style="display: none;" onclick="closePdfModal(event)">

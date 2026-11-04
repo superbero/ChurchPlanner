@@ -62,6 +62,7 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 			r.Get("/{id}/items/{iid}/edit", m.handler.EditItemForm)
 			r.Post("/{id}/items/{iid}", m.handler.UpdateItem)
 			r.Post("/{id}/items/{iid}/delete", m.handler.DeleteItem)
+			r.Post("/{id}/items/{iid}/duplicate", m.handler.DuplicateItem)
 			r.Post("/{id}/items/reorder", m.handler.ReorderItems)
 
 		})

@@ -26,6 +26,24 @@ func newSongTemplateRenderer(t *testing.T) *httpx.Renderer {
 	return renderer
 }
 
+func TestNormalizeSongPageSize(t *testing.T) {
+	tests := []struct {
+		input int
+		want  int
+	}{
+		{input: 0, want: 10},
+		{input: -1, want: 10},
+		{input: 10, want: 10},
+		{input: 15, want: 15},
+		{input: 100, want: 15},
+	}
+	for _, tt := range tests {
+		if got := normalizeSongPageSize(tt.input); got != tt.want {
+			t.Errorf("normalizeSongPageSize(%d) = %d, want %d", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestSongDetailHidesEditingControlsForAnonymousVisitors(t *testing.T) {
 	renderer := newSongTemplateRenderer(t)
 	response := httptest.NewRecorder()
@@ -58,8 +76,15 @@ func TestSongListRendersWithoutRemovalControlsWhenUserIsMissing(t *testing.T) {
 	response := httptest.NewRecorder()
 	renderer.Render(response, httptest.NewRequest(http.MethodGet, "/songs", nil),
 		http.StatusOK, "songs_list", map[string]any{
-			"Songs":            []Song{{ID: "song-1", Title: "Test song"}},
+			"Songs": []Song{
+				{ID: "song-1", Title: "New song", RecentlyAddedUnused: true},
+				{ID: "song-2", Title: "Unused song", NeverUsed: true},
+			},
 			"Filter":           Filter{},
+			"Page":             SongPage{Total: 21, Page: 2, PageSize: 10},
+			"PageCount":        3,
+			"PreviousURL":      "/songs?page=1&page_size=10",
+			"NextURL":          "/songs?page=3&page_size=10",
 			"TagGroups":        []TagGroupWithTags{},
 			"SelectedTagSlugs": map[string]bool{},
 		})
@@ -69,6 +94,15 @@ func TestSongListRendersWithoutRemovalControlsWhenUserIsMissing(t *testing.T) {
 	for _, control := range []string{"/songs/bulk-delete", `name="song_ids"`, "/songs/song-1/delete"} {
 		if strings.Contains(response.Body.String(), control) {
 			t.Errorf("song list without a user contains removal control %q", control)
+		}
+	}
+	for _, expected := range []string{
+		"New · not used", "Never used", "Page 2 / 3",
+		`href="/songs?page=1&amp;page_size=10"`, `href="/songs?page=3&amp;page_size=10"`,
+		`name="page_size"`, `value="10" selected`, `value="15"`, "10 per page", "Never used first",
+	} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("song list is missing %q", expected)
 		}
 	}
 }

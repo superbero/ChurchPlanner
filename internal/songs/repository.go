@@ -21,14 +21,17 @@ const songColumns = `s.id, s.title, s.author, s.youtube_url, s.ccli_number,
 	s.archived, s.created_at, s.updated_at,
 	COALESCE(a.original_key, '') AS original_key,
 	COALESCE(a.bpm, 0) AS bpm,
-	COALESCE((SELECT key FROM song_key_history h WHERE h.song_id = s.id ORDER BY used_on DESC LIMIT 1), '') AS last_used_key`
+	COALESCE((SELECT key FROM song_key_history h WHERE h.song_id = s.id ORDER BY used_on DESC LIMIT 1), '') AS last_used_key,
+	NOT EXISTS (SELECT 1 FROM song_key_history h WHERE h.song_id = s.id) AS never_used,
+	(s.created_at >= now() - INTERVAL '30 days'
+		AND NOT EXISTS (SELECT 1 FROM song_key_history h WHERE h.song_id = s.id)) AS recently_added_unused`
 
 func scanSong(row pgx.Row) (Song, error) {
 	var s Song
 	err := row.Scan(&s.ID, &s.Title, &s.Author, &s.YouTubeURL, &s.CCLINumber,
 		&s.CopyrightHolder, &s.CopyrightDate, &s.Publisher, &s.Scripture,
 		&s.Notes, &s.Archived, &s.CreatedAt, &s.UpdatedAt,
-		&s.OriginalKey, &s.BPM, &s.LastUsedKey)
+		&s.OriginalKey, &s.BPM, &s.LastUsedKey, &s.NeverUsed, &s.RecentlyAddedUnused)
 	return s, err
 }
 
@@ -37,6 +40,88 @@ func (r *Repository) List(ctx context.Context) ([]Song, error) {
 }
 
 func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
+	args, where := songSearchConditions(f)
+	query := fmt.Sprintf(
+		`SELECT %s FROM songs s
+		LEFT JOIN song_arrangements a ON a.song_id = s.id AND a.is_default = TRUE
+		WHERE %s ORDER BY %s`,
+		songColumns, where, songOrderBy(f.Sort),
+	)
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var songs []Song
+	for rows.Next() {
+		song, err := scanSong(rows)
+		if err != nil {
+			return nil, err
+		}
+		songs = append(songs, song)
+	}
+	return songs, rows.Err()
+}
+
+func (r *Repository) SearchPage(ctx context.Context, f Filter, pageNumber, pageSize int) (SongPage, error) {
+	pageSize = normalizeSongPageSize(pageSize)
+	if pageNumber < 1 {
+		pageNumber = 1
+	}
+	args, where := songSearchConditions(f)
+
+	var total int
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM songs s WHERE "+where, args...).Scan(&total); err != nil {
+		return SongPage{}, err
+	}
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		pageNumber = 1
+	} else if pageNumber > totalPages {
+		pageNumber = totalPages
+	}
+
+	queryArgs := append(append([]any(nil), args...), pageSize, (pageNumber-1)*pageSize)
+	baseQuery := `SELECT %s FROM songs s
+		LEFT JOIN song_arrangements a ON a.song_id = s.id AND a.is_default = TRUE
+		WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d`
+	query := fmt.Sprintf(baseQuery, songColumns, where, songOrderBy(f.Sort), len(queryArgs)-1, len(queryArgs))
+	rows, err := r.db.Query(ctx, query, queryArgs...)
+	if err != nil {
+		return SongPage{}, err
+	}
+	defer rows.Close()
+
+	var out []Song
+	for rows.Next() {
+		song, err := scanSong(rows)
+		if err != nil {
+			return SongPage{}, err
+		}
+		out = append(out, song)
+	}
+	if err := rows.Err(); err != nil {
+		return SongPage{}, err
+	}
+	return SongPage{Songs: out, Total: total, Page: pageNumber, PageSize: pageSize}, nil
+}
+
+func songOrderBy(sort string) string {
+	switch sort {
+	case "created":
+		return "s.created_at DESC, s.title, s.id"
+	case "updated":
+		return "s.updated_at DESC, s.title, s.id"
+	case "unused":
+		return `NOT EXISTS (SELECT 1 FROM song_key_history h WHERE h.song_id = s.id) DESC,
+			s.title, s.id`
+	default:
+		return "s.title, s.id"
+	}
+}
+
+func songSearchConditions(f Filter) ([]any, string) {
 	var args []any
 	var conds []string
 
@@ -71,34 +156,7 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
 	if len(conds) > 0 {
 		where = strings.Join(conds, " AND ")
 	}
-	orderBy := "title"
-	switch f.Sort {
-	case "created":
-		orderBy = "created_at DESC"
-	case "updated":
-		orderBy = "updated_at DESC"
-	}
-
-	// We must alias 'songs' as 's' and join the default arrangement as 'a'
-	baseQuery := `SELECT %s FROM songs s
-		LEFT JOIN song_arrangements a ON a.song_id = s.id AND a.is_default = TRUE
-		WHERE %s ORDER BY %s`
-	q := fmt.Sprintf(baseQuery, songColumns, where, orderBy)
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []Song
-	for rows.Next() {
-		s, err := scanSong(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, rows.Err()
+	return args, where
 }
 
 func (r *Repository) Get(ctx context.Context, id string) (Song, error) {

@@ -331,6 +331,80 @@ func (r *AssignmentRepository) GetItem(ctx context.Context, id string) (PlanItem
 		`SELECT `+itemColumns+` FROM plan_items WHERE id = $1`, id))
 }
 
+func (r *AssignmentRepository) DuplicateItem(ctx context.Context, planID, itemID string) (PlanItem, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return PlanItem{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	item, err := scanItem(tx.QueryRow(ctx,
+		`SELECT `+itemColumns+` FROM plan_items WHERE id = $1 AND plan_id = $2 FOR UPDATE`,
+		itemID, planID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PlanItem{}, ErrItemNotFound
+	}
+	if err != nil {
+		return PlanItem{}, err
+	}
+
+	var planTimeID any
+	if item.PlanTimeID != "" {
+		planTimeID = item.PlanTimeID
+	}
+	var position int
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(MAX(position), 0) + 1
+		FROM plan_items
+		WHERE plan_id = $1 AND plan_time_id IS NOT DISTINCT FROM $2
+	`, planID, planTimeID).Scan(&position); err != nil {
+		return PlanItem{}, err
+	}
+
+	copy, err := scanItem(tx.QueryRow(ctx, `
+		INSERT INTO plan_items (
+			plan_id, plan_time_id, position, kind, title, arrangement_id,
+			key_id, key, duration_minutes, notes
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::uuid, $8, $9, $10)
+		RETURNING `+itemColumns,
+		planID, planTimeID, position, item.Kind, item.Title, nullableID(item.ArrangementID),
+		item.KeyID, item.Key, item.DurationMinutes, item.Notes))
+	if err != nil {
+		return PlanItem{}, err
+	}
+
+	if item.Kind == "song" && item.ArrangementID != "" && item.Key != "" {
+		var serviceAt time.Time
+		if err := tx.QueryRow(ctx,
+			`SELECT service_at FROM plans WHERE id = $1`, planID).Scan(&serviceAt); err != nil {
+			return PlanItem{}, err
+		}
+		var songID string
+		if err := tx.QueryRow(ctx,
+			`SELECT song_id FROM song_arrangements WHERE id = $1`, item.ArrangementID).Scan(&songID); err != nil {
+			return PlanItem{}, err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO song_key_history (song_id, used_on, key, notes, plan_id)
+			VALUES ($1, $2, $3, $4, $5)
+		`, songID, serviceAt.Format("2006-01-02"), item.Key, "Scheduled in plan", planID); err != nil {
+			return PlanItem{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return PlanItem{}, err
+	}
+	return copy, nil
+}
+
+func nullableID(id string) any {
+	if id == "" {
+		return nil
+	}
+	return id
+}
+
 // UpdateItem edits the mutable fields of an item.
 func (r *AssignmentRepository) UpdateItem(ctx context.Context, id string, in UpdatePlanItemInput) error {
 	var planTimeID any

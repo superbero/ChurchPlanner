@@ -1,9 +1,9 @@
 package scheduling
 
 import (
-	"fmt"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -245,8 +245,10 @@ func (r *PlanRepository) DuplicateTime(ctx context.Context, planID, timeID strin
 	var kind, name string
 	var startsAt, endsAt time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT kind, name, starts_at, ends_at FROM plan_times WHERE id = $1
-	`, timeID).Scan(&kind, &name, &startsAt, &endsAt)
+		SELECT kind, name, starts_at, ends_at
+		FROM plan_times
+		WHERE id = $1 AND plan_id = $2
+	`, timeID, planID).Scan(&kind, &name, &startsAt, &endsAt)
 	if err != nil {
 		return err
 	}
@@ -287,7 +289,8 @@ func (r *PlanRepository) CheckTimeConflict(ctx context.Context, planID string, s
 		WHERE plan_id = $1
 		  AND starts_at < $3
 		  AND ends_at > $2
-	`, planID, starts, ends).Scan(&count)
+		  AND ($4::text = '' OR id::text <> $4::text)
+	`, planID, starts, ends, excludeID).Scan(&count)
 	if err != nil {
 		return err
 	}

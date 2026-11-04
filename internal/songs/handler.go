@@ -1,20 +1,18 @@
 package songs
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/ledongthuc/pdf"
-
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
@@ -49,10 +47,28 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		IncludeArchived: q.Get("archived") == "1",
 		Sort:            q.Get("sort"),
 	}
-	items, err := h.svc.Search(r.Context(), f)
+	requestedPage, _ := strconv.Atoi(q.Get("page"))
+	if requestedPage < 1 {
+		requestedPage = 1
+	}
+	requestedPageSize, _ := strconv.Atoi(q.Get("page_size"))
+	requestedPageSize = normalizeSongPageSize(requestedPageSize)
+	page, err := h.svc.SearchPage(r.Context(), f, requestedPage, requestedPageSize)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
+	}
+	pageCount := (page.Total + page.PageSize - 1) / page.PageSize
+	if pageCount == 0 {
+		pageCount = 1
+	}
+	queryForPage := func(number int) string {
+		values := url.Values{}
+		for key, entries := range q {
+			values[key] = append([]string(nil), entries...)
+		}
+		values.Set("page", strconv.Itoa(number))
+		return "/songs?" + values.Encode()
 	}
 	groups, err := h.tags.ListGrouped(r.Context())
 	if err != nil {
@@ -65,7 +81,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	deletedCount, _ := strconv.Atoi(q.Get("deleted"))
 	h.renderer.Render(w, r, http.StatusOK, "songs_list", map[string]any{
-		"Songs":            items,
+		"Songs":            page.Songs,
+		"Page":             page,
+		"PageCount":        pageCount,
+		"PreviousURL":      queryForPage(page.Page - 1),
+		"NextURL":          queryForPage(page.Page + 1),
 		"Filter":           f,
 		"TagGroups":        groups,
 		"SelectedTagSlugs": selected,
@@ -1060,9 +1080,10 @@ func (h *Handler) ProcessImport(w http.ResponseWriter, r *http.Request) {
 
 	var rawText string
 	var fileName string
-	format := "text"
 	var err error
 	explicitTitle := strings.TrimSpace(r.FormValue("title"))
+	var parsed ParsedSong
+	var inferred string
 
 	// 1. Check if the user pasted raw text
 	pastedText := strings.TrimSpace(r.FormValue("raw_text"))
@@ -1072,7 +1093,7 @@ func (h *Handler) ProcessImport(w http.ResponseWriter, r *http.Request) {
 		if fileName == "" {
 			fileName = "Pasted Song"
 		}
-		format = DetectFormat("", rawText)
+		parsed, inferred, err = parseImportText("", rawText)
 	} else {
 		// 2. Handle file upload
 		file, header, err := r.FormFile("file")
@@ -1088,61 +1109,15 @@ func (h *Handler) ProcessImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileName = strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
-
-		ext := strings.ToLower(filepath.Ext(header.Filename))
-		if ext == ".pdf" {
-			pdfReader, err := pdf.NewReader(bytes.NewReader(rawBytes), int64(len(rawBytes)))
-			if err != nil {
-				h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "Could not read PDF file."})
-				return
-			}
-			b, err := pdfReader.GetPlainText()
-			if err == nil {
-				var textBuf bytes.Buffer
-				_, _ = textBuf.ReadFrom(b)
-				rawText = textBuf.String()
-			} else {
-				h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "Could not extract text from PDF."})
-				return
-			}
-			format = "text"
-		} else {
-			switch ext {
-			case ".cho", ".pro", ".chordpro", ".txt", ".xml":
-			default:
-				h.renderer.Render(w, r, http.StatusUnsupportedMediaType, "songs_import", map[string]any{
-					"Error": "Unsupported file type. Upload a PDF, ChordPro, OpenSong/OpenLyrics XML, or plain-text file.",
-				})
-				return
-			}
-			rawText = string(rawBytes)
-			format = DetectFormat(header.Filename, rawText)
-		}
-	}
-
-	var parsed ParsedSong
-	var inferred string
-	switch format {
-	case "opensong":
-		parsed, err = ParseOpenSong(rawText)
-		if err == nil {
-			inferred = parsedImportSource(parsed)
-		}
-	case "openlyrics":
-		parsed, err = ParseOpenLyrics(rawText)
-		if err == nil {
-			inferred = parsedImportSource(parsed)
-		}
-	case "chordpro":
-		parsed = ParseChordPro(rawText)
-		inferred = rawText
-	default:
-		inferred = InferChordPro(rawText)
-		parsed = ParseChordPro(inferred)
+		parsed, inferred, rawText, err = parseUploadedSong(header.Filename, rawBytes)
 	}
 	if err != nil {
-		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{
-			"Error": "Could not read this XML as a supported OpenSong or OpenLyrics song.",
+		status := http.StatusUnprocessableEntity
+		if errors.Is(err, errUnsupportedImportFile) {
+			status = http.StatusUnsupportedMediaType
+		}
+		h.renderer.Render(w, r, status, "songs_import", map[string]any{
+			"Error": err.Error(),
 		})
 		return
 	}

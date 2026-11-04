@@ -59,8 +59,9 @@
                         <span class="muted">{{.Time.StartsAt.Format "3:04 PM"}} - {{.Time.EndsAt.Format "3:04 PM"}}</span>
                     </div>
                     <div style="display:flex; gap: 0.5rem; align-items:center;">
-                        <button type="button" class="link-btn"
-                                onclick="openEditTimeModal('{{.Time.ID}}', '{{.Time.Name}}', '{{.Time.Kind}}', '{{.Time.StartsAt.Format "2006-01-02T15:04"}}', '{{.Time.EndsAt.Format "2006-01-02T15:04"}}')">
+                        <button type="button" class="link-btn edit-time-button"
+                                data-time-id="{{.Time.ID}}" data-time-name="{{.Time.Name}}"
+                                data-time-kind="{{.Time.Kind}}">
                             ✎ Edit
                         </button>
                         <form method="post" action="/plans/{{$.Plan.ID}}/times/{{.Time.ID}}/duplicate" style="margin:0;">
@@ -92,6 +93,9 @@
                         <span class="item-length">{{if .DurationMinutes}}{{.DurationMinutes}}m{{end}}</span>
                         <div class="item-actions">
                             <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" class="action-link">Edit</a>
+                            <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/duplicate" style="display:inline">
+                                <button class="link-btn" type="submit" title="Copy this item to the end of this service section">Copy</button>
+                            </form>
                             <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove this item?')">
                                 <button class="link-btn" type="submit" style="color: var(--danger);">×</button>
                             </form>
@@ -324,16 +328,17 @@
 
 <!-- Time Validation & Tabs Script -->
 <script>
-    function openEditTimeModal(id, name, kind, starts, ends) {
+    function openEditTimeModal(button) {
+        const timeBlock = button.closest('.time-block');
         const modal = document.getElementById('edit-time-modal');
         const form = document.getElementById('edit-time-form');
         const planId = window.location.pathname.split('/')[2];
 
-        form.action = `/plans/${planId}/times/${id}`;
-        document.getElementById('edit-time-name').value = name;
-        document.getElementById('edit-time-kind').value = kind;
-        document.getElementById('edit-time-starts').value = starts;
-        document.getElementById('edit-time-ends').value = ends;
+        form.action = `/plans/${planId}/times/${button.dataset.timeId}`;
+        document.getElementById('edit-time-name').value = button.dataset.timeName;
+        document.getElementById('edit-time-kind').value = button.dataset.timeKind;
+        document.getElementById('edit-time-starts').value = timeBlock.dataset.starts;
+        document.getElementById('edit-time-ends').value = timeBlock.dataset.ends;
 
         modal.style.display = 'flex';
     }
@@ -344,6 +349,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.edit-time-button').forEach(button => {
+            button.addEventListener('click', () => openEditTimeModal(button));
+        });
+
         // Time Form Validation
         const timeForm = document.getElementById('time-form');
         if (timeForm) {

@@ -19,6 +19,9 @@ func NewService(repo *Repository, history *HistoryRepository) *Service {
 
 func (s *Service) List(ctx context.Context) ([]Song, error)             { return s.repo.List(ctx) }
 func (s *Service) Search(ctx context.Context, f Filter) ([]Song, error) { return s.repo.Search(ctx, f) }
+func (s *Service) SearchPage(ctx context.Context, f Filter, page, pageSize int) (SongPage, error) {
+	return s.repo.SearchPage(ctx, f, page, pageSize)
+}
 func (s *Service) Get(ctx context.Context, id string) (Song, error) {
 	if id == "" {
 		return Song{}, ErrNotFound

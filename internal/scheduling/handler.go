@@ -808,6 +808,20 @@ func (h *Handler) DuplicateTime(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
 
+func (h *Handler) DuplicateItem(w http.ResponseWriter, r *http.Request) {
+	planID := chi.URLParam(r, "id")
+	itemID := chi.URLParam(r, "iid")
+	if _, err := h.assign.DuplicateItem(r.Context(), planID, itemID); err != nil {
+		if errors.Is(err, ErrItemNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
+}
+
 func (h *Handler) BatchAddItems(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	if err := r.ParseForm(); err != nil {
@@ -998,7 +1012,6 @@ func (h *Handler) BulkCreatePlans(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/plans", http.StatusSeeOther)
 }
-
 
 func (h *Handler) UpdateTime(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")

@@ -3,7 +3,7 @@
     <div>
         <p class="song-breadcrumb"><a href="/songs">Songs</a><span aria-hidden="true">/</span><a href="/songs/import">Import</a><span aria-hidden="true">/</span>Bulk import</p>
         <h1>Import songs in bulk</h1>
-        <p class="muted">Upload a CSV, review every row, then add selected songs together.</p>
+        <p class="muted">Upload a CSV or multiple song files, review every item, then add selected songs together.</p>
     </div>
     <a href="/songs/import" class="button-secondary">Single-song import</a>
 </div>
@@ -19,7 +19,7 @@
         {{if .Skipped}}<p class="muted">{{.Skipped}} duplicate {{if eq .Skipped 1}}row was{{else}}rows were{{end}} skipped.</p>{{end}}
         <div class="bulk-import-complete-actions">
             <a href="/songs" class="button">View song library</a>
-            <a href="/songs/import/bulk" class="button-secondary">Import another CSV</a>
+            <a href="/songs/import/bulk" class="button-secondary">Import more songs</a>
         </div>
     </div>
 </section>
@@ -30,7 +30,7 @@
         <div class="bulk-preview-summary">
             <div>
                 <span class="import-step">REVIEW BEFORE IMPORT</span>
-                <h2>{{len .Rows}} song rows found</h2>
+                <h2>{{len .Rows}} songs found</h2>
                 <p class="muted">Valid unique rows are selected by default. Rows already duplicated in this file are left unchecked.</p>
             </div>
             <div class="bulk-preview-counts">
@@ -53,7 +53,7 @@
             <div class="bulk-preview-table-wrap">
                 <table class="bulk-preview-table">
                     <thead>
-                        <tr><th>Select</th><th>CSV row</th><th>Song</th><th>Key</th><th>Tempo</th><th>Review status</th></tr>
+                        <tr><th>Select</th><th>File / row</th><th>Song</th><th>Key</th><th>Tempo</th><th>Review status</th></tr>
                     </thead>
                     <tbody>
                     {{range .Rows}}
@@ -67,7 +67,7 @@
                                 <span aria-hidden="true">—</span>
                                 {{end}}
                             </td>
-                            <td>{{.CSVRow}}</td>
+                            <td>{{if .SourceName}}{{.SourceName}} · row {{.CSVRow}}{{else}}{{.CSVRow}}{{end}}</td>
                             <td>
                                 <strong>{{if .Title}}{{.Title}}{{else}}Untitled row{{end}}</strong>
                                 {{if .Author}}<span class="bulk-row-author">{{.Author}}</span>{{end}}
@@ -97,26 +97,28 @@
         </form>
         {{else}}
         <section class="bulk-import-card">
-            <span class="import-step">CSV WORKFLOW</span>
-            <h2>Prepare a song list</h2>
-            <p>Use one row per song. The <code>source_content</code> column can contain ChordPro or plain lyrics; quote it as a CSV field, especially when it contains commas or line breaks.</p>
+            <span class="import-step">BULK WORKFLOW</span>
+            <h2>Upload songs or a song list</h2>
+            <p>Select multiple PDF, ChordPro (.cho, .pro, .chordpro), OpenSong/OpenLyrics XML, or plain-text files. Each file becomes one song and its title, author, key, and tempo are read when available.</p>
+            <p>Or upload a CSV with one song per row. Its <code>source_content</code> column can contain ChordPro or plain lyrics; quote it as a CSV field, especially when it contains commas or line breaks. Upload CSVs by themselves, not mixed with song files.</p>
             <a href="/songs/import/bulk/template.csv" class="button-secondary">Download example CSV</a>
 
             <form method="post" action="/songs/import/bulk/preview" enctype="multipart/form-data" class="bulk-upload-form">
-                <label class="bulk-file-picker" for="bulk-csv-file">
+                <label class="bulk-file-picker" for="bulk-files">
                     <span class="bulk-file-icon" aria-hidden="true">⇧</span>
-                    <strong id="bulk-file-name">Choose a CSV file</strong>
-                    <span id="bulk-file-help">Up to 200 songs · 15 MB maximum</span>
-                    <input type="file" id="bulk-csv-file" name="csv_file" accept=".csv,text/csv" required>
+                    <strong id="bulk-file-name">Choose CSV or song files</strong>
+                    <span id="bulk-file-help">Up to 200 songs · 15 MB total</span>
+                    <input type="file" id="bulk-files" name="files" multiple
+                           accept=".csv,.pdf,.cho,.pro,.chordpro,.txt,.xml,text/csv,application/pdf,text/plain,text/xml,application/xml" required>
                 </label>
-                <button type="submit" class="button">Review songs</button>
+                <button type="submit" class="button">Review selected files</button>
             </form>
         </section>
 
         <section class="bulk-import-guide">
-            <h2>CSV columns</h2>
-            <p><code>title</code> and one content column (<code>source_content</code>, <code>chordpro</code>, or <code>lyrics</code>) are required.</p>
-            <p><code>author</code>, <code>key</code>, and <code>tempo</code> are optional. Songs matching an existing title and author are skipped to avoid accidental duplicates.</p>
+            <h2>Import behavior</h2>
+            <p>For CSV, <code>title</code> and one content column (<code>source_content</code>, <code>chordpro</code>, or <code>lyrics</code>) are required. <code>author</code>, <code>key</code>, and <code>tempo</code> are optional.</p>
+            <p>PDF text is extracted; XML metadata and lyrics are converted to ChordPro. Plain text and ChordPro content are supported directly. Songs matching an existing title and author are skipped to avoid accidental duplicates.</p>
             <p>All selected songs and arrangements are saved together. If any save fails, the batch is rolled back.</p>
         </section>
         {{end}}
@@ -125,10 +127,16 @@
 
 <script>
 (() => {
-    const file = document.getElementById('bulk-csv-file');
+    const file = document.getElementById('bulk-files');
     const fileName = document.getElementById('bulk-file-name');
     if (file) file.addEventListener('change', () => {
-        fileName.textContent = file.files.length ? file.files[0].name : 'Choose a CSV file';
+        if (!file.files.length) {
+            fileName.textContent = 'Choose CSV or song files';
+        } else if (file.files.length === 1) {
+            fileName.textContent = file.files[0].name;
+        } else {
+            fileName.textContent = `${file.files.length} files selected`;
+        }
     });
 
     const rowChecks = [...document.querySelectorAll('.bulk-row-select')];
