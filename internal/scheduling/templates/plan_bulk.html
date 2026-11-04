@@ -6,51 +6,59 @@
     </div>
 </div>
 
-<div class="card" style="max-width: 640px;">
+<div class="card" style="max-width: 700px;">
     <p class="muted" style="margin-top: 0; margin-bottom: 1.5rem;">
-        Generate multiple plans at once for predictable schedules (e.g., every Sunday for the next 3 months).
+        Generate multiple plans at once for predictable schedules. Select your date range and frequency, and we'll show you exactly what will be created.
     </p>
 
     <form method="post" action="/plans/bulk" id="bulk-form">
-        <label>Service type
-            <select name="service_type_id" required>
-                {{range .ServiceTypes}}
-                <option value="{{.ID}}">{{.Name}}</option>
-                {{end}}
-            </select>
-        </label>
+        <div class="row">
+            <label>Service Type
+                <select name="service_type_id" id="bulk-type" required>
+                    {{range .ServiceTypes}}
+                    <option value="{{.ID}}">{{.Name}}</option>
+                    {{end}}
+                </select>
+            </label>
+            <label>Frequency
+                <select name="frequency" id="bulk-freq">
+                    <option value="weekly">Every Week</option>
+                    <option value="biweekly">Every 2 Weeks</option>
+                    <option value="monthly">Every Month</option>
+                </select>
+            </label>
+        </div>
 
         <label>Title Base
             <input name="title_base" required placeholder="e.g. Sunday Service" value="Sunday Service">
             <span class="muted" style="font-size: 0.8em; font-weight: normal; display: block; margin-top: 0.25rem;">
-                We will append the date, e.g. "Sunday Service - Nov 8".
+                We will append the date to each plan, e.g. "Sunday Service - Nov 8".
             </span>
         </label>
 
         <div class="row">
             <label>Start Date
-                <input type="date" name="start_date" id="start_date" required>
+                <input type="date" name="start_date" id="bulk-start" required>
             </label>
             <label>End Date
-                <input type="date" name="end_date" id="end_date" required>
+                <input type="date" name="end_date" id="bulk-end" required>
             </label>
         </div>
 
-        <label>Frequency
-            <select name="frequency">
-                <option value="weekly">Every Week</option>
-                <option value="biweekly">Every 2 Weeks</option>
-                <option value="monthly">Every Month</option>
-            </select>
-        </label>
-
-        <div id="preview-box" style="background: var(--bg-body); padding: 1rem; border-radius: var(--radius-md); margin-top: 1.5rem; display: none;">
-            <strong style="display: block; margin-bottom: 0.5rem;">Preview</strong>
-            <p class="muted" style="font-size: 0.9em; margin: 0;">You are about to generate <strong id="preview-count">0</strong> plans.</p>
+        <div id="preview-container" style="margin-top: 1.5rem; display: none;">
+            <div style="background: var(--bg-body); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <strong style="font-size: 0.95em;">Plans to be generated:</strong>
+                    <span class="chip" style="background: var(--brand-50); color: var(--brand-600); font-weight: 600;" id="preview-count">0</span>
+                </div>
+                <div id="preview-dates" style="display: flex; flex-wrap: wrap; gap: 0.5rem; max-height: 150px; overflow-y: auto;">
+                    <!-- JS injects date pills here -->
+                </div>
+            </div>
         </div>
 
         <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
-            <button type="submit" class="button" onclick="return confirm('Generate these plans?')">Generate Plans</button>
+            <button type="submit" class="button" id="btn-generate" disabled onclick="return confirm('Generate these plans?')">Generate Plans</button>
             <a href="/plans" class="button-secondary">Cancel</a>
         </div>
     </form>
@@ -58,37 +66,118 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const start = document.getElementById('start_date');
-        const end = document.getElementById('end_date');
-        const freq = document.querySelector('select[name="frequency"]');
-        const box = document.getElementById('preview-box');
-        const countEl = document.getElementById('preview-count');
+        const typeSelect = document.getElementById('bulk-type');
+        const startInput = document.getElementById('bulk-start');
+        const endInput = document.getElementById('bulk-end');
+        const freqSelect = document.getElementById('bulk-freq');
 
-        function updatePreview() {
-            if (!start.value || !end.value) { box.style.display = 'none'; return; }
+        const previewContainer = document.getElementById('preview-container');
+        const previewDates = document.getElementById('preview-dates');
+        const previewCount = document.getElementById('preview-count');
+        const btnGenerate = document.getElementById('btn-generate');
 
-            const sDate = new Date(start.value);
-            const eDate = new Date(end.value);
-            if (eDate < sDate) { box.style.display = 'none'; return; }
-
-            let count = 0;
-            let curr = new Date(sDate);
-
-            while (curr <= eDate && count < 100) { // cap preview at 100
-                count++;
-                if (freq.value === 'weekly') curr.setDate(curr.getDate() + 7);
-                else if (freq.value === 'biweekly') curr.setDate(curr.getDate() + 14);
-                else if (freq.value === 'monthly') curr.setMonth(curr.getMonth() + 1);
-                else curr.setDate(curr.getDate() + 7);
-            }
-
-            countEl.textContent = count;
-            box.style.display = 'block';
+        function toYMD(date) {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         }
 
-        start.addEventListener('change', updatePreview);
-        end.addEventListener('change', updatePreview);
-        freq.addEventListener('change', updatePreview);
+        function toDisplay(date) {
+            return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+
+        // 1. Smart Start Date based on Service Type
+        function setInitialStartDate() {
+            if (startInput.value) return; // Don't overwrite if user already picked a date
+
+            const typeText = typeSelect.options[typeSelect.selectedIndex].text;
+            let targetDay = -1;
+            if (typeText.includes('Sunday')) targetDay = 0;
+            else if (typeText.includes('Midweek') || typeText.includes('Wednesday')) targetDay = 3;
+            else if (typeText.includes('Louange') || typeText.includes('Friday')) targetDay = 5;
+
+            if (targetDay !== -1) {
+                const today = new Date();
+                let distance = targetDay - today.getDay();
+                if (distance <= 0) distance += 7;
+                const nextDate = new Date(today.getTime() + distance * 24 * 60 * 60 * 1000);
+                startInput.value = toYMD(nextDate);
+
+                // Also set a default end date 4 weeks out
+                const defaultEnd = new Date(nextDate.getTime() + 28 * 24 * 60 * 60 * 1000);
+                endInput.value = toYMD(defaultEnd);
+            }
+        }
+
+        // 2. Calculate Preview
+        function updatePreview() {
+            previewDates.innerHTML = '';
+            const startStr = startInput.value;
+            const endStr = endInput.value;
+
+            if (!startStr || !endStr) {
+                previewContainer.style.display = 'none';
+                btnGenerate.disabled = true;
+                return;
+            }
+
+            const start = new Date(startStr + 'T12:00:00');
+            const end = new Date(endStr + 'T12:00:00');
+
+            if (end < start) {
+                previewDates.innerHTML = '<span class="error" style="padding:0; font-size:0.9em;">End date must be after start date.</span>';
+                previewContainer.style.display = 'block';
+                btnGenerate.disabled = true;
+                return;
+            }
+
+            const freq = freqSelect.value;
+            let current = new Date(start);
+            let count = 0;
+
+            while (current <= end && count < 100) {
+                const pill = document.createElement('span');
+                pill.className = 'chip';
+                pill.style.background = '#fff';
+                pill.style.border = '1px solid var(--border)';
+                pill.style.padding = '0.25rem 0.6rem';
+                pill.textContent = toDisplay(current);
+                previewDates.appendChild(pill);
+
+                count++;
+
+                if (freq === 'weekly') current.setDate(current.getDate() + 7);
+                else if (freq === 'biweekly') current.setDate(current.getDate() + 14);
+                else if (freq === 'monthly') current.setMonth(current.getMonth() + 1);
+            }
+
+            if (count === 0) {
+                previewDates.innerHTML = '<span class="muted">No dates match this range.</span>';
+                btnGenerate.disabled = true;
+            } else if (count >= 100) {
+                previewDates.innerHTML += '<span class="error" style="padding:0; font-size:0.9em; width:100%; margin-top:0.5rem;">Capped at 100 plans. Please narrow your date range.</span>';
+                btnGenerate.disabled = true;
+            } else {
+                btnGenerate.disabled = false;
+            }
+
+            previewCount.textContent = count;
+            previewContainer.style.display = 'block';
+        }
+
+        // 3. Event Listeners
+        typeSelect.addEventListener('change', () => {
+            setInitialStartDate();
+            updatePreview();
+        });
+        startInput.addEventListener('change', updatePreview);
+        endInput.addEventListener('change', updatePreview);
+        freqSelect.addEventListener('change', updatePreview);
+
+        // Init
+        setInitialStartDate();
+        updatePreview();
     });
 </script>
 {{end}}
