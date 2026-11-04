@@ -31,10 +31,12 @@
     <table>
         <thead>
             <tr>
-                <th>Name</th>
+                <th>Name &amp; Role</th>
+                <th>Title / Position</th>
+                <th>Team(s)</th>
+                <th>Skills / Instruments</th>
                 <th>Contact</th>
                 <th>Status</th>
-                <th>Team(s)</th>
                 <th style="text-align:right">Actions</th>
             </tr>
         </thead>
@@ -42,14 +44,23 @@
         {{range .Users}}
             <tr>
                 <td>
-                    <a href="/people/{{.ID}}" style="font-weight: 600; font-size: 1.05em; color: var(--text-main);">{{.Name}}</a>
-                    <div style="margin-top: 0.25rem;">
-                        <span class="chip">{{.Role}}</span>
-                    </div>
+                    <a href="/people/{{.ID}}" style="font-weight: 600; color: var(--text-main);">{{.Name}}</a>
+                    <div class="muted">{{roleLabel .Role}}</div>
+                </td>
+                <td>{{if .Title}}{{.Title}}{{else}}<span class="muted">—</span>{{end}}</td>
+                <td>
+                    {{if .TeamRoles}}
+                        {{range split .TeamRoles ", "}}<span class="chip">{{.}}</span> {{end}}
+                    {{else}}<span class="muted">—</span>{{end}}
                 </td>
                 <td>
-                    <div style="font-size: 0.9em;">{{.Email}}</div>
-                    {{if .Phone}}<div class="muted" style="font-size: 0.85em;">{{.Phone}}</div>{{end}}
+                    {{if .Skills}}
+                        {{range split .Skills ", "}}<span class="chip">{{.}}</span> {{end}}
+                    {{else}}<span class="muted">—</span>{{end}}
+                </td>
+                <td>
+                    <div>{{.Email}}</div>
+                    {{if .Phone}}<div class="muted">{{.Phone}}</div>{{end}}
                 </td>
                 <td>
                     {{if eq .Status "suspended"}}
@@ -58,25 +69,12 @@
                         <span class="chip" style="background: var(--success-bg); color: var(--success);">Active</span>
                     {{end}}
                 </td>
-                <td class="team-cell">
-                    {{if .TeamRoles}}
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
-                        {{range split .TeamRoles ", "}}
-                            <span class="chip" style="background: var(--brand-50); color: var(--brand-600);">{{.}}</span>
-                        {{end}}
-                        </div>
-                    {{else}}
-                        <span class="muted">—</span>
-                    {{end}}
-                </td>
                 <td class="actions-cell">
-                    <div class="action-group">
-                        <a href="/people/{{.ID}}" class="button-secondary btn-sm">Edit Profile</a>
-                    </div>
+                    <a href="/people/{{.ID}}" class="button-secondary btn-sm">Edit Profile</a>
                 </td>
             </tr>
         {{else}}
-            <tr><td colspan="5" style="text-align: center; padding: 3rem; color: var(--text-muted);">No people found.</td></tr>
+            <tr><td colspan="7" style="text-align:center; padding:3rem; color:var(--text-muted);">No people found.</td></tr>
         {{end}}
         </tbody>
     </table>

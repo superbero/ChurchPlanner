@@ -17,7 +17,7 @@ func NewService(repo *Repository, history *HistoryRepository) *Service {
 	return &Service{repo: repo, history: history}
 }
 
-func (s *Service) List(ctx context.Context) ([]Song, error) { return s.repo.List(ctx) }
+func (s *Service) List(ctx context.Context) ([]Song, error)             { return s.repo.List(ctx) }
 func (s *Service) Search(ctx context.Context, f Filter) ([]Song, error) { return s.repo.Search(ctx, f) }
 func (s *Service) Get(ctx context.Context, id string) (Song, error) {
 	if id == "" {
@@ -38,6 +38,9 @@ func (s *Service) Update(ctx context.Context, id string, in CreateSongInput) (So
 	return s.repo.Update(ctx, id, in)
 }
 func (s *Service) Delete(ctx context.Context, id string) error { return s.repo.Delete(ctx, id) }
+func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
+	return s.repo.DeleteMany(ctx, ids)
+}
 
 func (s *Service) History(ctx context.Context, songID string) ([]KeyHistory, error) {
 	return s.history.List(ctx, songID)

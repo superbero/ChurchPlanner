@@ -5,6 +5,7 @@
 
 <form method="post" action="/people" class="profile-form">
     <label>Full Name <input name="name" value="{{.Name}}" required placeholder="Jane Doe"></label>
+    <label>Title / Position <input name="title" value="{{.Title}}" placeholder="e.g. Worship Director"></label>
     <label>Email <input type="email" name="email" value="{{.Email}}" required placeholder="jane@example.com"></label>
     <label>Initial Password <input type="password" name="password" required minlength="6" placeholder="••••••••"></label>
 

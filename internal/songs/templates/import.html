@@ -1,67 +1,91 @@
 {{define "content"}}
 <div class="page-header">
     <div>
-        <h1>Import Songs</h1>
-        <p class="muted">Add songs from PDFs, ChordPro, XML, or raw text.</p>
+        <h1>Import a song</h1>
+        <p class="muted">Choose a file or paste lyrics. You can review and correct everything before it enters the library.</p>
     </div>
     <div class="action-bar">
         <a href="/songs" class="button-secondary">Back to Library</a>
     </div>
 </div>
 
-{{with .Error}}<div class="error" style="margin-bottom: 1.5rem;">{{.}}</div>{{end}}
+{{with .Error}}<div class="error import-error" role="alert">{{.}}</div>{{end}}
 
 <div class="import-grid">
-    <!-- File Upload -->
-    <div class="import-card">
-        <h2>Upload a File</h2>
-        <p class="muted">Supported: PDF, ChordPro (.cho), OpenSong XML, Plain Text.</p>
+    <section class="import-card">
+        <span class="import-step">STEP 1 · UPLOAD</span>
+        <h2>Start with a file</h2>
+        <p class="muted">PDF, ChordPro (.cho, .pro), OpenSong/OpenLyrics XML, or plain text. Maximum size: 15 MB.</p>
         <form method="post" action="/songs/import" enctype="multipart/form-data" class="import-form">
-            <div class="dropzone" id="dropzone">
-                <input type="file" name="file" id="file-input" accept=".pdf,.cho,.pro,.chordpro,.txt,.xml" style="display:none;">
-                <div class="dropzone-content">
-                    <div class="dropzone-icon">📄</div>
-                    <p><strong>Click to browse</strong> or drag and drop</p>
-                </div>
-                <div class="file-info" id="file-info" style="display:none;"></div>
-            </div>
-            <button type="submit" class="button" style="width: 100%; margin-top: 1rem;">Process File</button>
+            <label class="dropzone" id="dropzone" for="file-input">
+                <input type="file" name="file" id="file-input"
+                       accept=".pdf,.cho,.pro,.chordpro,.txt,.xml,application/pdf,text/plain,text/xml,application/xml"
+                       required>
+                <span class="dropzone-content" id="dropzone-content">
+                    <span class="dropzone-icon" aria-hidden="true">↑</span>
+                    <strong>Choose a song file</strong>
+                    <span>or drag and drop it here</span>
+                </span>
+                <span class="file-info" id="file-info" hidden></span>
+            </label>
+            <button type="submit" class="button import-submit">Review file</button>
         </form>
-    </div>
+    </section>
 
-    <!-- Paste Text -->
-    <div class="import-card">
-        <h2>Paste Raw Text</h2>
-        <p class="muted">Copy and paste lyrics and chords.</p>
+    <section class="import-card">
+        <span class="import-step">OR · PASTE</span>
+        <h2>Paste song text</h2>
+        <p class="muted">Paste lyrics, ChordPro, or text copied from a chart.</p>
         <form method="post" action="/songs/import" class="import-form">
-            <label>Song Title
-                <input type="text" name="title" placeholder="e.g. Amazing Grace" required>
+            <label>Song title
+                <input type="text" name="title" placeholder="e.g. Amazing Grace">
             </label>
-            <label>Raw Content
-                <textarea name="raw_text" rows="6" class="code-editor" placeholder="G C G&#10;Amazing grace how sweet the sound"></textarea>
+            <label>Lyrics and chords
+                <textarea name="raw_text" rows="9" class="code-editor"
+                          placeholder="Paste lyrics or ChordPro here…" required></textarea>
             </label>
-            <button type="submit" class="button-secondary" style="width: 100%;">Process Text</button>
+            <button type="submit" class="button-secondary import-submit">Review pasted text</button>
         </form>
-    </div>
+    </section>
 </div>
+
 <script>
+(() => {
     const dropzone = document.getElementById('dropzone');
-    const fileInput = document.getElementById('file-input');
-    const fileInfo = document.getElementById('file-info');
-    dropzone.addEventListener('click', () => fileInput.click());
-    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
-    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-    dropzone.addEventListener('drop', (e) => {
-        e.preventDefault(); dropzone.classList.remove('dragover');
-        if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; updateFileInfo(); }
-    });
-    fileInput.addEventListener('change', updateFileInfo);
-    function updateFileInfo() {
-        if (fileInput.files.length) {
-            fileInfo.textContent = `Selected: ${fileInput.files[0].name}`;
-            fileInfo.style.display = 'block';
-            dropzone.querySelector('.dropzone-content').style.display = 'none';
+    const input = document.getElementById('file-input');
+    const info = document.getElementById('file-info');
+    const content = document.getElementById('dropzone-content');
+
+    function showFile() {
+        const file = input.files && input.files[0];
+        if (!file) {
+            info.hidden = true;
+            content.hidden = false;
+            return;
         }
+        info.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        info.hidden = false;
+        content.hidden = true;
     }
+
+    input.addEventListener('change', showFile);
+    for (const eventName of ['dragenter', 'dragover']) {
+        dropzone.addEventListener(eventName, event => {
+            event.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+    }
+    for (const eventName of ['dragleave', 'drop']) {
+        dropzone.addEventListener(eventName, event => {
+            event.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+    }
+    dropzone.addEventListener('drop', event => {
+        if (!event.dataTransfer.files.length) return;
+        input.files = event.dataTransfer.files;
+        showFile();
+    });
+})();
 </script>
 {{end}}

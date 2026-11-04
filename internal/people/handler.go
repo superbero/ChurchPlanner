@@ -132,6 +132,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.Update(
 		r.Context(),
 		id,
+		strings.TrimSpace(r.FormValue("title")),
 		strings.TrimSpace(r.FormValue("phone")),
 		strings.TrimSpace(r.FormValue("vocal_low")),
 		strings.TrimSpace(r.FormValue("vocal_high")),
@@ -181,6 +182,7 @@ func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
+	title := strings.TrimSpace(r.FormValue("title"))
 	email := strings.TrimSpace(r.FormValue("email"))
 	password := r.FormValue("password")
 	role := strings.TrimSpace(r.FormValue("role"))
@@ -189,7 +191,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validUserRole(role) {
 		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "people_form", map[string]any{
-			"Error": "invalid user role", "Name": name, "Email": email,
+			"Error": "invalid user role", "Name": name, "Title": title, "Email": email,
 		})
 		return
 	}
@@ -204,9 +206,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.repo.Create(r.Context(), name, email, password, role); err != nil {
+	if _, err := h.repo.Create(r.Context(), name, title, email, password, role); err != nil {
 		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "people_form", map[string]any{
-			"Error": err.Error(), "Name": name, "Email": email, "Role": role,
+			"Error": err.Error(), "Name": name, "Title": title, "Email": email, "Role": role,
 		})
 		return
 	}

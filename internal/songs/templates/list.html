@@ -46,12 +46,32 @@
     </div>
 </form>
 
+{{if .DeletedCount}}
+<p class="library-notice" role="status">
+    {{if eq .DeletedCount 1}}Song removed from the library.{{else}}{{.DeletedCount}} songs removed from the library.{{end}}
+</p>
+{{end}}
 <p class="muted">{{len .Songs}} song(s).</p>
+
+{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
+<form id="bulk-delete-form" method="post" action="/songs/bulk-delete"
+      onsubmit="return confirm('Permanently remove the selected songs and all their arrangements? This cannot be undone.')">
+    <div class="library-bulk-actions">
+        <label class="check">
+            <input type="checkbox" id="select-all-songs" aria-label="Select all songs on this page">
+            Select all
+        </label>
+        <span id="selected-song-count" class="muted">0 selected</span>
+        <button type="submit" class="button-danger" id="bulk-delete-button">Remove selected</button>
+    </div>
+</form>
+{{end}}
 
 <div class="table-container">
     <table>
         <thead>
             <tr>
+                {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}<th><span class="sr-only">Select</span></th>{{end}}
                 <th>Title</th>
                 <th>Author</th>
                 <th>Key</th>
@@ -63,6 +83,10 @@
         <tbody>
         {{range .Songs}}
             <tr {{if .Archived}}class="archived"{{end}}>
+                {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
+                <td><input type="checkbox" name="song_ids" value="{{.ID}}" form="bulk-delete-form"
+                           class="song-select" aria-label="Select {{.Title}}"></td>
+                {{end}}
                 <td>
                     <a href="/songs/{{.ID}}" class="song-title">{{.Title}}</a>
                     {{if .Archived}}<span class="chip">archived</span>{{end}}
@@ -81,31 +105,38 @@
                 <td>{{if .BPM}}{{.BPM}}{{else}}—{{end}}</td>
                 <td class="actions-cell">
                     <div class="action-group">
-                        <button class="button-secondary btn-sm" onclick="showPreview('{{.ID}}')">Quick View</button>
+                        <button type="button" class="button-secondary btn-sm quick-view-button"
+                                data-song-id="{{.ID}}" aria-haspopup="dialog">Quick view</button>
                         <a href="/songs/{{.ID}}" class="action-link">Details</a>
-                        <a href="#" onclick="showPdfModal('{{.ID}}', '{{.Title}}', event); return false;" class="action-link">PDF</a>
-                        {{if isEditorOrAdmin $.CurrentUser.Role}}
+                        <button type="button" class="action-link pdf-button" data-song-id="{{.ID}}"
+                                data-song-title="{{.Title}}">PDF</button>
+                        {{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}
                         <a href="/songs/{{.ID}}/edit" class="action-link">Edit</a>
+                        <form method="post" action="/songs/{{.ID}}/delete" class="inline-delete-form"
+                              onsubmit="return confirm('Permanently remove this song and all its arrangements? This cannot be undone.')">
+                            <button type="submit" class="action-link danger-link">Remove</button>
+                        </form>
                         {{end}}
                     </div>
                 </td>
             </tr>
         {{else}}
-            <tr><td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-muted);">No songs found. Try clearing your filters or adding a new song.</td></tr>
+            <tr><td colspan="{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}7{{else}}6{{end}}" style="text-align: center; padding: 3rem; color: var(--text-muted);">No songs found. Try clearing your filters or adding a new song.</td></tr>
         {{end}}
         </tbody>
     </table>
 </div>
 
 <!-- Quick View Modal -->
-<div id="preview-modal" class="modal-overlay" style="display: none;" onclick="closePreview(event)">
-    <div class="modal-content" onclick="event.stopPropagation()">
-        <div class="modal-close" onclick="closePreview()">×</div>
-        <div id="preview-body">
-            <p style="text-align:center; padding: 2rem;">Loading…</p>
-        </div>
+<dialog id="preview-modal" class="quick-view-dialog" aria-labelledby="quick-view-dialog-title">
+    <div class="quick-view-dialog-header">
+        <h2 id="quick-view-dialog-title">Song quick view</h2>
+        <button type="button" class="quick-view-close" id="close-preview" aria-label="Close quick view">×</button>
     </div>
-</div>
+    <div id="preview-body" aria-live="polite" aria-busy="false">
+        <p class="quick-view-loading">Choose Quick view on a song to see its chart.</p>
+    </div>
+</dialog>
 
 <!-- PDF Modal -->
 <div id="pdf-modal" class="modal-overlay" style="display: none;" onclick="closePdfModal(event)">
@@ -151,23 +182,7 @@
 </div>
 
 <script>
-function showPreview(songId) {
-    const modal = document.getElementById('preview-modal');
-    const body = document.getElementById('preview-body');
-    modal.style.display = 'flex';
-    body.innerHTML = '<p style="text-align:center; padding: 2rem;">Loading…</p>';
-    fetch(`/songs/${songId}/preview`)
-        .then(r => r.text())
-        .then(html => body.innerHTML = html)
-        .catch(() => body.innerHTML = '<p style="text-align:center; color: red;">Failed to load preview.</p>');
-}
-function closePreview(e) {
-    if (e && e.target !== e.currentTarget) return;
-    document.getElementById('preview-modal').style.display = 'none';
-}
-
 function showPdfModal(songId, title, event) {
-    event.preventDefault();
     document.getElementById('pdf-modal-title').textContent = title;
     document.getElementById('pdf-form').action = `/songs/${songId}/pdf`;
     document.getElementById('pdf-modal').style.display = 'flex';
@@ -175,6 +190,95 @@ function showPdfModal(songId, title, event) {
 function closePdfModal(e) {
     if (e && e.target !== e.currentTarget) return;
     document.getElementById('pdf-modal').style.display = 'none';
+}
+
+const previewDialog = document.getElementById('preview-modal');
+const previewBody = document.getElementById('preview-body');
+const previewClose = document.getElementById('close-preview');
+let previewRequest;
+let previewOpener;
+
+function showPreview(songId, opener) {
+    previewRequest?.abort();
+    previewOpener = opener;
+    previewDialog.showModal();
+    previewClose.focus();
+    loadPreview(songId);
+}
+
+function loadPreview(songId) {
+    previewRequest?.abort();
+    const request = new AbortController();
+    previewRequest = request;
+    previewBody.setAttribute('aria-busy', 'true');
+    const loading = document.createElement('p');
+    loading.className = 'quick-view-loading';
+    loading.textContent = 'Loading song and chart…';
+    previewBody.replaceChildren(loading);
+
+    fetch(`/songs/${encodeURIComponent(songId)}/preview`, {
+        headers: { Accept: 'text/html' },
+        signal: request.signal
+    }).then(response => {
+        if (!response.ok) throw new Error(response.status === 404
+            ? 'This song could not be found. Refresh the library and try again.'
+            : 'The song preview could not be loaded.');
+        return response.text();
+    }).then(html => {
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        const content = parsed.querySelector('.quick-view-content');
+        if (!content) throw new Error('The preview response was incomplete. Please try again.');
+        previewBody.replaceChildren(document.importNode(content, true));
+    }).catch(error => {
+        if (error.name === 'AbortError') return;
+        const message = document.createElement('p');
+        message.className = 'quick-view-error';
+        message.setAttribute('role', 'alert');
+        message.textContent = error.message || 'The song preview could not be loaded.';
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'button-secondary btn-sm';
+        retry.textContent = 'Try again';
+        retry.addEventListener('click', () => loadPreview(songId), { once: true });
+        previewBody.replaceChildren(message, retry);
+    }).finally(() => {
+        if (previewRequest === request) previewBody.setAttribute('aria-busy', 'false');
+    });
+}
+
+document.querySelectorAll('.quick-view-button').forEach(button => {
+    button.addEventListener('click', () => showPreview(button.dataset.songId, button));
+});
+document.querySelectorAll('.pdf-button').forEach(button => {
+    button.addEventListener('click', event =>
+        showPdfModal(button.dataset.songId, button.dataset.songTitle, event));
+});
+previewClose.addEventListener('click', () => previewDialog.close());
+previewDialog.addEventListener('click', event => {
+    if (event.target === previewDialog) previewDialog.close();
+});
+previewDialog.addEventListener('close', () => {
+    previewRequest?.abort();
+    previewBody.setAttribute('aria-busy', 'false');
+    previewOpener?.focus();
+});
+
+const songSelections = [...document.querySelectorAll('.song-select')];
+const selectAllSongs = document.getElementById('select-all-songs');
+const selectedCount = document.getElementById('selected-song-count');
+if (selectAllSongs) {
+    function updateSongSelection() {
+        const selected = songSelections.filter(input => input.checked).length;
+        selectedCount.textContent = `${selected} selected`;
+        selectAllSongs.checked = songSelections.length > 0 && selected === songSelections.length;
+        selectAllSongs.indeterminate = selected > 0 && selected < songSelections.length;
+    }
+
+    selectAllSongs.addEventListener('change', () => {
+        songSelections.forEach(input => input.checked = selectAllSongs.checked);
+        updateSongSelection();
+    });
+    songSelections.forEach(input => input.addEventListener('change', updateSongSelection));
 }
 </script>
 {{end}}

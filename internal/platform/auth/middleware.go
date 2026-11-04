@@ -17,6 +17,7 @@ const userKey ctxKey = iota
 type User struct {
 	ID        string
 	Name      string
+	Title     string
 	Email     string
 	Role      string
 	Phone     string

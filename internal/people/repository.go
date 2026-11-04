@@ -22,7 +22,7 @@ type UserWithSkills struct {
 
 func (r *Repository) List(ctx context.Context, q string, status string) ([]UserWithSkills, error) {
 	query := `
-		SELECT u.id, u.name, u.email, u.role, u.phone, u.vocal_low, u.vocal_high, u.status,
+		SELECT u.id, u.name, u.title, u.email, u.role, u.phone, u.vocal_low, u.vocal_high, u.status,
 		       COALESCE((
 		           SELECT string_agg(t.name || ' · ' || p.name, ', ' ORDER BY t.name, p.position)
 		           FROM user_positions up
@@ -64,7 +64,7 @@ func (r *Repository) List(ctx context.Context, q string, status string) ([]UserW
 	var out []UserWithSkills
 	for rows.Next() {
 		var u UserWithSkills
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role,
+		if err := rows.Scan(&u.ID, &u.Name, &u.Title, &u.Email, &u.Role,
 			&u.Phone, &u.VocalLow, &u.VocalHigh, &u.Status, &u.Skills, &u.TeamRoles); err != nil {
 			return nil, err
 		}
@@ -76,36 +76,36 @@ func (r *Repository) List(ctx context.Context, q string, status string) ([]UserW
 func (r *Repository) Get(ctx context.Context, id string) (auth.User, error) {
 	var u auth.User
 	err := r.db.QueryRow(ctx, `
-		SELECT id, name, email, role, phone, vocal_low, vocal_high, status
+		SELECT id, name, title, email, role, phone, vocal_low, vocal_high, status
 		FROM users WHERE id = $1
-	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Phone, &u.VocalLow, &u.VocalHigh, &u.Status)
+	`, id).Scan(&u.ID, &u.Name, &u.Title, &u.Email, &u.Role, &u.Phone, &u.VocalLow, &u.VocalHigh, &u.Status)
 	return u, err
 }
 
-func (r *Repository) Create(ctx context.Context, name, email, password, role string) (string, error) {
+func (r *Repository) Create(ctx context.Context, name, title, email, password, role string) (string, error) {
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		return "", err
 	}
 	var id string
 	err = r.db.QueryRow(ctx, `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (name, title, email, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
-	`, name, email, hash, role).Scan(&id)
+	`, name, title, email, hash, role).Scan(&id)
 	return id, err
 }
 
-func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh, role, status string) error {
+func (r *Repository) Update(ctx context.Context, id, title, phone, vocalLow, vocalHigh, role, status string) error {
 	if role == "" {
 		role = auth.RoleScheduledViewer
 	}
 	_, err := r.db.Exec(ctx, `
 		UPDATE users
-		SET phone = $2, vocal_low = $3, vocal_high = $4, role = $5, status = $6,
+		SET title = $2, phone = $3, vocal_low = $4, vocal_high = $5, role = $6, status = $7,
 		    updated_at = now()
 		WHERE id = $1
-	`, id, phone, vocalLow, vocalHigh, role, status)
+	`, id, title, phone, vocalLow, vocalHigh, role, status)
 	return err
 }
 

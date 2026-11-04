@@ -110,41 +110,75 @@ func (r *Repository) Get(ctx context.Context, id string) (Song, error) {
 }
 
 func (r *Repository) Create(ctx context.Context, in CreateSongInput) (Song, error) {
-	return scanSong(r.db.QueryRow(ctx, `
+	var id string
+	err := r.db.QueryRow(ctx, `
 		INSERT INTO songs (
 			title, author, youtube_url, ccli_number,
 			copyright_holder, copyright_date, publisher, scripture, notes, archived
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-		RETURNING `+songColumns,
+		RETURNING id
+	`,
 		in.Title, in.Author, in.YouTubeURL, in.CCLINumber,
 		in.CopyrightHolder, in.CopyrightDate, in.Publisher, in.Scripture,
-		in.Notes, in.Archived))
+		in.Notes, in.Archived).Scan(&id)
+	if err != nil {
+		return Song{}, err
+	}
+	return r.Get(ctx, id)
 }
 
 func (r *Repository) Update(ctx context.Context, id string, in CreateSongInput) (Song, error) {
-	s, err := scanSong(r.db.QueryRow(ctx, `
+	var updatedID string
+	err := r.db.QueryRow(ctx, `
 		UPDATE songs SET
 			title=$2, author=$3, youtube_url=$4, ccli_number=$5,
 			copyright_holder=$6, copyright_date=$7, publisher=$8,
 			scripture=$9, notes=$10, archived=$11, updated_at=now()
 		WHERE id=$1
-		RETURNING `+songColumns,
+		RETURNING id
+	`,
 		id, in.Title, in.Author, in.YouTubeURL, in.CCLINumber,
 		in.CopyrightHolder, in.CopyrightDate, in.Publisher, in.Scripture,
-		in.Notes, in.Archived))
+		in.Notes, in.Archived).Scan(&updatedID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Song{}, ErrNotFound
 	}
-	return s, err
+	if err != nil {
+		return Song{}, err
+	}
+	return r.Get(ctx, updatedID)
 }
 
 func (r *Repository) Delete(ctx context.Context, id string) error {
-	tag, err := r.db.Exec(ctx, `DELETE FROM songs WHERE id = $1`, id)
+	return r.DeleteMany(ctx, []string{id})
+}
+
+func (r *Repository) DeleteMany(ctx context.Context, ids []string) error {
+	uniqueIDs := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniqueIDs = append(uniqueIDs, id)
+	}
+	if len(uniqueIDs) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `DELETE FROM songs WHERE id::text = ANY($1::text[])`, uniqueIDs)
+	if err != nil {
+		return err
+	}
+	if int(tag.RowsAffected()) != len(uniqueIDs) {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit(ctx)
 }

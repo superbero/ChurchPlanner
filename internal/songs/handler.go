@@ -3,6 +3,7 @@ package songs
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -62,11 +63,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	for _, s := range f.TagSlugs {
 		selected[s] = true
 	}
+	deletedCount, _ := strconv.Atoi(q.Get("deleted"))
 	h.renderer.Render(w, r, http.StatusOK, "songs_list", map[string]any{
 		"Songs":            items,
 		"Filter":           f,
 		"TagGroups":        groups,
 		"SelectedTagSlugs": selected,
+		"DeletedCount":     deletedCount,
 	})
 }
 
@@ -152,11 +155,34 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
+	if err := h.svc.Delete(r.Context(), chi.URLParam(r, "id")); errors.Is(err, ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
-	http.Redirect(w, r, "/songs", http.StatusSeeOther)
+	http.Redirect(w, r, "/songs?deleted=1", http.StatusSeeOther)
+}
+
+func (h *Handler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	ids := r.Form["song_ids"]
+	if len(ids) == 0 {
+		http.Error(w, "Select at least one song to remove.", http.StatusBadRequest)
+		return
+	}
+	if len(ids) > 100 {
+		http.Error(w, "You can remove at most 100 songs at a time.", http.StatusBadRequest)
+		return
+	}
+	if err := h.svc.DeleteMany(r.Context(), ids); errors.Is(err, ErrNotFound) {
+		http.Error(w, "One or more selected songs no longer exist. Refresh the library and try again.", http.StatusConflict)
+		return
+	} else if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/songs?deleted="+strconv.Itoa(len(ids)), http.StatusSeeOther)
 }
 
 func (h *Handler) AddHistory(w http.ResponseWriter, r *http.Request) {
@@ -398,8 +424,6 @@ func (h *Handler) DownloadPDF(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ShowImport(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, r, http.StatusOK, "songs_import", nil)
 }
-
-
 
 // ---- Tags (unchanged) ----
 
@@ -948,8 +972,7 @@ func (h *Handler) publicBaseURL(r *http.Request) string {
 	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }
 
-
-// Preview renders a lightweight partial containing the lyrics and YouTube embed.
+// Preview renders the song details and default chart for the library quick view.
 func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	song, err := h.svc.Get(r.Context(), id)
@@ -958,39 +981,60 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch the default arrangement to get the actual lyrics/chords
 	var chart []RenderedSection
+	var arrangement Arrangement
 	arr, err := h.arr.Default(r.Context(), song.ID)
-	if err == nil {
-		// Pass the Arrangement ID, not the Song ID
-		chart, _, _ = h.arr.Chart(r.Context(), arr.ID, "")
+	hasArrangement := err == nil
+	if err != nil && !errors.Is(err, ErrArrangementNotFound) {
+		httpx.ServerError(w, err)
+		return
+	}
+	if hasArrangement {
+		arrangement = arr
+		chart, _, err = h.arr.Chart(r.Context(), arr.ID, "")
+		if err != nil {
+			httpx.ServerError(w, err)
+			return
+		}
 	}
 
 	h.renderer.RenderPartial(w, r, http.StatusOK, "songs_preview", map[string]any{
-		"Song":      song,
-		"YouTubeID": youtubeID(song.YouTubeURL),
-		"Chart":     chart,
+		"Song":           song,
+		"Arrangement":    arrangement,
+		"HasArrangement": hasArrangement,
+		"YouTubeID":      youtubeID(song.YouTubeURL),
+		"Chart":          chart,
 	})
 }
 
-// ProcessImport parses a PDF or raw text and renders the review workspace.
+// ProcessImport extracts song content and renders the review workspace.
 func (h *Handler) ProcessImport(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		httpx.ServerError(w, err)
+	r.Body = http.MaxBytesReader(w, r.Body, 15<<20)
+	if strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			writeImportRequestError(w, err, "The uploaded file could not be read.")
+			return
+		}
+	} else if err := r.ParseForm(); err != nil {
+		writeImportRequestError(w, err, "The pasted song could not be read.")
 		return
 	}
 
 	var rawText string
 	var fileName string
+	format := "text"
+	var err error
+	explicitTitle := strings.TrimSpace(r.FormValue("title"))
 
 	// 1. Check if the user pasted raw text
 	pastedText := strings.TrimSpace(r.FormValue("raw_text"))
 	if pastedText != "" {
 		rawText = pastedText
-		fileName = strings.TrimSpace(r.FormValue("title"))
+		fileName = explicitTitle
 		if fileName == "" {
 			fileName = "Pasted Song"
 		}
+		format = DetectFormat("", rawText)
 	} else {
 		// 2. Handle file upload
 		file, header, err := r.FormFile("file")
@@ -1023,67 +1067,182 @@ func (h *Handler) ProcessImport(w http.ResponseWriter, r *http.Request) {
 				h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{"Error": "Could not extract text from PDF."})
 				return
 			}
+			format = "text"
 		} else {
+			switch ext {
+			case ".cho", ".pro", ".chordpro", ".txt", ".xml":
+			default:
+				h.renderer.Render(w, r, http.StatusUnsupportedMediaType, "songs_import", map[string]any{
+					"Error": "Unsupported file type. Upload a PDF, ChordPro, OpenSong/OpenLyrics XML, or plain-text file.",
+				})
+				return
+			}
 			rawText = string(rawBytes)
+			format = DetectFormat(header.Filename, rawText)
 		}
 	}
 
-	// 3. Heuristic inference
-	inferred := InferChordPro(rawText)
+	var parsed ParsedSong
+	var inferred string
+	switch format {
+	case "opensong":
+		parsed, err = ParseOpenSong(rawText)
+		if err == nil {
+			inferred = parsedImportSource(parsed)
+		}
+	case "openlyrics":
+		parsed, err = ParseOpenLyrics(rawText)
+		if err == nil {
+			inferred = parsedImportSource(parsed)
+		}
+	case "chordpro":
+		parsed = ParseChordPro(rawText)
+		inferred = rawText
+	default:
+		inferred = InferChordPro(rawText)
+		parsed = ParseChordPro(inferred)
+	}
+	if err != nil {
+		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import", map[string]any{
+			"Error": "Could not read this XML as a supported OpenSong or OpenLyrics song.",
+		})
+		return
+	}
+	if explicitTitle != "" {
+		fileName = explicitTitle
+	} else if strings.TrimSpace(parsed.Title) != "" {
+		fileName = parsed.Title
+	}
 
 	h.renderer.Render(w, r, http.StatusOK, "songs_import_review", map[string]any{
 		"Title":    fileName,
+		"Author":   parsed.Author,
+		"Key":      parsed.Key,
+		"Tempo":    parsed.Tempo,
 		"RawText":  rawText,
 		"Inferred": inferred,
+		"FileName": filepath.Base(fileName),
 	})
 }
 
 // SaveImport saves the reviewed and edited ChordPro content to the database.
 func (h *Handler) SaveImport(w http.ResponseWriter, r *http.Request) {
 	title := strings.TrimSpace(r.FormValue("title"))
+	author := strings.TrimSpace(r.FormValue("author"))
+	key := strings.TrimSpace(r.FormValue("key"))
+	tempo, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("tempo")))
 	sourceContent := r.FormValue("source_content")
 
 	if title == "" {
-		title = "Untitled Import"
+		h.renderImportReviewError(w, r, "Enter a song title before saving.", title, author, key, tempo, sourceContent)
+		return
 	}
-
-	parsed := ParseChordPro(sourceContent)
-	if parsed.Title == "" {
-		parsed.Title = title
+	if strings.TrimSpace(sourceContent) == "" {
+		h.renderImportReviewError(w, r, "Add lyrics or ChordPro content before saving.", title, author, key, tempo, sourceContent)
+		return
 	}
 
 	// 1. Create the Song (metadata only)
 	song, err := h.svc.Create(r.Context(), CreateSongInput{
-		Title:  parsed.Title,
-		Author: parsed.Author,
+		Title:  title,
+		Author: author,
 	})
 	if err != nil {
-		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import_review", map[string]any{
-			"Error":    err.Error(),
-			"Title":    title,
-			"RawText":  r.FormValue("raw_text"),
-			"Inferred": sourceContent,
-		})
+		h.renderImportReviewError(w, r, err.Error(), title, author, key, tempo, sourceContent)
 		return
 	}
 
 	// 2. Create the default Arrangement containing the actual musical data
 	_, err = h.arr.Create(r.Context(), song.ID, CreateArrangementInput{
 		Name:          "Original",
-		BPM:           parsed.Tempo,
-		OriginalKey:   parsed.Key,
+		BPM:           tempo,
+		OriginalKey:   key,
 		SourceContent: sourceContent,
 		Format:        "chordpro",
 	}, true)
 	if err != nil {
-		h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import_review", map[string]any{
-			"Error":    "Song created, but arrangement failed: " + err.Error(),
-			"Title":    title,
-			"RawText":  r.FormValue("raw_text"),
-			"Inferred": sourceContent,
-		})
+		h.renderImportReviewError(w, r, "Song created, but arrangement failed: "+err.Error(),
+			title, author, key, tempo, sourceContent)
 		return
 	}
 
 	http.Redirect(w, r, "/songs", http.StatusSeeOther)
+}
+
+func parsedImportSource(parsed ParsedSong) string {
+	var out strings.Builder
+	if parsed.Title != "" {
+		fmt.Fprintf(&out, "{title: %s}\n", parsed.Title)
+	}
+	if parsed.Author != "" {
+		fmt.Fprintf(&out, "{artist: %s}\n", parsed.Author)
+	}
+	if parsed.Key != "" {
+		fmt.Fprintf(&out, "{key: %s}\n", parsed.Key)
+	}
+	if parsed.Tempo > 0 {
+		fmt.Fprintf(&out, "{tempo: %d}\n", parsed.Tempo)
+	}
+
+	lyrics := strings.Split(parsed.Lyrics, "\n")
+	chords := strings.Split(parsed.Chords, "\n")
+	for i, lyric := range lyrics {
+		if i >= len(chords) || strings.TrimSpace(chords[i]) == "" {
+			out.WriteString(lyric)
+			out.WriteByte('\n')
+			continue
+		}
+		out.WriteString(chordLineToChordPro(lyric, chords[i]))
+		out.WriteByte('\n')
+	}
+	return strings.TrimSpace(out.String())
+}
+
+func chordLineToChordPro(lyric, chordLine string) string {
+	lyricRunes := []rune(lyric)
+	chords := strings.Fields(chordLine)
+	var out strings.Builder
+	position := 0
+	searchFrom := 0
+	for _, chord := range chords {
+		bytePosition := strings.Index(chordLine[searchFrom:], chord)
+		if bytePosition < 0 {
+			continue
+		}
+		bytePosition += searchFrom
+		chordPosition := len([]rune(chordLine[:bytePosition]))
+		if chordPosition < position {
+			chordPosition = position
+		}
+		if chordPosition > len(lyricRunes) {
+			chordPosition = len(lyricRunes)
+		}
+		out.WriteString(string(lyricRunes[position:chordPosition]))
+		fmt.Fprintf(&out, "[%s]", chord)
+		position = chordPosition
+		searchFrom = bytePosition + len(chord)
+	}
+	out.WriteString(string(lyricRunes[position:]))
+	return out.String()
+}
+
+func (h *Handler) renderImportReviewError(w http.ResponseWriter, r *http.Request, message, title, author, key string, tempo int, source string) {
+	h.renderer.Render(w, r, http.StatusUnprocessableEntity, "songs_import_review", map[string]any{
+		"Error":    message,
+		"Title":    title,
+		"Author":   author,
+		"Key":      key,
+		"Tempo":    tempo,
+		"RawText":  r.FormValue("raw_text"),
+		"Inferred": source,
+	})
+}
+
+func writeImportRequestError(w http.ResponseWriter, err error, message string) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		http.Error(w, "The song import exceeds the 15 MB limit.", http.StatusRequestEntityTooLarge)
+		return
+	}
+	http.Error(w, message, http.StatusBadRequest)
 }

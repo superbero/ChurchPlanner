@@ -1,92 +1,127 @@
 {{define "content"}}
-<div class="page-header">
+<div class="page-header import-review-heading">
     <div>
-        <h1>Review Import</h1>
-        <p class="muted">We've attempted to infer the chords. Review and edit before saving.</p>
+        <span class="import-step">STEP 2 · REVIEW</span>
+        <h1>Review your song</h1>
+        <p class="muted">Check the song details and correct the ChordPro source. The preview updates as you type.</p>
     </div>
+    <a href="/songs/import" class="button-secondary">Start over</a>
 </div>
 
-{{with .Error}}<div class="error" style="margin-bottom: 1.5rem;">{{.}}</div>{{end}}
+{{with .Error}}<div class="error import-error" role="alert">{{.}}</div>{{end}}
 
-<form method="post" action="/songs/import/save">
+<form method="post" action="/songs/import/save" class="import-review-form">
     <input type="hidden" name="raw_text" value="{{.RawText}}">
 
+    <section class="import-metadata" aria-label="Song details">
+        <label>Song title
+            <input type="text" name="title" value="{{.Title}}" required>
+        </label>
+        <label>Author
+            <input type="text" name="author" value="{{.Author}}" placeholder="Optional">
+        </label>
+        <label>Key
+            <input type="text" name="key" value="{{.Key}}" placeholder="e.g. G">
+        </label>
+        <label>Tempo
+            <input type="number" name="tempo" value="{{.Tempo}}" min="0" max="400" placeholder="BPM">
+        </label>
+    </section>
+
     <div class="review-workspace">
-        <!-- Left: Raw PDF Text -->
-        <div class="review-panel">
+        <section class="review-panel">
             <div class="panel-header">
-                <h3>Original Text (Read-only)</h3>
+                <div>
+                    <h2>ChordPro source</h2>
+                    <p class="muted">Chords go in brackets before the lyric, e.g. <code>[G]Amazing grace</code>.</p>
+                </div>
+                <button type="button" class="button-secondary btn-sm" id="restore-source">Restore detected text</button>
             </div>
-            <textarea class="code-editor" readonly>{{.RawText}}</textarea>
-        </div>
+            <label class="sr-only" for="chordpro-editor">ChordPro source</label>
+            <textarea name="source_content" id="chordpro-editor" class="code-editor import-editor"
+                      spellcheck="false" required>{{.Inferred}}</textarea>
+        </section>
 
-        <!-- Right: Editable ChordPro + Preview -->
-        <div class="review-panel">
+        <section class="review-panel">
             <div class="panel-header">
-                <h3>ChordPro Source</h3>
+                <div>
+                    <h2>Chart preview</h2>
+                    <p class="muted">This is how the imported chart will read.</p>
+                </div>
             </div>
-
-            <label>Song Title
-                <input type="text" name="title" value="{{.Title}}" required style="margin-bottom: 1rem;">
-            </label>
-
-            <textarea name="source_content" id="chordpro-editor" class="code-editor" style="margin-bottom: 1rem;">{{.Inferred}}</textarea>
-
-            <div class="panel-header">
-                <h3>Live Preview</h3>
-            </div>
-            <div class="chart-paper" id="live-preview" style="min-height: 200px;">
-                <p class="muted">Type in the ChordPro source above to see the preview.</p>
-            </div>
-        </div>
+            <div class="chart-paper import-preview" id="live-preview" aria-live="polite"></div>
+        </section>
     </div>
 
-    <div class="action-bar" style="margin-top: 2rem; justify-content: flex-end;">
+    <details class="import-original">
+        <summary>View original uploaded or pasted text</summary>
+        <textarea class="code-editor" readonly rows="8" aria-label="Original imported text">{{.RawText}}</textarea>
+    </details>
+
+    <div class="import-review-actions">
         <a href="/songs/import" class="button-secondary">Cancel</a>
-        <button type="submit" class="button">Save Song to Library</button>
+        <button type="submit" class="button">Save song to library</button>
     </div>
 </form>
 
 <script>
+(() => {
     const editor = document.getElementById('chordpro-editor');
     const preview = document.getElementById('live-preview');
+    const restore = document.getElementById('restore-source');
+    const detectedSource = editor.value;
 
     function renderPreview() {
-        const text = editor.value;
-        const lines = text.split('\n');
-        let html = '';
+        preview.replaceChildren();
+        const lines = editor.value.split(/\r?\n/);
+        let visibleLines = 0;
 
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-            if (line.trim() === '') {
-                html += '<div style="height: 1.5em;"></div>';
-                continue;
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || /^\{[^}]+:\s*[^}]*\}$/.test(trimmed)) continue;
+            visibleLines++;
+
+            const row = document.createElement('div');
+            row.className = 'chart-line import-chart-line';
+            const chordRow = document.createElement('div');
+            chordRow.className = 'import-chord-row';
+            const lyric = document.createElement('span');
+            lyric.className = 'lyric';
+
+            let lyricText = '';
+            let cursor = 0;
+            const chordPattern = /\[([^\]]+)\]/g;
+            let match;
+            while ((match = chordPattern.exec(line)) !== null) {
+                lyricText += line.slice(cursor, match.index);
+                const chord = document.createElement('span');
+                chord.className = 'chord';
+                chord.style.left = `${[...lyricText].length}ch`;
+                chord.textContent = match[1];
+                chordRow.append(chord);
+                cursor = match.index + match[0].length;
             }
-
-            // Basic chord extraction [C]lyric
-            let lyricHtml = '';
-            let chordHtml = '';
-            let pos = 0;
-
-            line.replace(/\[([^\]]+)\]/g, (match, chord, offset) => {
-                const textBefore = line.substring(pos, offset);
-                lyricHtml += textBefore;
-                const currentLen = lyricHtml.length;
-                chordHtml += `<span class="chord" style="left: ${currentLen}ch">${chord}</span>`;
-                pos = offset + match.length;
-            });
-            lyricHtml += line.substring(pos);
-
-            if (chordHtml) {
-                html += `<div class="chart-line" style="margin-bottom:1.4em;"><div style="position:relative; height:0;">${chordHtml}</div><span class="lyric" style="display:block; padding-top:1.3em; white-space:pre;">${lyricHtml}</span></div>`;
-            } else {
-                html += `<div class="chart-line"><span class="lyric" style="display:block; white-space:pre; margin-bottom: 0.5em;">${lyricHtml}</span></div>`;
-            }
+            lyricText += line.slice(cursor);
+            lyric.textContent = lyricText || ' ';
+            row.append(chordRow, lyric);
+            preview.append(row);
         }
-        preview.innerHTML = html;
+
+        if (!visibleLines) {
+            const empty = document.createElement('p');
+            empty.className = 'muted';
+            empty.textContent = 'Add lyrics or chords to see a preview.';
+            preview.append(empty);
+        }
     }
 
     editor.addEventListener('input', renderPreview);
-    renderPreview(); // Initial render
+    restore.addEventListener('click', () => {
+        editor.value = detectedSource;
+        editor.dispatchEvent(new Event('input'));
+        editor.focus();
+    });
+    renderPreview();
+})();
 </script>
 {{end}}
