@@ -14,7 +14,7 @@
     <form method="post" action="{{if .IsNew}}/plans{{else}}/plans/{{.Plan.ID}}{{end}}">
 
         <label>Service type
-            <select name="service_type_id" required>
+            <select name="service_type_id" id="service-type-select" required>
                 {{range .ServiceTypes}}
                 <option value="{{.ID}}" {{if eq .ID $.Plan.ServiceTypeID}}selected{{end}}>{{.Name}}</option>
                 {{end}}
@@ -27,11 +27,11 @@
 
         <h3 style="margin-top: 1.5rem; margin-bottom: 0.25rem; font-size: 1rem;">Service window</h3>
         <p class="muted" style="font-size: 0.85em; margin-top: 0; margin-bottom: 1rem;">
-            The primary service time. A time slot with these exact start/end values is created automatically and kept in sync when you edit this plan.
+            The primary service time. A time slot with these exact start/end values is created automatically.
         </p>
 
         <label>Date
-            <input type="date" name="service_date" value="{{.Plan.ServiceAt.Format "2006-01-02"}}" required>
+            <input type="date" name="service_date" id="service-date-input" value="{{.Plan.ServiceAt.Format "2006-01-02"}}" required>
         </label>
 
         <div class="row">
@@ -53,4 +53,51 @@
         </div>
     </form>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeSelect = document.getElementById('service-type-select');
+        const dateInput = document.getElementById('service-date-input');
+
+        if (!typeSelect || !dateInput) return;
+
+        typeSelect.addEventListener('change', function() {
+            // Get the visible text of the selected option
+            const selectedText = this.options[this.selectedIndex].text.trim();
+
+            let targetDay = -1;
+            if (selectedText.includes('Sunday')) targetDay = 0;
+            else if (selectedText.includes('Midweek') || selectedText.includes('Wednesday')) targetDay = 3;
+            else if (selectedText.includes('Louange') || selectedText.includes('Friday')) targetDay = 5;
+
+            // If it's a custom type like Cohesion or Training Day, targetDay stays -1 (manual)
+
+            if (targetDay !== -1) {
+                const today = new Date();
+                const currentDay = today.getDay();
+                let distance = targetDay - currentDay;
+
+                // If the target day is today or has passed this week, jump to next week
+                if (distance <= 0) {
+                    distance += 7;
+                }
+
+                // Calculate the next date
+                const nextDate = new Date(today.getTime() + distance * 24 * 60 * 60 * 1000);
+
+                // Format as YYYY-MM-DD for the input
+                const yyyy = nextDate.getFullYear();
+                const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(nextDate.getDate()).padStart(2, '0');
+
+                dateInput.value = `${yyyy}-${mm}-${dd}`;
+            }
+        });
+
+        // If the user creates a new plan and hasn't picked a date, trigger the logic on load
+        if (!dateInput.value && typeSelect.value) {
+            typeSelect.dispatchEvent(new Event('change'));
+        }
+    });
+</script>
 {{end}}
