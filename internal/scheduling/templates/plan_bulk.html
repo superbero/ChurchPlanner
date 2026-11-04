@@ -1,0 +1,94 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="/plans">← All plans</a></p>
+        <h1>Bulk Create Plans</h1>
+    </div>
+</div>
+
+<div class="card" style="max-width: 640px;">
+    <p class="muted" style="margin-top: 0; margin-bottom: 1.5rem;">
+        Generate multiple plans at once for predictable schedules (e.g., every Sunday for the next 3 months).
+    </p>
+
+    <form method="post" action="/plans/bulk" id="bulk-form">
+        <label>Service type
+            <select name="service_type_id" required>
+                {{range .ServiceTypes}}
+                <option value="{{.ID}}">{{.Name}}</option>
+                {{end}}
+            </select>
+        </label>
+
+        <label>Title Base
+            <input name="title_base" required placeholder="e.g. Sunday Service" value="Sunday Service">
+            <span class="muted" style="font-size: 0.8em; font-weight: normal; display: block; margin-top: 0.25rem;">
+                We will append the date, e.g. "Sunday Service - Nov 8".
+            </span>
+        </label>
+
+        <div class="row">
+            <label>Start Date
+                <input type="date" name="start_date" id="start_date" required>
+            </label>
+            <label>End Date
+                <input type="date" name="end_date" id="end_date" required>
+            </label>
+        </div>
+
+        <label>Frequency
+            <select name="frequency">
+                <option value="weekly">Every Week</option>
+                <option value="biweekly">Every 2 Weeks</option>
+                <option value="monthly">Every Month</option>
+            </select>
+        </label>
+
+        <div id="preview-box" style="background: var(--bg-body); padding: 1rem; border-radius: var(--radius-md); margin-top: 1.5rem; display: none;">
+            <strong style="display: block; margin-bottom: 0.5rem;">Preview</strong>
+            <p class="muted" style="font-size: 0.9em; margin: 0;">You are about to generate <strong id="preview-count">0</strong> plans.</p>
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+            <button type="submit" class="button" onclick="return confirm('Generate these plans?')">Generate Plans</button>
+            <a href="/plans" class="button-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const start = document.getElementById('start_date');
+        const end = document.getElementById('end_date');
+        const freq = document.querySelector('select[name="frequency"]');
+        const box = document.getElementById('preview-box');
+        const countEl = document.getElementById('preview-count');
+
+        function updatePreview() {
+            if (!start.value || !end.value) { box.style.display = 'none'; return; }
+
+            const sDate = new Date(start.value);
+            const eDate = new Date(end.value);
+            if (eDate < sDate) { box.style.display = 'none'; return; }
+
+            let count = 0;
+            let curr = new Date(sDate);
+
+            while (curr <= eDate && count < 100) { // cap preview at 100
+                count++;
+                if (freq.value === 'weekly') curr.setDate(curr.getDate() + 7);
+                else if (freq.value === 'biweekly') curr.setDate(curr.getDate() + 14);
+                else if (freq.value === 'monthly') curr.setMonth(curr.getMonth() + 1);
+                else curr.setDate(curr.getDate() + 7);
+            }
+
+            countEl.textContent = count;
+            box.style.display = 'block';
+        }
+
+        start.addEventListener('change', updatePreview);
+        end.addEventListener('change', updatePreview);
+        freq.addEventListener('change', updatePreview);
+    });
+</script>
+{{end}}

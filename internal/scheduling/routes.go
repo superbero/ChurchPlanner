@@ -43,6 +43,8 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 			r.Use(authn.RequireRoles(auth.RoleEditor))
 
 			r.Get("/new", m.handler.NewPlan)
+		r.Get("/bulk", m.handler.ShowBulkPlan)
+		r.Post("/bulk", m.handler.BulkCreatePlans)
 			r.Post("/", m.handler.CreatePlan)
 			r.Get("/{id}/edit", m.handler.EditPlan)
 			r.Post("/{id}", m.handler.UpdatePlan)

@@ -929,3 +929,81 @@ func (h *Handler) AddTime(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
+
+func (h *Handler) ShowBulkPlan(w http.ResponseWriter, r *http.Request) {
+	types, err := h.svcTypes.List(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_bulk", map[string]any{
+		"ServiceTypes": types,
+	})
+}
+
+func (h *Handler) BulkCreatePlans(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+
+	typeID := r.FormValue("service_type_id")
+	titleBase := strings.TrimSpace(r.FormValue("title_base"))
+	startStr := r.FormValue("start_date")
+	endStr := r.FormValue("end_date")
+	frequency := r.FormValue("frequency")
+
+	startDate, _ := time.Parse("2006-01-02", startStr)
+	endDate, _ := time.Parse("2006-01-02", endStr)
+
+	if startDate.IsZero() || endDate.IsZero() || endDate.Before(startDate) {
+		http.Error(w, "Invalid date range", http.StatusBadRequest)
+		return
+	}
+
+	startHour, startMinute := 10, 0
+	endHour, endMinute := 11, 30
+
+	created := 0
+	current := startDate
+
+	for !current.After(endDate) {
+		var exists bool
+		h.plans.DB().QueryRow(r.Context(), `
+			SELECT EXISTS(
+				SELECT 1 FROM plans
+				WHERE service_type_id = $1 AND service_at::date = $2::date
+			)
+		`, typeID, current.Format("2006-01-02")).Scan(&exists)
+
+		if !exists {
+			serviceAt := time.Date(current.Year(), current.Month(), current.Day(), startHour, startMinute, 0, 0, time.Local)
+			serviceEnds := time.Date(current.Year(), current.Month(), current.Day(), endHour, endMinute, 0, 0, time.Local)
+
+			var planID string
+			err := h.plans.DB().QueryRow(r.Context(), `
+				INSERT INTO plans (service_type_id, title, service_at, service_ends_at)
+				VALUES ($1, $2, $3, $4)
+				RETURNING id
+			`, typeID, titleBase+" - "+current.Format("Jan 2"), serviceAt, serviceEnds).Scan(&planID)
+
+			if err == nil {
+				h.plans.CreateTime(r.Context(), planID, "service", "Service", serviceAt, serviceEnds)
+				created++
+			}
+		}
+
+		switch frequency {
+		case "weekly":
+			current = current.AddDate(0, 0, 7)
+		case "biweekly":
+			current = current.AddDate(0, 0, 14)
+		case "monthly":
+			current = current.AddDate(0, 1, 0)
+		default:
+			current = current.AddDate(0, 0, 7)
+		}
+	}
+
+	http.Redirect(w, r, "/plans", http.StatusSeeOther)
+}
