@@ -1,6 +1,7 @@
 package people
 
 import (
+	"fmt"
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,11 +17,12 @@ type UserWithSkills struct {
 	auth.User
 	Skills    string
 	TeamRoles string
+	Status    string
 }
 
-func (r *Repository) List(ctx context.Context) ([]UserWithSkills, error) {
-	rows, err := r.db.Query(ctx, `
-		SELECT u.id, u.name, u.email, u.role, u.phone, u.vocal_low, u.vocal_high,
+func (r *Repository) List(ctx context.Context, q string, status string) ([]UserWithSkills, error) {
+	query := `
+		SELECT u.id, u.name, u.email, u.role, u.phone, u.vocal_low, u.vocal_high, u.status,
 		       COALESCE((
 		           SELECT string_agg(t.name || ' · ' || p.name, ', ' ORDER BY t.name, p.position)
 		           FROM user_positions up
@@ -35,8 +37,25 @@ func (r *Repository) List(ctx context.Context) ([]UserWithSkills, error) {
 		           WHERE tm.user_id = u.id
 		       ), '')
 		FROM users u
-		ORDER BY u.name
-	`)
+		WHERE 1=1
+	`
+	var args []any
+	argCount := 1
+
+	if q != "" {
+		query += fmt.Sprintf(` AND (u.name ILIKE $%d OR u.email ILIKE $%d)`, argCount, argCount)
+		args = append(args, "%"+q+"%")
+		argCount++
+	}
+	if status != "" {
+		query += fmt.Sprintf(` AND u.status = $%d`, argCount)
+		args = append(args, status)
+		argCount++
+	}
+
+	query += ` ORDER BY u.name`
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +65,7 @@ func (r *Repository) List(ctx context.Context) ([]UserWithSkills, error) {
 	for rows.Next() {
 		var u UserWithSkills
 		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role,
-			&u.Phone, &u.VocalLow, &u.VocalHigh, &u.Skills, &u.TeamRoles); err != nil {
+			&u.Phone, &u.VocalLow, &u.VocalHigh, &u.Status, &u.Skills, &u.TeamRoles); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -77,7 +96,7 @@ func (r *Repository) Create(ctx context.Context, name, email, password, role str
 	return id, err
 }
 
-func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh, role string) error {
+func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh, role, status string) error {
 	if role == "" {
 		role = auth.RoleScheduledViewer
 	}
@@ -150,4 +169,31 @@ func (r *Repository) TeamRolesFor(ctx context.Context, userID string) ([]TeamRol
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+func (r *Repository) BulkCreate(ctx context.Context, users []CreateUserInput) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for _, u := range users {
+		hash, _ := auth.HashPassword(u.Password)
+		_, err := tx.Exec(ctx, `
+			INSERT INTO users (name, email, password_hash, role)
+			VALUES ($1, $2, $3, $4)
+		`, u.Name, u.Email, hash, u.Role)
+		if err != nil {
+			return fmt.Errorf("failed to insert %s: %w", u.Email, err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+type CreateUserInput struct {
+	Name     string
+	Email    string
+	Password string
+	Role     string
 }

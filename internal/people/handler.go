@@ -1,6 +1,7 @@
 package people
 
 import (
+	"encoding/csv"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -20,13 +21,18 @@ type Handler struct {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	users, err := h.repo.List(r.Context())
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+
+	users, err := h.repo.List(r.Context(), q, status)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
 	h.renderer.Render(w, r, http.StatusOK, "people_list", map[string]any{
-		"Users": users,
+		"Users":        users,
+		"Query":        q,
+		"StatusFilter": status,
 	})
 }
 
@@ -106,7 +112,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	userRole := strings.TrimSpace(r.FormValue("role"))
 
 	// Pass empty strings for vocal ranges since the UI no longer captures them
-	if err := h.repo.Update(r.Context(), id, phone, "", "", userRole); err != nil {
+	if err := h.repo.Update(r.Context(), id, phone, "", "", userRole, r.FormValue("status")); err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
@@ -191,4 +197,46 @@ func validUserRole(role string) bool {
 func canAssignPrivilegedRoles(r *http.Request) bool {
 	u, ok := auth.UserFrom(r.Context())
 	return ok && auth.CanAssignPrivilegedRoles(u.Role)
+}
+
+func (h *Handler) ShowBulkImport(w http.ResponseWriter, r *http.Request) {
+	h.renderer.Render(w, r, http.StatusOK, "people_bulk", nil)
+}
+
+func (h *Handler) BulkImport(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Missing file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		http.Error(w, "Invalid CSV", http.StatusBadRequest)
+		return
+	}
+
+	var users []CreateUserInput
+	for i, row := range records {
+		if i == 0 { continue } // skip header
+		if len(row) < 3 { continue }
+		users = append(users, CreateUserInput{
+			Name:     row[0],
+			Email:    row[1],
+			Role:     row[2],
+			Password: "changeme123", // Temporary password
+		})
+	}
+
+	if err := h.repo.BulkCreate(r.Context(), users); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/people", http.StatusSeeOther)
 }

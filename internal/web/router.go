@@ -20,6 +20,7 @@ import (
 	"github.com/yourchurch/churchplanner/internal/reports"
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 	"github.com/yourchurch/churchplanner/internal/songs"
+	"github.com/yourchurch/churchplanner/internal/teams"
 )
 
 //go:embed static
@@ -54,6 +55,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		{"songs", songs.Templates()},
 		{"scheduling", scheduling.Templates()},
 		{"people", people.Templates()},
+		{"teams", teams.Templates()},
 		{"calendar", calendar.Templates()},
 		{"reports", reports.Templates()},
 		{"checkin", checkin.Templates()},

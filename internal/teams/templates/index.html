@@ -1,0 +1,42 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Teams</h1>
+        <p class="muted">Manage departments and their positions.</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: start;">
+    <div class="table-container">
+        <table>
+            <thead><tr><th>Team Name</th><th>Positions</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody>
+            {{range .Teams}}
+                <tr>
+                    <td><strong><a href="/teams/{{.ID}}">{{.Name}}</a></strong></td>
+                    <td>{{.PositionCount}}</td>
+                    <td class="actions-cell">
+                        <a href="/teams/{{.ID}}" class="button-secondary btn-sm">Manage</a>
+                        <form method="post" action="/teams/{{.ID}}/delete" style="display:inline; margin-left:0.5rem;" onsubmit="return confirm('Delete this team and all its positions?')">
+                            <button type="submit" class="link-btn" style="color: var(--danger);">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {{else}}
+                <tr><td colspan="3" style="text-align:center; padding: 2rem; color:var(--text-muted);">No teams created yet.</td></tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top: 0;">Add Team</h2>
+        <form method="post" action="/teams">
+            <label>Team Name
+                <input name="name" placeholder="e.g. Prayer Team" required>
+            </label>
+            <button type="submit" class="button" style="width: 100%;">Create Team</button>
+        </form>
+    </div>
+</div>
+{{end}}

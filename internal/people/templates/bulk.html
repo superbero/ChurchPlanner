@@ -1,0 +1,22 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="/people">← All people</a></p>
+        <h1>Bulk Import</h1>
+    </div>
+</div>
+
+<div class="card" style="max-width: 640px;">
+    <p>Upload a CSV with the following columns (no headers needed):</p>
+    <pre style="background: var(--bg-body); padding: 1rem; border-radius: 6px; font-size: 0.85em;">
+Name, Email, Role
+Alice Smith, alice@example.com, volunteer
+Bob Jones, bob@example.com, editor</pre>
+    <p class="muted" style="font-size: 0.9em;">All imported users will have the temporary password: <strong>changeme123</strong>. They should change it on first login.</p>
+
+    <form method="post" action="/people/bulk" enctype="multipart/form-data" style="margin-top: 1.5rem;">
+        <label>CSV File <input type="file" name="file" accept=".csv" required></label>
+        <button type="submit" class="button">Import Users</button>
+    </form>
+</div>
+{{end}}

@@ -595,3 +595,53 @@ func (r *AssignmentRepository) MarkNotified(ctx context.Context, planPersonID st
 	_, err := r.db.Exec(ctx, `UPDATE plan_people SET notified_at = now() WHERE id = $1`, planPersonID)
 	return err
 }
+
+
+func (r *AssignmentRepository) CreateTeam(ctx context.Context, name string) error {
+	_, err := r.db.Exec(ctx, `INSERT INTO teams (name) VALUES ($1)`, name)
+	return err
+}
+
+func (r *AssignmentRepository) DeleteTeam(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM teams WHERE id = $1`, id)
+	return err
+}
+
+type TeamWithCount struct {
+	ID            string
+	Name          string
+	PositionCount int
+}
+
+func (r *AssignmentRepository) ListTeamsWithCounts(ctx context.Context) ([]TeamWithCount, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT t.id, t.name, COUNT(p.id)
+		FROM teams t
+		LEFT JOIN positions p ON p.team_id = t.id
+		GROUP BY t.id
+		ORDER BY t.name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TeamWithCount
+	for rows.Next() {
+		var t TeamWithCount
+		if err := rows.Scan(&t.ID, &t.Name, &t.PositionCount); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (r *AssignmentRepository) CreatePosition(ctx context.Context, teamID, name string) error {
+	_, err := r.db.Exec(ctx, `INSERT INTO positions (team_id, name) VALUES ($1, $2)`, teamID, name)
+	return err
+}
+
+func (r *AssignmentRepository) DeletePosition(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM positions WHERE id = $1`, id)
+	return err
+}

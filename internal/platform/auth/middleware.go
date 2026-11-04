@@ -22,6 +22,7 @@ type User struct {
 	Phone     string
 	VocalLow  string
 	VocalHigh string
+	Status    string
 }
 
 const (
@@ -60,8 +61,8 @@ func (a *Authenticator) CurrentUser(r *http.Request) (User, bool) {
 	}
 	var u User
 	err := a.DB.QueryRow(r.Context(),
-		`SELECT id, name, email, role FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Name, &u.Email, &u.Role)
+		`SELECT id, name, email, role, status FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Status)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			a.Sessions.Remove(r.Context(), "user_id")
@@ -76,6 +77,11 @@ func (a *Authenticator) RequireUser(next http.Handler) http.Handler {
 		u, ok := a.CurrentUser(r)
 		if !ok {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		if u.Status == "suspended" {
+			a.Sessions.Destroy(r.Context())
+			http.Redirect(w, r, "/login?error=account_suspended", http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))

@@ -40,6 +40,8 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 		r.Route("/people", func(r chi.Router) {
 			r.Get("/", m.handler.List)
 			r.Get("/new", m.handler.New)
+		r.Get("/bulk", m.handler.ShowBulkImport)
+		r.Post("/bulk", m.handler.BulkImport)
 			r.Post("/", m.handler.Create)
 			r.Get("/{id}", m.handler.View)
 			r.Post("/{id}", m.handler.Update)

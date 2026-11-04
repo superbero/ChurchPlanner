@@ -1,0 +1,36 @@
+{{define "content"}}
+<p><a href="/teams">← All teams</a></p>
+<h1>{{.TeamName}}</h1>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: start; margin-top: 1.5rem;">
+    <div class="table-container">
+        <table>
+            <thead><tr><th>Position Name</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody>
+            {{range .Positions}}
+                <tr>
+                    <td><strong>{{.Name}}</strong></td>
+                    <td class="actions-cell">
+                        <form method="post" action="/teams/{{$.TeamID}}/positions/{{.ID}}/delete" onsubmit="return confirm('Delete this position?')">
+                            <button type="submit" class="link-btn" style="color: var(--danger);">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {{else}}
+                <tr><td colspan="2" style="text-align:center; padding: 2rem; color:var(--text-muted);">No positions in this team yet.</td></tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top: 0;">Add Position</h2>
+        <form method="post" action="/teams/{{.TeamID}}/positions">
+            <label>Position Name
+                <input name="name" placeholder="e.g. Lead Vocalist" required>
+            </label>
+            <button type="submit" class="button" style="width: 100%;">Create Position</button>
+        </form>
+    </div>
+</div>
+{{end}}

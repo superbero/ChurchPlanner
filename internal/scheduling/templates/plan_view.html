@@ -181,6 +181,7 @@
 
     {{if .Teams}}
     <div class="tabs">
+        <!-- Tab Buttons -->
         <div class="tab-buttons" role="tablist">
             {{range $i, $team := .Teams}}
             <button class="tab-btn {{if eq $i 0}}active{{end}}" data-target="team-{{$team.TeamID}}" role="tab">
@@ -189,6 +190,7 @@
             {{end}}
         </div>
 
+        <!-- Tab Panels -->
         <div class="tab-content">
             {{range $i, $team := .Teams}}
             <div id="team-{{$team.TeamID}}" class="tab-panel {{if eq $i 0}}active{{end}}" role="tabpanel">
@@ -233,6 +235,8 @@
                                 {{end}}
                             </div>
                         </div>
+                        {{else}}
+                        <div class="empty-items" style="padding: 2rem;">No positions added to this team yet.</div>
                         {{end}}
                     </div>
                 </div>
@@ -242,8 +246,23 @@
     </div>
     {{else}}
         <div class="empty-state">
-            <p>No positions required yet.</p>
+            <p>No teams configured. Add teams in the database to start scheduling.</p>
         </div>
+    {{end}}
+
+    {{if .ManageablePositions}}
+    <div class="add-position-card" style="max-width: 100%; margin-top: 1.5rem;">
+        <h3 style="margin-top: 0;">Add a Position to this Plan</h3>
+        <form method="post" action="/plans/{{.Plan.ID}}/positions" class="inline-form" style="display: flex; gap: 0.5rem; align-items: center;">
+            <select name="position_id" required style="flex: 1; max-width: 400px;">
+                <option value="">— Select a position to add —</option>
+                {{range .ManageablePositions}}
+                <option value="{{.ID}}">{{.TeamName}} · {{.Name}}</option>
+                {{end}}
+            </select>
+            <button type="submit" class="button">Add Position</button>
+        </form>
+    </div>
     {{end}}
 </div>
 
