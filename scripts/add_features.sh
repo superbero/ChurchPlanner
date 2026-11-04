@@ -4,215 +4,126 @@ set -uo pipefail
 [ -f go.mod ] || { echo "✗ run from project root"; exit 1; }
 
 echo "════════════════════════════════════════════════════════════════"
-echo "  Converting Plan Actions to an Accordion Menu"
+echo "  Restoring Add Position Form & People Serving Layout"
 echo "════════════════════════════════════════════════════════════════"
 
-echo "▸ [1/3] Rewriting plans.html with Accordion Rows"
-cat > internal/scheduling/templates/plans.html <<'HTMLEOF'
-{{define "content"}}
-<div class="page-header">
-    <div>
-        <h1>Plans</h1>
-        <p class="muted">Schedule services and manage team assignments.</p>
-    </div>
-    <div class="action-bar">
-        <a class="button" href="/plans/new">New Plan</a>
-        <a class="button-secondary" href="/plans/bulk">Bulk Create</a>
-        <a class="button-secondary" href="/my-schedule">My Schedule</a>
-    </div>
-</div>
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path("internal/scheduling/templates/plan_view.html")
+src = p.read_text()
 
-<form method="get" action="/plans" class="filter-bar-horizontal">
-    <div class="filter-group">
-        <select name="type" style="min-width: 150px;">
-            <option value="">All Service Types</option>
-            {{range .ServiceTypes}}
-            <option value="{{.ID}}" {{if eq .ID $.SelectedType}}selected{{end}}>{{.Name}}</option>
+# Find the People Serving section and replace it completely
+start_marker = '<!-- BOTTOM: People Serving Tabs -->'
+end_marker = '<!-- Song Picker Modal -->'
+
+start_idx = src.find(start_marker)
+end_idx = src.find(end_marker)
+
+if start_idx == -1 or end_idx == -1:
+    print("  ✗ Could not find the People Serving section boundaries")
+    exit(1)
+
+new_section = '''<!-- BOTTOM: People Serving Tabs -->
+<div class="people-serving-section">
+    <div class="section-header">
+        <h2>People Serving</h2>
+    </div>
+
+    {{if .Teams}}
+    <div class="tabs">
+        <!-- Tab Buttons -->
+        <div class="tab-buttons" role="tablist">
+            {{range $i, $team := .Teams}}
+            <button class="tab-btn {{if eq $i 0}}active{{end}}" data-target="team-{{$team.TeamID}}" role="tab">
+                {{$team.TeamName}}
+            </button>
             {{end}}
-        </select>
-    </div>
+        </div>
 
-    <div class="filter-group">
-        <select name="date_range" style="min-width: 140px;">
-            <option value="upcoming" {{if eq .DateRange "upcoming"}}selected{{end}}>Upcoming</option>
-            <option value="this_month" {{if eq .DateRange "this_month"}}selected{{end}}>This Month</option>
-            <option value="last_month" {{if eq .DateRange "last_month"}}selected{{end}}>Last Month</option>
-            <option value="past" {{if eq .DateRange "past"}}selected{{end}}>Past Plans</option>
-        </select>
-    </div>
+        <!-- Tab Panels -->
+        <div class="tab-content">
+            {{range $i, $team := .Teams}}
+            <div id="team-{{$team.TeamID}}" class="tab-panel {{if eq $i 0}}active{{end}}" role="tabpanel">
+                <div class="team-card">
+                    <div class="position-list">
+                        {{range $team.Positions}}
+                        <div class="position-row">
+                            <div class="position-info">
+                                <strong>{{.PositionName}}</strong>
+                                {{if .Assignees}}
+                                    {{range .Assignees}}
+                                    <div class="assignee-status">
+                                        <span class="status-dot status-{{.Status}}"></span>
+                                        <span>{{.PersonName}}</span>
+                                    </div>
+                                    {{end}}
+                                {{else}}
+                                    <span class="status-badge status-open">Open</span>
+                                {{end}}
+                            </div>
 
-    <div class="filter-group">
-        <select name="limit" style="min-width: 100px;">
-            <option value="10" {{if eq .Limit 10}}selected{{end}}>Show 10</option>
-            <option value="25" {{if eq .Limit 25}}selected{{end}}>Show 25</option>
-            <option value="50" {{if eq .Limit 50}}selected{{end}}>Show 50</option>
-        </select>
-    </div>
+                            <div class="position-actions">
+                                {{if index $.ManageablePositionIDs .PositionID}}
+                                <form method="post" action="/plans/{{$.Plan.ID}}/people" class="assign-form">
+                                    <input type="hidden" name="position_id" value="{{.PositionID}}">
+                                    <select name="person_id" required onchange="this.form.submit()">
+                                        <option value="">Assign…</option>
+                                        {{$eligible := index $.UsersByPos .PositionID}}
+                                        {{range $eligible}}
+                                        <option value="{{.ID}}">{{.Name}}{{if index $.BlockedUsers .ID}} 🚫{{end}}</option>
+                                        {{end}}
+                                    </select>
+                                </form>
+                                {{end}}
 
-    <div class="filter-group" style="margin-left: auto;">
-        <button type="submit" class="button-secondary">Apply Filters</button>
-        <a href="/plans" class="button-secondary">Clear</a>
-    </div>
-</form>
-
-{{if .TypeName}}<p class="muted" style="margin-bottom: 1rem;">Showing: <strong>{{.TypeName}}</strong></p>{{end}}
-
-<div class="table-container">
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Service</th>
-                <th>Status</th>
-                <th style="text-align:right">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        {{range .Plans}}
-            <!-- Main Row -->
-            <tr>
-                <td style="white-space: nowrap;">
-                    <strong>{{.ServiceAt.Format "Mon, Jan 2"}}</strong>
-                    <span class="muted" style="margin-left: 0.5rem;">{{.ServiceAt.Format "3:04 PM"}}</span>
-                </td>
-                <td>
-                    <a href="/plans/{{.ID}}" style="font-weight: 500; font-size: 1.05em;">{{.Title}}</a>
-                </td>
-                <td>
-                    {{if .Published}}
-                        <span class="chip" style="background: var(--success-bg); color: var(--success);">Published</span>
-                    {{else}}
-                        <span class="chip" style="background: var(--warning-bg); color: var(--warning);">Draft</span>
-                    {{end}}
-                </td>
-                <td class="actions-cell">
-                    <button type="button" class="button-secondary btn-sm toggle-actions" data-target="actions-{{.ID}}">
-                        Manage ▼
-                    </button>
-                </td>
-            </tr>
-            <!-- Expandable Action Row -->
-            <tr id="actions-{{.ID}}" class="accordion-row" style="display: none;">
-                <td colspan="4">
-                    <div class="action-toolbar">
-                        <a href="/plans/{{.ID}}" class="button-secondary btn-sm">Open Plan</a>
-                        <a href="/plans/{{.ID}}/edit" class="button-secondary btn-sm">Edit Details</a>
-
-                        <form method="post" action="/plans/{{.ID}}/publish" style="margin:0;">
-                            <input type="hidden" name="published" value="{{if .Published}}0{{else}}1{{end}}">
-                            <button type="submit" class="button-secondary btn-sm">{{if .Published}}Unpublish{{else}}Publish{{end}}</button>
-                        </form>
-
-                        <div style="flex:1;"></div> <!-- Spacer -->
-
-                        <form method="post" action="/plans/{{.ID}}/delete" onsubmit="return confirm('Delete this plan and everything in it?')" style="margin:0;">
-                            <button type="submit" class="button-danger btn-sm">Delete Plan</button>
-                        </form>
+                                {{if .Assignees}}
+                                    {{range .Assignees}}
+                                    <form method="post" action="/plans/{{$.Plan.ID}}/people/{{.PlanPersonID}}/delete" style="display:inline;">
+                                        <button class="link-btn" type="submit" style="color: var(--danger);" title="Remove">×</button>
+                                    </form>
+                                    {{end}}
+                                {{end}}
+                            </div>
+                        </div>
+                        {{else}}
+                        <div class="empty-items" style="padding: 2rem;">No positions added to this team yet.</div>
+                        {{end}}
                     </div>
-                </td>
-            </tr>
-        {{else}}
-            <tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">No plans found matching your filters.</td></tr>
-        {{end}}
-        </tbody>
-    </table>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{else}}
+        <div class="empty-state">
+            <p>No teams configured. Add teams in the database to start scheduling.</p>
+        </div>
+    {{end}}
+
+    {{if .ManageablePositions}}
+    <div class="add-position-card" style="max-width: 100%; margin-top: 1.5rem;">
+        <h3 style="margin-top: 0;">Add a Position to this Plan</h3>
+        <form method="post" action="/plans/{{.Plan.ID}}/positions" class="inline-form" style="display: flex; gap: 0.5rem; align-items: center;">
+            <select name="position_id" required style="flex: 1; max-width: 400px;">
+                <option value="">— Select a position to add —</option>
+                {{range .ManageablePositions}}
+                <option value="{{.ID}}">{{.TeamName}} · {{.Name}}</option>
+                {{end}}
+            </select>
+            <button type="submit" class="button">Add Position</button>
+        </form>
+    </div>
+    {{end}}
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const toggleButtons = document.querySelectorAll('.toggle-actions');
-
-        toggleButtons.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const targetId = this.getAttribute('data-target');
-                const targetRow = document.getElementById(targetId);
-
-                if (targetRow.style.display === 'none') {
-                    // Close all others first
-                    document.querySelectorAll('.accordion-row').forEach(row => {
-                        row.style.display = 'none';
-                    });
-                    document.querySelectorAll('.toggle-actions').forEach(b => {
-                        b.innerHTML = 'Manage ▼';
-                    });
-
-                    // Open this one
-                    targetRow.style.display = 'table-row';
-                    this.innerHTML = 'Close ▲';
-                } else {
-                    targetRow.style.display = 'none';
-                    this.innerHTML = 'Manage ▼';
-                }
-            });
-        });
-    });
-</script>
-{{end}}
-HTMLEOF
-echo "  ✓ plans.html rewritten"
-
-echo "▸ [2/3] Updating CSS for Accordion"
-python3 - <<'PYEOF'
-from pathlib import Path
-import re
-
-p = Path("internal/web/static/css/app.css")
-src = p.read_text()
-
-# Remove old kebab CSS
-start = src.find('/* ── Kebab Menu (Three Dots) ───────────────────────────────────── */')
-if start != -1:
-    src = src[:start]
-
-# Add Accordion CSS
-src += '''
-
-/* ── Accordion Action Rows ─────────────────────────────────────── */
-.accordion-row td {
-    background: var(--bg-body);
-    padding: 0; /* Remove padding to let toolbar span */
-    border-bottom: 1px solid var(--border);
-}
-
-.action-toolbar {
-    display: flex;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    align-items: center;
-}
-
-.action-toolbar form {
-    margin: 0;
-}
-
-.btn-sm {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.85rem;
-}
-
-.toggle-actions {
-    min-width: 100px;
-}
 '''
+
+src = src[:start_idx] + new_section + src[end_idx:]
 p.write_text(src)
-print("  ✓ CSS updated for Accordion")
+print("  ✓ People Serving section restored with Add Position form")
 PYEOF
 
-echo "▸ [3/3] Build & Restart"
-# Bump cache
-python3 - <<'PYEOF'
-from pathlib import Path
-import re
-p = Path("internal/web/templates/layout.html")
-src = p.read_text()
-m = re.search(r'app\.(css|js)\?v=(\d+)', src)
-if m:
-    new_v = int(m.group(2)) + 1
-    src = src.replace(f'app.css?v={m.group(2)}', f'app.css?v={new_v}')
-    src = src.replace(f'app.js?v={m.group(2)}', f'app.js?v={new_v}')
-    p.write_text(src)
-PYEOF
-
+echo "▸ Build & Restart"
 if ! go build ./...; then
     echo "✗ build failed — paste errors"
     exit 1

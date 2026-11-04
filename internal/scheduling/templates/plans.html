@@ -58,7 +58,8 @@
         </thead>
         <tbody>
         {{range .Plans}}
-            <tr>
+            <!-- Main Row (Clickable) -->
+            <tr class="accordion-header" data-target="actions-{{.ID}}">
                 <td style="white-space: nowrap;">
                     <strong>{{.ServiceAt.Format "Mon, Jan 2"}}</strong>
                     <span class="muted" style="margin-left: 0.5rem;">{{.ServiceAt.Format "3:04 PM"}}</span>
@@ -74,26 +75,26 @@
                     {{end}}
                 </td>
                 <td class="actions-cell">
-                    <div class="action-group">
+                    <span class="chevron">▼</span>
+                </td>
+            </tr>
+            <!-- Expandable Action Row -->
+            <tr id="actions-{{.ID}}" class="accordion-row" style="display: none;">
+                <td colspan="4">
+                    <div class="action-toolbar">
                         <a href="/plans/{{.ID}}" class="button-secondary btn-sm">Open Plan</a>
+                        <a href="/plans/{{.ID}}/edit" class="button-secondary btn-sm">Edit Details</a>
 
-                        <details class="kebab-menu">
-                            <summary class="kebab-btn" title="More actions">⋮</summary>
-                            <div class="kebab-dropdown">
-                                <a href="/plans/{{.ID}}/edit">Edit Details</a>
+                        <form method="post" action="/plans/{{.ID}}/publish" style="margin:0;">
+                            <input type="hidden" name="published" value="{{if .Published}}0{{else}}1{{end}}">
+                            <button type="submit" class="button-secondary btn-sm">{{if .Published}}Unpublish{{else}}Publish{{end}}</button>
+                        </form>
 
-                                <form method="post" action="/plans/{{.ID}}/publish" style="display:block;">
-                                    <input type="hidden" name="published" value="{{if .Published}}0{{else}}1{{end}}">
-                                    <button type="submit">{{if .Published}}Unpublish{{else}}Publish{{end}}</button>
-                                </form>
+                        <div style="flex:1;"></div> <!-- Spacer -->
 
-                                <div class="kebab-divider"></div>
-
-                                <form method="post" action="/plans/{{.ID}}/delete" onsubmit="return confirm('Delete this plan and everything in it?')" style="display:block;">
-                                    <button type="submit" class="kebab-danger">Delete Plan</button>
-                                </form>
-                            </div>
-                        </details>
+                        <form method="post" action="/plans/{{.ID}}/delete" onsubmit="return confirm('Delete this plan and everything in it?')" style="margin:0;">
+                            <button type="submit" class="button-danger btn-sm">Delete Plan</button>
+                        </form>
                     </div>
                 </td>
             </tr>
@@ -103,4 +104,32 @@
         </tbody>
     </table>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const headers = document.querySelectorAll('.accordion-header');
+
+        headers.forEach(row => {
+            row.addEventListener('click', function(e) {
+                // Don't trigger accordion if they clicked a link inside the row
+                if (e.target.closest('a')) return;
+
+                const targetId = this.getAttribute('data-target');
+                const targetRow = document.getElementById(targetId);
+                const chevron = this.querySelector('.chevron');
+                const isOpen = targetRow.style.display !== 'none';
+
+                // Close all other rows
+                document.querySelectorAll('.accordion-row').forEach(r => r.style.display = 'none');
+                document.querySelectorAll('.accordion-header .chevron').forEach(c => c.style.transform = 'rotate(0deg)');
+
+                // Toggle current
+                if (!isOpen) {
+                    targetRow.style.display = 'table-row';
+                    chevron.style.transform = 'rotate(180deg)';
+                }
+            });
+        });
+    });
+</script>
 {{end}}

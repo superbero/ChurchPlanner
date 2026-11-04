@@ -1666,121 +1666,75 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 
 
 
-/* ── Kebab Menu (Three Dots) ───────────────────────────────────── */
-/* Ensure table rows don't clip dropdowns */
-.table-container tr {
-    position: static;
-    z-index: auto;
+
+
+/* ── Accordion Action Rows ─────────────────────────────────────── */
+.accordion-row td {
+    background: var(--bg-body);
+    padding: 0; /* Remove padding to let toolbar span */
+    border-bottom: 1px solid var(--border);
 }
 
-/* Only the row with an open menu gets elevated */
-.table-container tr.menu-open {
-    position: relative;
-    z-index: 100;
+.action-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    align-items: center;
 }
 
-.kebab-menu {
-    position: relative;
-    display: inline-block;
+.action-toolbar form {
+    margin: 0;
 }
 
-.kebab-btn {
-    list-style: none;
+.btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.toggle-actions {
+    min-width: 100px;
+}
+
+
+/* ── Accordion Table Rows ──────────────────────────────────────── */
+.accordion-header {
     cursor: pointer;
-    padding: 0.35rem 0.6rem;
-    border-radius: var(--radius-sm);
+    transition: background 0.15s;
+}
+.accordion-header:hover {
+    background: var(--bg-hover);
+}
+/* Ensure table cells inherit the hover */
+.accordion-header:hover td {
+    background: transparent;
+}
+
+.chevron {
+    display: inline-block;
+    font-size: 0.8rem;
     color: var(--text-muted);
-    font-size: 1.2rem;
-    font-weight: bold;
-    border: 1px solid transparent;
+    transition: transform 0.2s ease;
     user-select: none;
 }
-.kebab-btn::-webkit-details-marker {
-    display: none;
-}
-.kebab-btn:hover {
-    background: var(--bg-hover);
-    border-color: var(--border);
-    color: var(--text-main);
+
+.accordion-row td {
+    background: var(--bg-body);
+    padding: 0;
+    border-bottom: 1px solid var(--border);
 }
 
-.kebab-dropdown {
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: 0.25rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15), 0 4px 6px rgba(0,0,0,0.05);
-    min-width: 160px;
-    z-index: 9999;
-    padding: 0.5rem 0;
-}
-
-.kebab-dropdown a,
-.kebab-dropdown button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 0.5rem 1rem;
-    font: inherit;
-    font-size: 0.9rem;
-    color: var(--text-main);
-    background: transparent;
-    border: 0;
-    text-decoration: none;
-    cursor: pointer;
-}
-.kebab-dropdown a:hover,
-.kebab-dropdown button:hover {
-    background: var(--bg-hover);
-    text-decoration: none;
-}
-.kebab-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 0.5rem 0;
-}
-.kebab-dropdown .kebab-danger {
-    color: var(--danger);
-}
-.kebab-dropdown .kebab-danger:hover {
-    background: var(--danger-bg);
-}
-
-/* Table corner rounding (replacing overflow: hidden) */
-.table-container thead tr:first-child th:first-child {
-    border-top-left-radius: var(--radius-md);
-}
-.table-container thead tr:first-child th:last-child {
-    border-top-right-radius: var(--radius-md);
-}
-.table-container tbody tr:last-child td:first-child {
-    border-bottom-left-radius: var(--radius-md);
-}
-.table-container tbody tr:last-child td:last-child {
-    border-bottom-right-radius: var(--radius-md);
-}
-
-
-/* Danger Button (Delete) */
-.button-danger {
-    display: inline-flex;
+.action-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
     align-items: center;
-    justify-content: center;
-    background: var(--bg-surface);
-    color: var(--danger);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-sm);
-    font-weight: 500;
-    font-size: 0.9rem;
-    border: 1px solid var(--danger);
-    cursor: pointer;
-    transition: all 0.15s;
 }
-.button-danger:hover {
-    background: var(--danger);
-    color: #fff;
-    text-decoration: none;
+
+.action-toolbar form {
+    margin: 0;
+}
+
+.btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
 }

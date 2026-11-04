@@ -349,7 +349,7 @@ func (h *Handler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 	// sync that specific slot so the plan view stays consistent.
 	if before.ServiceTimeID != "" &&
 		(!before.ServiceAt.Equal(p.ServiceAt) || !before.ServiceEndsAt.Equal(p.ServiceEndsAt)) {
-		_ = h.plans.UpdateTime(r.Context(), before.ServiceTimeID, p.ServiceAt, p.ServiceEndsAt)
+		_ = h.plans.UpdateTime(r.Context(), before.ServiceTimeID, "service", "Service", p.ServiceAt, p.ServiceEndsAt)
 	}
 	http.Redirect(w, r, "/plans/"+id, http.StatusSeeOther)
 }
@@ -384,15 +384,6 @@ func (h *Handler) DeletePlan(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteTime(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
-	n, err := h.assign.CountTimes(r.Context(), planID)
-	if err != nil {
-		httpx.ServerError(w, err)
-		return
-	}
-	if n <= 1 {
-		http.Error(w, "Cannot delete the only time on a plan — items would be lost.", http.StatusBadRequest)
-		return
-	}
 	_ = h.plans.DeleteTime(r.Context(), chi.URLParam(r, "tid"))
 	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }
@@ -917,7 +908,7 @@ func (h *Handler) AddTime(w http.ResponseWriter, r *http.Request) {
 		ends = starts.Add(time.Duration(duration) * time.Minute)
 	}
 
-	if err := h.plans.CheckTimeConflict(r.Context(), planID, starts, ends); err != nil {
+	if err := h.plans.CheckTimeConflict(r.Context(), planID, starts, ends, ""); err != nil {
 		h.renderPlan(w, r, planID, err.Error())
 		return
 	}
@@ -1006,4 +997,41 @@ func (h *Handler) BulkCreatePlans(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/plans", http.StatusSeeOther)
+}
+
+
+func (h *Handler) UpdateTime(w http.ResponseWriter, r *http.Request) {
+	planID := chi.URLParam(r, "id")
+	timeID := chi.URLParam(r, "tid")
+
+	starts, err := time.Parse("2006-01-02T15:04", r.FormValue("starts_at"))
+	if err != nil {
+		h.renderPlan(w, r, planID, "Invalid start time format.")
+		return
+	}
+	ends, err := time.Parse("2006-01-02T15:04", r.FormValue("ends_at"))
+	if err != nil {
+		h.renderPlan(w, r, planID, "Invalid end time format.")
+		return
+	}
+
+	if err := h.plans.CheckTimeConflict(r.Context(), planID, starts, ends, timeID); err != nil {
+		h.renderPlan(w, r, planID, err.Error())
+		return
+	}
+
+	kind := r.FormValue("kind")
+	if kind == "" {
+		kind = "service"
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		name = "Service"
+	}
+
+	if err := h.plans.UpdateTime(r.Context(), timeID, kind, name, starts, ends); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/plans/"+planID, http.StatusSeeOther)
 }

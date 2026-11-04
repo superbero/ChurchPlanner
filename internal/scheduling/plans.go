@@ -192,10 +192,12 @@ func (r *PlanRepository) CreateTime(ctx context.Context, planID, kind, name stri
 }
 
 // UpdateTime changes the start/end of an existing plan time.
-func (r *PlanRepository) UpdateTime(ctx context.Context, id string, starts, ends time.Time) error {
+func (r *PlanRepository) UpdateTime(ctx context.Context, timeID, kind, name string, starts, ends time.Time) error {
 	_, err := r.db.Exec(ctx, `
-		UPDATE plan_times SET starts_at = $2, ends_at = $3 WHERE id = $1
-	`, id, starts, ends)
+		UPDATE plan_times
+		SET kind = $2, name = $3, starts_at = $4, ends_at = $5
+		WHERE id = $1
+	`, timeID, kind, name, starts, ends)
 	return err
 }
 
@@ -274,7 +276,7 @@ func (r *PlanRepository) DuplicateTime(ctx context.Context, planID, timeID strin
 
 // CheckTimeConflict verifies that the requested time is valid and does not
 // overlap with any existing plan time.
-func (r *PlanRepository) CheckTimeConflict(ctx context.Context, planID string, starts, ends time.Time) error {
+func (r *PlanRepository) CheckTimeConflict(ctx context.Context, planID string, starts, ends time.Time, excludeID string) error {
 	if !ends.After(starts) {
 		return ErrInvalidTimeRange
 	}
