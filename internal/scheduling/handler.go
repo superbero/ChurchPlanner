@@ -28,36 +28,37 @@ func (h *Handler) PlansIndex(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
+
 	selectedType := r.URL.Query().Get("type")
-	u, ok := auth.UserFrom(r.Context())
-	if !ok {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
+	dateRange := r.URL.Query().Get("date_range")
+	if dateRange == "" {
+		dateRange = "upcoming"
 	}
-	canViewDrafts := auth.CanEditContent(u.Role)
-	if !canViewDrafts {
-		var err error
-		canViewDrafts, err = h.members.IsLeaderOfAnyTeam(r.Context(), u.ID)
-		if err != nil {
-			httpx.ServerError(w, err)
-			return
-		}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit == 0 {
+		limit = 25
 	}
-	plans, err := h.plans.ListUpcoming(r.Context(), selectedType, 40, canViewDrafts)
+
+	plans, err := h.plans.List(r.Context(), selectedType, limit, dateRange)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
+
 	typeName := ""
 	for _, t := range types {
 		if t.ID == selectedType {
 			typeName = t.Name
 		}
 	}
+
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plans", map[string]any{
 		"ServiceTypes": types,
 		"Plans":        plans,
 		"SelectedType": selectedType,
+		"DateRange":    dateRange,
+		"Limit":        limit,
 		"TypeName":     typeName,
 	})
 }

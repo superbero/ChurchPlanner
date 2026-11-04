@@ -1,6 +1,7 @@
 package scheduling
 
 import (
+	"fmt"
 	"context"
 	"errors"
 	"time"
@@ -34,31 +35,46 @@ func scanPlan(row pgx.Row) (Plan, error) {
 	return p, err
 }
 
-func (r *PlanRepository) ListUpcoming(ctx context.Context, serviceTypeID string, limit int, includeDrafts bool) ([]Plan, error) {
-	if limit <= 0 {
-		limit = 30
+func (r *PlanRepository) List(ctx context.Context, serviceTypeID string, limit int, dateRange string) ([]Plan, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
 	}
-	var rows pgx.Rows
-	var err error
-	if serviceTypeID == "" {
-		rows, err = r.db.Query(ctx, `
-			SELECT `+planColumns+` FROM plans
-			WHERE service_at >= now() - interval '30 days'
-			  AND ($1 OR published = TRUE)
-			ORDER BY service_at ASC LIMIT $2
-		`, includeDrafts, limit)
-	} else {
-		rows, err = r.db.Query(ctx, `
-			SELECT `+planColumns+` FROM plans
-			WHERE service_type_id = $1 AND service_at >= now() - interval '30 days'
-			  AND ($2 OR published = TRUE)
-			ORDER BY service_at ASC LIMIT $3
-		`, serviceTypeID, includeDrafts, limit)
+
+	// Base query
+	q := `SELECT ` + planColumns + ` FROM plans WHERE 1=1`
+	var args []any
+	argCount := 1
+
+	if serviceTypeID != "" {
+		q += fmt.Sprintf(` AND service_type_id = $%d`, argCount)
+		args = append(args, serviceTypeID)
+		argCount++
 	}
+
+	// Apply date range logic
+	switch dateRange {
+	case "upcoming":
+		q += ` AND service_at >= now() ORDER BY service_at ASC`
+	case "past":
+		q += ` AND service_at < now() ORDER BY service_at DESC`
+	case "this_month":
+		q += ` AND date_trunc('month', service_at) = date_trunc('month', now()) ORDER BY service_at ASC`
+	case "last_month":
+		q += ` AND date_trunc('month', service_at) = date_trunc('month', now() - interval '1 month') ORDER BY service_at DESC`
+	default:
+		// Default to a reasonable window if no range is provided
+		q += ` AND service_at >= now() - interval '30 days' ORDER BY service_at ASC`
+	}
+
+	q += fmt.Sprintf(` LIMIT $%d`, argCount)
+	args = append(args, limit)
+
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var out []Plan
 	for rows.Next() {
 		p, err := scanPlan(rows)

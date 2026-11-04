@@ -432,7 +432,7 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 .cal-event:hover { background: #c7d2fe; }
 .cal-event.cal-draft { opacity: 0.7; border: 1px dashed #a5b4fc; background: transparent; }
 .cal-time { font-weight: 700; margin-right: .25rem; }
-.cal-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-title { display: block; white-space: nowrap; overflow: visible; text-overflow: ellipsis; }
 
 /* User Menu */
 .user-menu { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
@@ -1338,29 +1338,6 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 }
 
 
-/* ── Plan Workspace Layout ─────────────────────────────────────── */
-.plan-layout {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 2rem;
-    align-items: start;
-}
-@media (max-width: 900px) {
-    .plan-layout { grid-template-columns: 1fr; }
-}
-
-.section-header {
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-}
-.section-header h2 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0;
-    letter-spacing: -0.01em;
-}
-
 /* Time Blocks */
 .time-block {
     background: var(--bg-surface);
@@ -1605,4 +1582,177 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 }
 .time-block.drag-over-bottom {
     border-bottom: 4px solid var(--brand-500);
+}
+
+
+/* ── Plan Layout (Top) ─────────────────────────────────────────── */
+.plan-top-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 2rem;
+    align-items: start;
+    margin-bottom: 3rem;
+}
+@media (max-width: 900px) {
+    .plan-top-layout { grid-template-columns: 1fr; }
+}
+
+/* ── People Serving Tabs (Bottom) ──────────────────────────────── */
+.people-serving-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+}
+
+.tabs {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.tab-buttons {
+    display: flex;
+    background: var(--bg-body);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    padding: 1rem 1.5rem;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.tab-btn:hover {
+    color: var(--text-main);
+    background: var(--bg-hover);
+}
+.tab-btn.active {
+    color: var(--brand-600);
+    border-bottom-color: var(--brand-600);
+    background: var(--bg-surface);
+}
+
+.tab-panel {
+    display: none;
+    padding: 1.5rem;
+}
+.tab-panel.active {
+    display: block;
+}
+
+/* Override team-card styles inside tabs to look flat */
+.tab-panel .team-card {
+    border: 0;
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+}
+.tab-panel .team-header {
+    display: none;
+}
+.tab-panel .position-row:first-child {
+    padding-top: 0;
+}
+
+
+/* ── Kebab Menu (Three Dots) ───────────────────────────────────── */
+.kebab-menu {
+    position: relative;
+    display: inline-block;
+    text-align: left;
+}
+.kebab-btn {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    font-weight: bold;
+    border: 1px solid transparent;
+}
+.kebab-btn::-webkit-details-marker {
+    display: none;
+}
+.kebab-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border);
+    color: var(--text-main);
+}
+.kebab-dropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 0.25rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    min-width: 160px;
+    z-index: 100;
+    padding: 0.5rem 0;
+}
+.kebab-dropdown a,
+.kebab-dropdown button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text-main);
+    background: transparent;
+    border: 0;
+    text-decoration: none;
+    cursor: pointer;
+}
+.kebab-dropdown a:hover,
+.kebab-dropdown button:hover {
+    background: var(--bg-hover);
+}
+.kebab-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.5rem 0;
+}
+.kebab-dropdown .kebab-danger {
+    color: var(--danger);
+}
+.kebab-dropdown .kebab-danger:hover {
+    background: var(--danger-bg);
+}
+
+
+/* Fix table corners since we removed overflow: hidden */
+thead tr:first-child th:first-child {
+    border-top-left-radius: var(--radius-md);
+}
+thead tr:first-child th:last-child {
+    border-top-right-radius: var(--radius-md);
+}
+tbody tr:last-child td:first-child {
+    border-bottom-left-radius: var(--radius-md);
+}
+tbody tr:last-child td:last-child {
+    border-bottom-right-radius: var(--radius-md);
+}
+
+/* Ensure the kebab menu sits above the other rows */
+tr {
+    position: relative;
+    z-index: 1;
+}
+tr:has(.kebab-menu[open]) {
+    z-index: 50;
+}
+.kebab-menu {
+    z-index: 10;
 }

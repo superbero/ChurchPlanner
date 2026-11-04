@@ -12,15 +12,33 @@
 
 <form method="get" action="/plans" class="filter-bar-horizontal">
     <div class="filter-group">
-        <select name="type" style="min-width: 200px;">
+        <select name="type" style="min-width: 150px;">
             <option value="">All Service Types</option>
             {{range .ServiceTypes}}
             <option value="{{.ID}}" {{if eq .ID $.SelectedType}}selected{{end}}>{{.Name}}</option>
             {{end}}
         </select>
     </div>
+
+    <div class="filter-group">
+        <select name="date_range" style="min-width: 140px;">
+            <option value="upcoming" {{if eq .DateRange "upcoming"}}selected{{end}}>Upcoming</option>
+            <option value="this_month" {{if eq .DateRange "this_month"}}selected{{end}}>This Month</option>
+            <option value="last_month" {{if eq .DateRange "last_month"}}selected{{end}}>Last Month</option>
+            <option value="past" {{if eq .DateRange "past"}}selected{{end}}>Past Plans</option>
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <select name="limit" style="min-width: 100px;">
+            <option value="10" {{if eq .Limit 10}}selected{{end}}>Show 10</option>
+            <option value="25" {{if eq .Limit 25}}selected{{end}}>Show 25</option>
+            <option value="50" {{if eq .Limit 50}}selected{{end}}>Show 50</option>
+        </select>
+    </div>
+
     <div class="filter-group" style="margin-left: auto;">
-        <button type="submit" class="button-secondary">Filter</button>
+        <button type="submit" class="button-secondary">Apply Filters</button>
         <a href="/plans" class="button-secondary">Clear</a>
     </div>
 </form>
@@ -57,12 +75,29 @@
                 <td class="actions-cell">
                     <div class="action-group">
                         <a href="/plans/{{.ID}}" class="button-secondary btn-sm">Open Plan</a>
-                        <a href="/plans/{{.ID}}/edit" class="action-link">Edit</a>
+
+                        <details class="kebab-menu">
+                            <summary class="kebab-btn" title="More actions">⋮</summary>
+                            <div class="kebab-dropdown">
+                                <a href="/plans/{{.ID}}/edit">Edit Details</a>
+
+                                <form method="post" action="/plans/{{.ID}}/publish" style="display:block;">
+                                    <input type="hidden" name="published" value="{{if .Published}}0{{else}}1{{end}}">
+                                    <button type="submit">{{if .Published}}Unpublish{{else}}Publish{{end}}</button>
+                                </form>
+
+                                <div class="kebab-divider"></div>
+
+                                <form method="post" action="/plans/{{.ID}}/delete" onsubmit="return confirm('Delete this plan and everything in it?')" style="display:block;">
+                                    <button type="submit" class="kebab-danger">Delete Plan</button>
+                                </form>
+                            </div>
+                        </details>
                     </div>
                 </td>
             </tr>
         {{else}}
-            <tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">No plans found. Click "New Plan" to get started.</td></tr>
+            <tr><td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">No plans found matching your filters.</td></tr>
         {{end}}
         </tbody>
     </table>
