@@ -29,7 +29,13 @@
             </label>
         </div>
 
-        <label>Phone <input name="phone" value="{{.User.Phone}}" placeholder="555-0100"></label>
+        <label>Phone (include country code)
+            <input type="tel" name="phone" value="{{.User.Phone}}" autocomplete="tel"
+                   inputmode="tel" pattern="\+[1-9][0-9\s().-]{5,24}"
+                   title="Include the country calling code, for example +1 555-0100."
+                   placeholder="+1 555-0100">
+            <small class="muted">Include + and your country calling code, e.g. +1 555-0100 or +44 20 1234 5678.</small>
+        </label>
         <div class="row">
             <label>Vocal Low <input name="vocal_low" value="{{.User.VocalLow}}" size="4" placeholder="A3"></label>
             <label>Vocal High <input name="vocal_high" value="{{.User.VocalHigh}}" size="4" placeholder="E5"></label>
@@ -38,19 +44,16 @@
         <h2>Skills / Instruments</h2>
         <p class="muted">Add the positions this person is comfortable filling.</p>
 
-        <div id="active-skills" class="active-skills-panel">
-            {{range .Positions}}
-                {{if index $.SkillMap .ID}}
+        <div id="active-skills" class="active-skills-panel" aria-live="polite">{{range .Positions}}{{if index $.SkillMap .ID}}
                 <div class="skill-chip" data-id="{{.ID}}" data-team="{{.TeamName}}" data-name="{{.Name}}">
                     <span><strong>{{.TeamName}}</strong> · {{.Name}}</span>
-                    <button type="button" class="remove-skill" title="Remove">×</button>
+                    <button type="button" class="remove-skill" title="Remove {{.TeamName}} · {{.Name}}" aria-label="Remove {{.TeamName}} · {{.Name}}">×</button>
                     <input type="hidden" name="position_ids" value="{{.ID}}">
                 </div>
-                {{end}}
-            {{end}}
-        </div>
+                {{end}}{{end}}</div>
 
         <div class="add-skill-row">
+            <label class="sr-only" for="skill-picker">Select a skill or instrument to add</label>
             <select id="skill-picker">
                 <option value="">— Select a skill to add —</option>
                 {{range .Positions}}
@@ -59,7 +62,7 @@
                     {{end}}
                 {{end}}
             </select>
-            <button type="button" id="add-skill-btn" class="button-secondary">Add</button>
+            <button type="button" id="add-skill-btn" class="button-secondary" disabled>Add</button>
         </div>
 
         <h2>Team Memberships</h2>
@@ -85,4 +88,71 @@
         </p>
     </form>
 </div>
+<script>
+(() => {
+    const panel = document.getElementById('active-skills');
+    const picker = document.getElementById('skill-picker');
+    const addButton = document.getElementById('add-skill-btn');
+    if (!panel || !picker || !addButton) return;
+
+    function updateAddButton() {
+        addButton.disabled = !picker.value;
+    }
+
+    function makeSkillChip(id, team, name) {
+        const chip = document.createElement('div');
+        chip.className = 'skill-chip';
+        chip.dataset.id = id;
+        chip.dataset.team = team;
+        chip.dataset.name = name;
+
+        const label = document.createElement('span');
+        const teamName = document.createElement('strong');
+        teamName.textContent = team;
+        label.append(teamName, document.createTextNode(` · ${name}`));
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove-skill';
+        remove.title = `Remove ${team} · ${name}`;
+        remove.setAttribute('aria-label', remove.title);
+        remove.textContent = '×';
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'position_ids';
+        input.value = id;
+
+        chip.append(label, remove, input);
+        return chip;
+    }
+
+    picker.addEventListener('change', updateAddButton);
+    addButton.addEventListener('click', () => {
+        const option = picker.selectedOptions[0];
+        if (!option || !option.value) return;
+
+        panel.append(makeSkillChip(option.value, option.dataset.team || '', option.dataset.name || option.textContent.trim()));
+        option.remove();
+        picker.value = '';
+        updateAddButton();
+    });
+
+    panel.addEventListener('click', event => {
+        const remove = event.target.closest('.remove-skill');
+        if (!remove) return;
+        const chip = remove.closest('.skill-chip');
+        if (!chip) return;
+
+        const option = document.createElement('option');
+        option.value = chip.dataset.id;
+        option.dataset.team = chip.dataset.team;
+        option.dataset.name = chip.dataset.name;
+        option.textContent = `${chip.dataset.team} · ${chip.dataset.name}`;
+        picker.append(option);
+        chip.remove();
+        updateAddButton();
+    });
+})();
+</script>
 {{end}}

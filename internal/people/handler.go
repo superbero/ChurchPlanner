@@ -2,8 +2,10 @@ package people
 
 import (
 	"encoding/csv"
+	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -12,6 +14,8 @@ import (
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 )
+
+var phoneInputCharacters = regexp.MustCompile(`^[+0-9().\-\s]+$`)
 
 type Handler struct {
 	repo        *Repository
@@ -128,12 +132,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid account status", http.StatusBadRequest)
 		return
 	}
+	phone, err := normalizePhone(r.FormValue("phone"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
 
 	if err := h.repo.Update(
 		r.Context(),
 		id,
 		strings.TrimSpace(r.FormValue("title")),
-		strings.TrimSpace(r.FormValue("phone")),
+		phone,
 		strings.TrimSpace(r.FormValue("vocal_low")),
 		strings.TrimSpace(r.FormValue("vocal_high")),
 		role,
@@ -171,6 +180,29 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/people/"+id, http.StatusSeeOther)
+}
+
+func normalizePhone(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(value, "+") || strings.Count(value, "+") != 1 ||
+		!phoneInputCharacters.MatchString(value) {
+		return "", errors.New("Enter a phone number with its country code, for example +1 555-0100.")
+	}
+
+	var digits strings.Builder
+	for _, char := range value {
+		if char >= '0' && char <= '9' {
+			digits.WriteRune(char)
+		}
+	}
+	number := digits.String()
+	if len(number) < 7 || len(number) > 15 || number[0] == '0' {
+		return "", errors.New("Phone number must include a valid country code and contain 7 to 15 digits.")
+	}
+	return "+" + number, nil
 }
 
 func (h *Handler) New(w http.ResponseWriter, r *http.Request) {

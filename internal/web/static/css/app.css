@@ -338,6 +338,8 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 /* People module */
 .profile-grid { max-width: 700px; }
 .profile-form h2 { margin-top: 1.5rem; }
+.profile-form label small { display: block; margin-top: .35rem; line-height: 1.4; }
+.profile-form input[type="tel"] { width: 100%; }
 
 
 

@@ -71,9 +71,13 @@ func TestPeopleEditTemplateUsesUserStatusTitleAndMemberships(t *testing.T) {
 			"User": auth.User{
 				ID: "user-1", Name: "Alex Doe", Title: "Worship Director",
 				Email: "alex@example.com", Role: auth.RoleEditor, Status: "suspended",
+				Phone: "+15550100",
 			},
-			"Positions":                []scheduling.Position{},
-			"SkillMap":                 map[string]bool{},
+			"Positions": []scheduling.Position{
+				{ID: "position-1", Name: "Drums", TeamName: "Worship"},
+				{ID: "position-2", Name: "Guitar", TeamName: "Worship"},
+			},
+			"SkillMap":                 map[string]bool{"position-1": true},
 			"Teams":                    []scheduling.Team{},
 			"MembershipRoles":          map[string]string{},
 			"CanAssignPrivilegedRoles": false,
@@ -84,6 +88,10 @@ func TestPeopleEditTemplateUsesUserStatusTitleAndMemberships(t *testing.T) {
 	for _, want := range []string{
 		`action="/people/user-1"`, `name="title" value="Worship Director"`,
 		`value="suspended" selected`, `value="editor"`,
+		`type="tel" name="phone"`, `placeholder="+1 555-0100"`,
+		`pattern="\+[1-9][0-9\s().-]{5,24}"`,
+		`id="skill-picker"`, `id="add-skill-btn"`, `remove-skill`,
+		`name="position_ids"`, `picker.addEventListener('change'`,
 	} {
 		if !strings.Contains(response.Body.String(), want) {
 			t.Errorf("people edit page missing %q", want)
