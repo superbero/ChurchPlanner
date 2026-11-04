@@ -1,8 +1,8 @@
 package people
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -76,9 +76,9 @@ func (r *Repository) List(ctx context.Context, q string, status string) ([]UserW
 func (r *Repository) Get(ctx context.Context, id string) (auth.User, error) {
 	var u auth.User
 	err := r.db.QueryRow(ctx, `
-		SELECT id, name, email, role, phone, vocal_low, vocal_high
+		SELECT id, name, email, role, phone, vocal_low, vocal_high, status
 		FROM users WHERE id = $1
-	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Phone, &u.VocalLow, &u.VocalHigh)
+	`, id).Scan(&u.ID, &u.Name, &u.Email, &u.Role, &u.Phone, &u.VocalLow, &u.VocalHigh, &u.Status)
 	return u, err
 }
 
@@ -101,9 +101,11 @@ func (r *Repository) Update(ctx context.Context, id, phone, vocalLow, vocalHigh,
 		role = auth.RoleScheduledViewer
 	}
 	_, err := r.db.Exec(ctx, `
-		UPDATE users SET phone = $2, vocal_low = $3, vocal_high = $4, role = $5
+		UPDATE users
+		SET phone = $2, vocal_low = $3, vocal_high = $4, role = $5, status = $6,
+		    updated_at = now()
 		WHERE id = $1
-	`, id, phone, vocalLow, vocalHigh, role)
+	`, id, phone, vocalLow, vocalHigh, role, status)
 	return err
 }
 

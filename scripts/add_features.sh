@@ -1,24 +1,36 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
 [ -f go.mod ] || { echo "✗ run from project root"; exit 1; }
+
+LAYOUT="internal/web/templates/layout.html"
+[ -f "$LAYOUT" ] || { echo "✗ missing $LAYOUT"; exit 1; }
 
 echo "════════════════════════════════════════════════════════════════"
 echo "  Cleaning up the Navigation Bar"
 echo "════════════════════════════════════════════════════════════════"
 
-python3 - <<'PYEOF'
+python3 - "$LAYOUT" <<'PYEOF'
+import re, sys
 from pathlib import Path
-p = Path("internal/web/templates/layout.html")
+
+p = Path(sys.argv[1])
 src = p.read_text()
 
-# Find the entire <nav> block and replace it
-start = src.find('<nav class="top-nav">')
-end = src.find('</nav>') + len('</nav>')
+OPEN = '<nav class="top-nav">'
+CLOSE = '</nav>'
 
-if start == -1 or end == -1:
-    print("  ✗ Could not find <nav> block")
-    exit(1)
+start = src.find(OPEN)
+if start == -1:
+    print(f'  ✗ Could not find {OPEN!r} block', file=sys.stderr)
+    sys.exit(1)
+
+# Find the matching </nav> AFTER start — not the first one in the file.
+end = src.find(CLOSE, start)
+if end == -1:
+    print(f'  ✗ Could not find closing {CLOSE!r} after {OPEN!r}', file=sys.stderr)
+    sys.exit(1)
+end += len(CLOSE)
 
 new_nav = '''<nav class="top-nav">
         <div class="nav-container">
@@ -26,15 +38,7 @@ new_nav = '''<nav class="top-nav">
 
             <div class="nav-links">
                 {{if .CurrentUser}}
-                    {{if eq .CurrentUser.Role "admin"}}
-                        <a href="/plans">Plans</a>
-                        <a href="/people">People</a>
-                        <a href="/teams">Teams</a>
-                        <a href="/songs">Songs</a>
-                        <a href="/calendar">Calendar</a>
-                        <a href="/reports/ccli">Reports</a>
-                        <a href="/checkin" target="_blank" class="nav-checkin" title="Open Kiosk in New Tab">Kiosk ↗</a>
-                    {{else if eq .CurrentUser.Role "manager"}}
+                    {{if or (eq .CurrentUser.Role "admin") (eq .CurrentUser.Role "manager")}}
                         <a href="/plans">Plans</a>
                         <a href="/people">People</a>
                         <a href="/teams">Teams</a>
@@ -68,22 +72,25 @@ new_nav = '''<nav class="top-nav">
         </div>
     </nav>'''
 
-src = src[:start] + new_nav + src[end:]
-p.write_text(src)
-print("  ✓ Navigation bar cleaned up")
-PYEOF
+current = src[start:end]
+if current == new_nav:
+    print("  • Navigation bar already up to date — skipping rewrite")
+else:
+    src = src[:start] + new_nav + src[end:]
+    print("  ✓ Navigation bar cleaned up")
 
-# Bump cache
-python3 - <<'PYEOF'
-from pathlib import Path
-import re
-p = Path("internal/web/templates/layout.html")
-src = p.read_text()
-m = re.search(r'app\.(css|js)\?v=(\d+)', src)
-if m:
-    new_v = int(m.group(2)) + 1
-    src = src.replace(f'app.css?v={m.group(2)}', f'app.css?v={new_v}')
-    src = src.replace(f'app.js?v={m.group(2)}', f'app.js?v={new_v}')
+# Cache-bump: handle CSS and JS independently, once each.
+def bump(m):
+    return f"{m.group(1)}{int(m.group(2)) + 1}"
+
+new_src, n = re.subn(r'(app\.(?:css|js)\?v=)(\d+)', bump, src)
+if n:
+    print(f"  ✓ Bumped {n} asset cache version(s)")
+    src = new_src
+else:
+    print("  • No app.css/app.js ?v= found — nothing to bump")
+
+if src != p.read_text():
     p.write_text(src)
 PYEOF
 
@@ -93,4 +100,8 @@ if ! go build ./...; then
 fi
 echo "✓ build OK"
 
-docker compose -f deploy/docker-compose.yml up -d --build
+if command -v docker >/dev/null 2>&1; then
+    docker compose -f deploy/docker-compose.yml up -d --build
+else
+    echo "• docker not found — skipping compose up"
+fi

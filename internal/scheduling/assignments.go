@@ -596,7 +596,6 @@ func (r *AssignmentRepository) MarkNotified(ctx context.Context, planPersonID st
 	return err
 }
 
-
 func (r *AssignmentRepository) CreateTeam(ctx context.Context, name string) error {
 	_, err := r.db.Exec(ctx, `INSERT INTO teams (name) VALUES ($1)`, name)
 	return err
@@ -644,4 +643,15 @@ func (r *AssignmentRepository) CreatePosition(ctx context.Context, teamID, name 
 func (r *AssignmentRepository) DeletePosition(ctx context.Context, id string) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM positions WHERE id = $1`, id)
 	return err
+}
+
+func (r *AssignmentRepository) DeletePositionForTeam(ctx context.Context, teamID, positionID string) error {
+	tag, err := r.db.Exec(ctx, `DELETE FROM positions WHERE id = $1 AND team_id = $2`, positionID, teamID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }

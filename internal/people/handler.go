@@ -100,19 +100,44 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-
-	// Combine country code and local number
-	phoneCountry := strings.TrimSpace(r.FormValue("phone_country"))
-	phoneLocal := strings.TrimSpace(r.FormValue("phone_number"))
-	phone := phoneLocal
-	if phoneCountry != "" && !strings.HasPrefix(phoneLocal, phoneCountry) {
-		phone = phoneCountry + " " + phoneLocal
+	requester, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	target, err := h.repo.Get(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
 	}
 
-	userRole := strings.TrimSpace(r.FormValue("role"))
+	role := strings.TrimSpace(r.FormValue("role"))
+	if !validUserRole(role) {
+		http.Error(w, "invalid user role", http.StatusBadRequest)
+		return
+	}
+	if requester.Role != auth.RoleAdmin &&
+		(target.Role == auth.RoleAdmin || target.Role == auth.RoleManager ||
+			role == auth.RoleAdmin || role == auth.RoleManager) {
+		http.Error(w, "only an organization administrator can manage administrator or manager roles", http.StatusForbidden)
+		return
+	}
 
-	// Pass empty strings for vocal ranges since the UI no longer captures them
-	if err := h.repo.Update(r.Context(), id, phone, "", "", userRole, r.FormValue("status")); err != nil {
+	status := strings.TrimSpace(r.FormValue("status"))
+	if status != "active" && status != "suspended" {
+		http.Error(w, "invalid account status", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.repo.Update(
+		r.Context(),
+		id,
+		strings.TrimSpace(r.FormValue("phone")),
+		strings.TrimSpace(r.FormValue("vocal_low")),
+		strings.TrimSpace(r.FormValue("vocal_high")),
+		role,
+		status,
+	); err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
@@ -131,6 +156,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		teamRole := strings.TrimSpace(values[0])
 		if teamRole == "" {
 			continue
+		}
+		if teamRole != "leader" && teamRole != "member" {
+			http.Error(w, "invalid team membership role", http.StatusBadRequest)
+			return
 		}
 		teamID := strings.TrimPrefix(key, "team_role_")
 		memberships[teamID] = teamRole
@@ -224,8 +253,12 @@ func (h *Handler) BulkImport(w http.ResponseWriter, r *http.Request) {
 
 	var users []CreateUserInput
 	for i, row := range records {
-		if i == 0 { continue } // skip header
-		if len(row) < 3 { continue }
+		if i == 0 {
+			continue
+		} // skip header
+		if len(row) < 3 {
+			continue
+		}
 		users = append(users, CreateUserInput{
 			Name:     row[0],
 			Email:    row[1],

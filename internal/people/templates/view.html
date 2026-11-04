@@ -15,13 +15,15 @@
                     <option value="suspended" {{if eq .User.Status "suspended"}}selected{{end}}>Suspended (cannot log in)</option>
                 </select>
             </label>
-            <label>Role
+            <label>Permission level
                 <select name="role">
-                    <option value="volunteer" {{if eq .User.Role "volunteer"}}selected{{end}}>Volunteer</option>
-                    <option value="guest"     {{if eq .User.Role "guest"}}selected{{end}}>Guest</option>
-                    <option value="editor"    {{if eq .User.Role "editor"}}selected{{end}}>Editor</option>
-                    <option value="manager"   {{if eq .User.Role "manager"}}selected{{end}}>Manager</option>
-                    <option value="admin"     {{if eq .User.Role "admin"}}selected{{end}}>Admin</option>
+                    {{if .CanAssignPrivilegedRoles}}
+                    <option value="admin" {{if eq .User.Role "admin"}}selected{{end}}>Organization Administrator</option>
+                    <option value="manager" {{if eq .User.Role "manager"}}selected{{end}}>Manager</option>
+                    {{end}}
+                    <option value="editor" {{if eq .User.Role "editor"}}selected{{end}}>Editor</option>
+                    <option value="viewer" {{if eq .User.Role "viewer"}}selected{{end}}>Viewer</option>
+                    <option value="scheduled_viewer" {{if eq .User.Role "scheduled_viewer"}}selected{{end}}>Scheduled Viewer</option>
                 </select>
             </label>
         </div>

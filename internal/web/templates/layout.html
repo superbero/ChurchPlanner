@@ -16,16 +16,13 @@
                 {{if eq .CurrentUser.Role "admin"}}
                     <a href="/plans">Plans</a>
                     <a href="/people">People</a>
-                        <a href="/teams">Teams</a>
-                        <a href="/teams">Teams</a>
+                    <a href="/teams">Teams</a>
                     <a href="/songs">Songs</a>
                     <a href="/calendar">Calendar</a>
                     <a href="/reports/ccli">Reports</a>
                 {{else if eq .CurrentUser.Role "manager"}}
                     <a href="/plans">Plans</a>
                     <a href="/people">People</a>
-                        <a href="/teams">Teams</a>
-                        <a href="/teams">Teams</a>
                     <a href="/calendar">Calendar</a>
                     <a href="/songs">Songs</a>
                 {{else if eq .CurrentUser.Role "editor"}}

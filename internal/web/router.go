@@ -210,6 +210,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		// Organization administrators only.
 		r.Group(func(r chi.Router) {
 			r.Use(authn.RequireRoles(auth.RoleAdmin))
+			teams.New(d.DB, renderer).Routes(r, authn)
 			reports.New(d.DB, renderer).Routes(r)
 		})
 	})
