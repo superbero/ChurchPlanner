@@ -127,12 +127,18 @@ func (h *Handler) View(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, arrRow{Arrangement: a, Keys: keys})
 	}
 
+	practiceToken := r.URL.Query().Get("practice")
+	practiceURL := ""
+	if practiceToken != "" {
+		practiceURL = h.publicBaseURL(r) + "/practice/" + practiceToken
+	}
 	h.renderer.Render(w, r, http.StatusOK, "songs_detail", map[string]any{
 		"Song":          song,
 		"Arrangements":  rows,
 		"History":       history,
 		"Tags":          tags,
-		"PracticeToken": r.URL.Query().Get("practice"),
+		"PracticeToken": practiceToken,
+		"PracticeURL":   practiceURL,
 	})
 }
 
@@ -981,8 +987,24 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	offset := 0
+	if rawOffset := r.URL.Query().Get("semitones"); rawOffset != "" {
+		offset, err = strconv.Atoi(rawOffset)
+		if err != nil {
+			http.Error(w, "Invalid transpose amount.", http.StatusBadRequest)
+			return
+		}
+	}
+	if offset < -12 || offset > 12 {
+		http.Error(w, "Transpose amount must be between -12 and 12 semitones.", http.StatusBadRequest)
+		return
+	}
+
 	var chart []RenderedSection
 	var arrangement Arrangement
+	baseKey := ""
+	displayKey := ""
+	canTranspose := false
 	arr, err := h.arr.Default(r.Context(), song.ID)
 	hasArrangement := err == nil
 	if err != nil && !errors.Is(err, ErrArrangementNotFound) {
@@ -991,7 +1013,19 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 	}
 	if hasArrangement {
 		arrangement = arr
-		chart, _, err = h.arr.Chart(r.Context(), arr.ID, "")
+		baseKey = arr.OriginalKey
+		if defaultKey, keyErr := h.arr.DefaultKey(r.Context(), arr.ID); keyErr == nil {
+			baseKey = defaultKey.Key
+		} else if !errors.Is(keyErr, ErrArrangementKeyNotFound) {
+			httpx.ServerError(w, keyErr)
+			return
+		}
+		displayKey = baseKey
+		if baseKey != "" {
+			_, canTranspose = KeyIndex(baseKey)
+			displayKey = TransposeKey(baseKey, offset)
+		}
+		chart, displayKey, err = h.arr.Chart(r.Context(), arr.ID, displayKey)
 		if err != nil {
 			httpx.ServerError(w, err)
 			return
@@ -1002,6 +1036,10 @@ func (h *Handler) Preview(w http.ResponseWriter, r *http.Request) {
 		"Song":           song,
 		"Arrangement":    arrangement,
 		"HasArrangement": hasArrangement,
+		"BaseKey":        baseKey,
+		"DisplayKey":     displayKey,
+		"Transpose":      offset,
+		"CanTranspose":   canTranspose,
 		"YouTubeID":      youtubeID(song.YouTubeURL),
 		"Chart":          chart,
 	})

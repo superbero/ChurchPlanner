@@ -1,5 +1,6 @@
 {{define "content"}}
-<article class="quick-view-content">
+<article class="quick-view-content" data-song-id="{{.Song.ID}}" data-transpose="{{.Transpose}}"
+         data-base-key="{{.BaseKey}}">
     <header class="quick-view-header">
         <div>
             <p class="quick-view-eyebrow">SONG QUICK VIEW</p>
@@ -8,14 +9,15 @@
         </div>
         <div class="quick-view-links">
             {{if .HasArrangement}}
-            <a class="button-secondary btn-sm" href="/songs/{{.Song.ID}}/pdf">Download PDF</a>
+            <a class="button-secondary btn-sm quick-view-pdf"
+               href="/songs/{{.Song.ID}}/pdf{{if .DisplayKey}}?key={{.DisplayKey}}{{end}}">Download PDF</a>
             {{end}}
             <a class="button btn-sm" href="/songs/{{.Song.ID}}">Song details</a>
         </div>
     </header>
 
     <div class="quick-view-meta" aria-label="Song details">
-        {{if .Arrangement.OriginalKey}}<span><strong>Key</strong> {{.Arrangement.OriginalKey}}</span>{{end}}
+        {{if .Arrangement.OriginalKey}}<span><strong>Original key</strong> {{.Arrangement.OriginalKey}}</span>{{end}}
         {{if .Arrangement.BPM}}<span><strong>Tempo</strong> {{.Arrangement.BPM}} BPM</span>{{end}}
         {{if .Arrangement.Meter}}<span><strong>Meter</strong> {{.Arrangement.Meter}}</span>{{end}}
         {{if .Arrangement.LengthSeconds}}<span><strong>Length</strong> {{.Arrangement.LengthSeconds}} sec</span>{{end}}
@@ -43,8 +45,54 @@
         {{if .Chart}}
         <section class="quick-view-chart" aria-label="Default arrangement chart">
             <div class="quick-view-chart-heading">
-                <h3>{{.Arrangement.Name}}</h3>
-                <span class="chip chip-default">Default arrangement</span>
+                <div>
+                    <h3>{{.Arrangement.Name}}</h3>
+                    <span class="chip chip-default">Default arrangement</span>
+                </div>
+                <div class="chart-transposer" aria-label="Transpose chart">
+                    <span class="transpose-label">Key</span>
+                    {{if .CanTranspose}}
+                    <select class="transpose-key-select" aria-label="Choose chart key">
+                        {{if hasSuffix .BaseKey "m"}}
+                        <option value="Cm" {{if eq .DisplayKey "Cm"}}selected{{end}}>Cm</option>
+                        <option value="C#m" {{if eq .DisplayKey "C#m"}}selected{{end}}>C#m</option>
+                        <option value="Dm" {{if eq .DisplayKey "Dm"}}selected{{end}}>Dm</option>
+                        <option value="D#m" {{if eq .DisplayKey "D#m"}}selected{{end}}>D#m</option>
+                        <option value="Em" {{if eq .DisplayKey "Em"}}selected{{end}}>Em</option>
+                        <option value="Fm" {{if eq .DisplayKey "Fm"}}selected{{end}}>Fm</option>
+                        <option value="F#m" {{if eq .DisplayKey "F#m"}}selected{{end}}>F#m</option>
+                        <option value="Gm" {{if eq .DisplayKey "Gm"}}selected{{end}}>Gm</option>
+                        <option value="G#m" {{if eq .DisplayKey "G#m"}}selected{{end}}>G#m</option>
+                        <option value="Am" {{if eq .DisplayKey "Am"}}selected{{end}}>Am</option>
+                        <option value="A#m" {{if eq .DisplayKey "A#m"}}selected{{end}}>A#m</option>
+                        <option value="Bm" {{if eq .DisplayKey "Bm"}}selected{{end}}>Bm</option>
+                        {{else}}
+                        <option value="C" {{if eq .DisplayKey "C"}}selected{{end}}>C</option>
+                        <option value="C#" {{if eq .DisplayKey "C#"}}selected{{end}}>C#</option>
+                        <option value="D" {{if eq .DisplayKey "D"}}selected{{end}}>D</option>
+                        <option value="D#" {{if eq .DisplayKey "D#"}}selected{{end}}>D#</option>
+                        <option value="E" {{if eq .DisplayKey "E"}}selected{{end}}>E</option>
+                        <option value="F" {{if eq .DisplayKey "F"}}selected{{end}}>F</option>
+                        <option value="F#" {{if eq .DisplayKey "F#"}}selected{{end}}>F#</option>
+                        <option value="G" {{if eq .DisplayKey "G"}}selected{{end}}>G</option>
+                        <option value="G#" {{if eq .DisplayKey "G#"}}selected{{end}}>G#</option>
+                        <option value="A" {{if eq .DisplayKey "A"}}selected{{end}}>A</option>
+                        <option value="A#" {{if eq .DisplayKey "A#"}}selected{{end}}>A#</option>
+                        <option value="B" {{if eq .DisplayKey "B"}}selected{{end}}>B</option>
+                        {{end}}
+                    </select>
+                    {{end}}
+                    <button type="button" class="transpose-step" data-semitones="-1"
+                            aria-label="Transpose down one semitone"
+                            {{if or (not .CanTranspose) (le .Transpose -12)}}disabled{{end}}>−</button>
+                    <strong class="transpose-current-key">{{if .DisplayKey}}{{.DisplayKey}}{{else}}—{{end}}</strong>
+                    <button type="button" class="transpose-step" data-semitones="1"
+                            aria-label="Transpose up one semitone"
+                            {{if or (not .CanTranspose) (ge .Transpose 12)}}disabled{{end}}>+</button>
+                    <button type="button" class="transpose-reset"
+                            {{if or (not .CanTranspose) (eq .Transpose 0)}}disabled{{end}}>Reset</button>
+                    <span class="transpose-status muted" aria-live="polite"></span>
+                </div>
             </div>
             <div class="preview-lyrics">
                 {{range .Chart}}

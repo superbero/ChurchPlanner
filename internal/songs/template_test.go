@@ -92,15 +92,34 @@ func TestSongPreviewShowsDefaultArrangementAndEmptyState(t *testing.T) {
 			Name: "Original", OriginalKey: "G", BPM: 92, Meter: "4/4",
 		},
 		"HasArrangement": true,
+		"BaseKey":        "G",
+		"DisplayKey":     "G",
+		"Transpose":      0,
+		"CanTranspose":   true,
 		"Chart": []RenderedSection{{
 			Label: "Verse",
 			Lines: []ChartLine{{Chords: []ChordPos{{Position: 0, Chord: "G"}}, Lyric: "Amazing grace"}},
 		}},
 	})
-	for _, expected := range []string{"Test tune", "Test artist", "Original", "Default arrangement", "G", "92 BPM", "Amazing grace"} {
+	for _, expected := range []string{"Test tune", "Test artist", "Original", "Default arrangement", "G", "92 BPM", "Amazing grace", "Transpose chart", `aria-label="Choose chart key"`, `value="G" selected`, "Transpose up one semitone", "Reset"} {
 		if !strings.Contains(chart, expected) {
 			t.Errorf("preview is missing %q", expected)
 		}
+	}
+	if strings.Contains(chart, `aria-label="Transpose up one semitone" disabled`) {
+		t.Error("valid arrangement key has transposition disabled")
+	}
+	sharpKeyChart := render(map[string]any{
+		"Song":           Song{ID: "song-1", Title: "Test tune"},
+		"HasArrangement": true,
+		"Arrangement":    Arrangement{Name: "Original"},
+		"BaseKey":        "C",
+		"DisplayKey":     "C#",
+		"CanTranspose":   true,
+		"Chart":          []RenderedSection{{Label: "Verse"}},
+	})
+	if !strings.Contains(sharpKeyChart, `/songs/song-1/pdf?key=C%23`) {
+		t.Error("sharp key in the quick-view PDF URL is not safely encoded")
 	}
 
 	empty := render(map[string]any{

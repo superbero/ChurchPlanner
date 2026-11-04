@@ -72,6 +72,10 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 			r.Get("/import", m.handler.ShowImport)
 			r.Post("/import", m.handler.ProcessImport)
 			r.Post("/import/save", m.handler.SaveImport)
+			r.Get("/import/bulk", m.handler.ShowBulkImport)
+			r.Get("/import/bulk/template.csv", m.handler.DownloadBulkImportTemplate)
+			r.Post("/import/bulk/preview", m.handler.PreviewBulkImport)
+			r.Post("/import/bulk/save", m.handler.SaveBulkImport)
 
 			// Health dashboard is an admin insight tool
 			r.Get("/reports/health", m.handler.Health)

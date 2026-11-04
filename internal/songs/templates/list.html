@@ -88,8 +88,13 @@
                            class="song-select" aria-label="Select {{.Title}}"></td>
                 {{end}}
                 <td>
+                    <div class="song-title-cell">
                     <a href="/songs/{{.ID}}" class="song-title">{{.Title}}</a>
                     {{if .Archived}}<span class="chip">archived</span>{{end}}
+                    <button type="button" class="action-link song-expand-button"
+                            data-song-id="{{.ID}}" aria-controls="song-panel-{{.ID}}"
+                            aria-expanded="false">Chart &amp; transpose</button>
+                    </div>
                 </td>
                 <td>{{.Author}}</td>
                 <td>
@@ -105,8 +110,6 @@
                 <td>{{if .BPM}}{{.BPM}}{{else}}—{{end}}</td>
                 <td class="actions-cell">
                     <div class="action-group">
-                        <button type="button" class="button-secondary btn-sm quick-view-button"
-                                data-song-id="{{.ID}}" aria-haspopup="dialog">Quick view</button>
                         <a href="/songs/{{.ID}}" class="action-link">Details</a>
                         <button type="button" class="action-link pdf-button" data-song-id="{{.ID}}"
                                 data-song-title="{{.Title}}">PDF</button>
@@ -120,23 +123,19 @@
                     </div>
                 </td>
             </tr>
+            <tr class="song-accordion-row" id="song-panel-{{.ID}}" hidden>
+                <td colspan="{{if and $.CurrentUser (isEditorOrAdmin $.CurrentUser.Role)}}7{{else}}6{{end}}">
+                    <div class="song-accordion-panel" aria-live="polite">
+                        <p class="quick-view-loading">Loading chart and transpose controls…</p>
+                    </div>
+                </td>
+            </tr>
         {{else}}
             <tr><td colspan="{{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}7{{else}}6{{end}}" style="text-align: center; padding: 3rem; color: var(--text-muted);">No songs found. Try clearing your filters or adding a new song.</td></tr>
         {{end}}
         </tbody>
     </table>
 </div>
-
-<!-- Quick View Modal -->
-<dialog id="preview-modal" class="quick-view-dialog" aria-labelledby="quick-view-dialog-title">
-    <div class="quick-view-dialog-header">
-        <h2 id="quick-view-dialog-title">Song quick view</h2>
-        <button type="button" class="quick-view-close" id="close-preview" aria-label="Close quick view">×</button>
-    </div>
-    <div id="preview-body" aria-live="polite" aria-busy="false">
-        <p class="quick-view-loading">Choose Quick view on a song to see its chart.</p>
-    </div>
-</dialog>
 
 <!-- PDF Modal -->
 <div id="pdf-modal" class="modal-overlay" style="display: none;" onclick="closePdfModal(event)">
@@ -192,31 +191,25 @@ function closePdfModal(e) {
     document.getElementById('pdf-modal').style.display = 'none';
 }
 
-const previewDialog = document.getElementById('preview-modal');
-const previewBody = document.getElementById('preview-body');
-const previewClose = document.getElementById('close-preview');
-let previewRequest;
-let previewOpener;
+const chartRequests = new WeakMap();
 
-function showPreview(songId, opener) {
-    previewRequest?.abort();
-    previewOpener = opener;
-    previewDialog.showModal();
-    previewClose.focus();
-    loadPreview(songId);
-}
-
-function loadPreview(songId) {
-    previewRequest?.abort();
+function loadSongChart(container, songId, offset, showLoading = true) {
+    chartRequests.get(container)?.abort();
     const request = new AbortController();
-    previewRequest = request;
-    previewBody.setAttribute('aria-busy', 'true');
-    const loading = document.createElement('p');
-    loading.className = 'quick-view-loading';
-    loading.textContent = 'Loading song and chart…';
-    previewBody.replaceChildren(loading);
+    chartRequests.set(container, request);
+    container.setAttribute('aria-busy', 'true');
+    const currentContent = container.querySelector('.quick-view-content');
+    if (showLoading || !currentContent) {
+        const loading = document.createElement('p');
+        loading.className = 'quick-view-loading';
+        loading.textContent = 'Loading song and chart…';
+        container.replaceChildren(loading);
+    } else {
+        const status = currentContent.querySelector('.transpose-status');
+        if (status) status.textContent = 'Updating chart…';
+    }
 
-    fetch(`/songs/${encodeURIComponent(songId)}/preview`, {
+    fetch(`/songs/${encodeURIComponent(songId)}/preview?semitones=${offset}`, {
         headers: { Accept: 'text/html' },
         signal: request.signal
     }).then(response => {
@@ -228,9 +221,14 @@ function loadPreview(songId) {
         const parsed = new DOMParser().parseFromString(html, 'text/html');
         const content = parsed.querySelector('.quick-view-content');
         if (!content) throw new Error('The preview response was incomplete. Please try again.');
-        previewBody.replaceChildren(document.importNode(content, true));
+        container.replaceChildren(document.importNode(content, true));
     }).catch(error => {
         if (error.name === 'AbortError') return;
+        if (container.querySelector('.quick-view-content')) {
+            const status = container.querySelector('.transpose-status');
+            if (status) status.textContent = error.message || 'Could not transpose chart.';
+            return;
+        }
         const message = document.createElement('p');
         message.className = 'quick-view-error';
         message.setAttribute('role', 'alert');
@@ -239,30 +237,70 @@ function loadPreview(songId) {
         retry.type = 'button';
         retry.className = 'button-secondary btn-sm';
         retry.textContent = 'Try again';
-        retry.addEventListener('click', () => loadPreview(songId), { once: true });
-        previewBody.replaceChildren(message, retry);
+        retry.addEventListener('click', () => loadSongChart(container, songId, offset), { once: true });
+        container.replaceChildren(message, retry);
     }).finally(() => {
-        if (previewRequest === request) previewBody.setAttribute('aria-busy', 'false');
+        if (chartRequests.get(container) === request) container.setAttribute('aria-busy', 'false');
     });
 }
 
-document.querySelectorAll('.quick-view-button').forEach(button => {
-    button.addEventListener('click', () => showPreview(button.dataset.songId, button));
+document.querySelectorAll('.song-expand-button').forEach(button => {
+    button.addEventListener('click', () => {
+        const panelRow = document.getElementById(button.getAttribute('aria-controls'));
+        const panel = panelRow.querySelector('.song-accordion-panel');
+        const open = button.getAttribute('aria-expanded') === 'true';
+        if (!open) {
+            document.querySelectorAll('.song-expand-button[aria-expanded="true"]').forEach(other => {
+                if (other === button) return;
+                other.setAttribute('aria-expanded', 'false');
+                other.textContent = 'Chart & transpose';
+                document.getElementById(other.getAttribute('aria-controls')).hidden = true;
+            });
+        }
+        button.setAttribute('aria-expanded', String(!open));
+        panelRow.hidden = open;
+        button.textContent = open ? 'Chart & transpose' : 'Hide chart';
+        if (!open && !panel.querySelector('.quick-view-content') && !panel.querySelector('.quick-view-error')) {
+            loadSongChart(panel, button.dataset.songId, 0);
+        }
+        if (!open) panelRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+});
+document.addEventListener('click', event => {
+    const button = event.target.closest('.transpose-step, .transpose-reset');
+    if (!button) return;
+    const content = button.closest('.quick-view-content');
+    if (!content) return;
+    event.preventDefault();
+    const currentOffset = Number(content.dataset.transpose || 0);
+    const nextOffset = button.classList.contains('transpose-reset')
+        ? 0
+        : Math.max(-12, Math.min(12, currentOffset + Number(button.dataset.semitones)));
+    if (nextOffset !== currentOffset) {
+        loadSongChart(content.parentElement, content.dataset.songId, nextOffset, false);
+    }
+});
+document.addEventListener('change', event => {
+    const select = event.target.closest('.transpose-key-select');
+    if (!select) return;
+    const content = select.closest('.quick-view-content');
+    if (!content) return;
+    const pitchClasses = {
+        C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5,
+        'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11,
+        Db: 1, Eb: 3, Gb: 6, Ab: 8, Bb: 10
+    };
+    const baseRoot = content.dataset.baseKey.replace(/m$/, '');
+    const targetRoot = select.value.replace(/m$/, '');
+    if (pitchClasses[baseRoot] === undefined || pitchClasses[targetRoot] === undefined) return;
+    let offset = (pitchClasses[targetRoot] - pitchClasses[baseRoot] + 12) % 12;
+    if (offset > 6) offset -= 12;
+    loadSongChart(content.parentElement, content.dataset.songId, offset, false);
 });
 document.querySelectorAll('.pdf-button').forEach(button => {
     button.addEventListener('click', event =>
         showPdfModal(button.dataset.songId, button.dataset.songTitle, event));
 });
-previewClose.addEventListener('click', () => previewDialog.close());
-previewDialog.addEventListener('click', event => {
-    if (event.target === previewDialog) previewDialog.close();
-});
-previewDialog.addEventListener('close', () => {
-    previewRequest?.abort();
-    previewBody.setAttribute('aria-busy', 'false');
-    previewOpener?.focus();
-});
-
 const songSelections = [...document.querySelectorAll('.song-select')];
 const selectAllSongs = document.getElementById('select-all-songs');
 const selectedCount = document.getElementById('selected-song-count');

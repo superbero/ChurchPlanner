@@ -1,8 +1,9 @@
 {{define "content"}}
 <div class="page-header song-header">
     <div>
+        <p class="song-breadcrumb"><a href="/songs">Songs</a><span aria-hidden="true">/</span>{{.Song.Title}}</p>
         <h1>{{.Song.Title}} {{if .Song.Archived}}<span class="chip">archived</span>{{end}}</h1>
-        <p class="author">{{.Song.Author}}</p>
+        {{if .Song.Author}}<p class="author">{{.Song.Author}}</p>{{end}}
 
         <div class="meta-chips">
             {{if .Song.CCLINumber}}<span class="meta-chip" title="CCLI Number"><strong>CCLI:</strong> {{.Song.CCLINumber}}</span>{{end}}
@@ -28,7 +29,15 @@
 
     <!-- LEFT COLUMN: Arrangements -->
     <div class="song-main">
-        <h2>Arrangements</h2>
+        <div class="song-section-heading">
+            <div>
+                <h2>Arrangements</h2>
+                <p class="muted">{{len .Arrangements}} version(s) available for this song.</p>
+            </div>
+            {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
+            <a href="/songs/{{.Song.ID}}/arrangements/new" class="button-secondary">+ Add arrangement</a>
+            {{end}}
+        </div>
         {{if .Arrangements}}
         <div class="arrangement-list">
             {{range .Arrangements}}
@@ -40,9 +49,10 @@
                         {{if .Arrangement.Archived}}<span class="chip">archived</span>{{end}}
                     </h3>
                     <div class="arrangement-meta">
-                        <span><strong>Key:</strong> {{.Arrangement.OriginalKey}}</span>
+                        {{if .Arrangement.OriginalKey}}<span><strong>Key:</strong> {{.Arrangement.OriginalKey}}</span>{{end}}
                         {{if .Arrangement.BPM}}<span><strong>BPM:</strong> {{.Arrangement.BPM}}</span>{{end}}
-                        {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}}s</span>{{end}}
+                        {{if .Arrangement.Meter}}<span><strong>Meter:</strong> {{.Arrangement.Meter}}</span>{{end}}
+                        {{if .Arrangement.LengthSeconds}}<span><strong>Length:</strong> {{.Arrangement.LengthSeconds}} sec</span>{{end}}
                     </div>
                     {{if .Keys}}
                     <div class="arrangement-keys">
@@ -74,16 +84,20 @@
         </div>
         {{else}}
         <div class="empty-state">
-            <p>No arrangements yet. You need an arrangement to start building a chord chart.</p>
+            <div class="song-empty-icon" aria-hidden="true">♫</div>
+            <h3>No arrangements yet</h3>
+            <p class="muted">An arrangement stores a song’s lyrics, chords, key, and tempo.</p>
             {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-            <a href="/songs/{{.Song.ID}}/arrangements/new" class="button">Create First Arrangement</a>
+            <a href="/songs/{{.Song.ID}}/arrangements/new" class="button">Create the first arrangement</a>
             {{end}}
         </div>
         {{end}}
 
         {{if .Song.Notes}}
-        <h2 style="margin-top: 2rem;">Notes</h2>
-        <div class="song-notes">{{.Song.Notes}}</div>
+        <section class="song-notes-card">
+            <h2>Song notes</h2>
+            <p>{{.Song.Notes}}</p>
+        </section>
         {{end}}
     </div>
 
@@ -91,75 +105,103 @@
     <div class="song-sidebar">
 
         <!-- Share for Practice -->
-        <div class="sidebar-card">
-            <h3>Share for practice</h3>
-            <p class="muted" style="font-size: 0.9em; margin-bottom: 1rem;">
-                Generate a link volunteers can open without logging in. They'll see the chart, YouTube video, and a PDF download.
-            </p>
+        <section class="sidebar-card">
+            <div class="sidebar-card-heading">
+                <span class="sidebar-icon" aria-hidden="true">↗</span>
+                <div>
+                    <h3>Share for practice</h3>
+                    <p class="muted">Give volunteers a private link to the chart and PDF.</p>
+                </div>
+            </div>
             {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
             <form method="post" action="/songs/{{.Song.ID}}/practice-links" class="practice-form">
-                <div class="input-group">
-                    <input type="number" name="ttl_days" value="30" min="1" max="365" required style="width: 70px;">
-                    <span class="muted">days</span>
-                    <button type="submit" class="button" style="margin-left:auto;">Generate Link</button>
+                <label for="practice-link-days">Link expires after</label>
+                <div class="practice-form-row">
+                    <input id="practice-link-days" type="number" name="ttl_days" value="30" min="1" max="365" required>
+                    <span>days</span>
+                    <button type="submit" class="button">Generate link</button>
                 </div>
             </form>
             {{end}}
             {{if .PracticeToken}}
             <div class="practice-result">
-                <strong>New link:</strong> <a href="/practice/{{.PracticeToken}}" target="_blank">/practice/{{.PracticeToken}}</a>
+                <p><strong>Your practice link is ready</strong></p>
+                <div class="practice-link-row">
+                    <a href="/practice/{{.PracticeToken}}" target="_blank" rel="noopener">Open practice link ↗</a>
+                    <button type="button" class="button-secondary btn-sm copy-practice-link"
+                            data-copy-url="{{.PracticeURL}}">Copy link</button>
+                </div>
+                <span class="copy-status muted" role="status" aria-live="polite"></span>
             </div>
             {{end}}
-        </div>
+        </section>
 
         <!-- Key History -->
-        <div class="sidebar-card">
-            <h3>Key History</h3>
-            <p class="muted" style="font-size: 0.9em; margin-bottom: 1rem;">Record which key was used on a specific date.</p>
+        <section class="sidebar-card">
+            <div class="sidebar-card-heading">
+                <span class="sidebar-icon" aria-hidden="true">♫</span>
+                <div>
+                    <h3>Key history</h3>
+                    <p class="muted">Keep track of the key used at each service.</p>
+                </div>
+            </div>
 
             {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
             <form method="post" action="/songs/{{.Song.ID}}/history" class="history-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" name="used_on" required>
-                    </div>
-                    <div class="form-group" style="flex: 0 0 80px;">
-                        <label>Key</label>
-                        <input type="text" name="key" value="{{.Song.Key}}" required placeholder="G">
-                    </div>
+                <div class="history-form-grid">
+                    <label for="history-used-on">Service date
+                        <input id="history-used-on" type="date" name="used_on" required>
+                    </label>
+                    <label for="history-key">Key
+                        <input id="history-key" type="text" name="key" value="{{.Song.OriginalKey}}"
+                               required maxlength="8" placeholder="e.g. G">
+                    </label>
                 </div>
-                <div class="form-group">
-                    <label>Notes (optional)</label>
-                    <input type="text" name="notes" placeholder="e.g. Sunday Service">
-                </div>
-                <button type="submit" class="button-secondary" style="width: 100%; margin-top: 0.5rem;">Record Key</button>
+                <label for="history-notes">Service or notes <span class="muted">(optional)</span>
+                    <input id="history-notes" type="text" name="notes" maxlength="200"
+                           placeholder="e.g. Sunday morning">
+                </label>
+                <button type="submit" class="button-secondary">Record key</button>
             </form>
             {{end}}
 
             {{if .History}}
-            <table class="history-table">
-                <thead><tr><th>Date</th><th>Key</th><th>Notes</th></tr></thead>
-                <tbody>
+            <ol class="history-list" aria-label="Previously used keys">
                 {{range .History}}
-                    <tr>
-                        <td>{{.UsedOn.Format "2 Jan 2006"}}</td>
-                        <td><strong>{{.Key}}</strong></td>
-                        <td class="muted">{{.Notes}}</td>
-                    </tr>
+                <li class="history-item">
+                    <span class="history-key">{{.Key}}</span>
+                    <div>
+                        <strong>{{.UsedOn.Format "2 Jan 2006"}}</strong>
+                        {{if .Notes}}<p>{{.Notes}}</p>{{end}}
+                    </div>
+                </li>
                 {{end}}
-                </tbody>
-            </table>
+            </ol>
             {{else}}
-            <p class="muted" style="font-size: 0.9em; margin-top: 1rem; text-align: center;">No history recorded.</p>
+            <p class="history-empty muted">No keys recorded yet. Add one above after a service.</p>
             {{end}}
-        </div>
+        </section>
 
         {{if and .CurrentUser (isEditorOrAdmin .CurrentUser.Role)}}
-        <form method="post" action="/songs/{{.Song.ID}}/delete" onsubmit="return confirm('Delete song and all arrangements?')">
-            <button type="submit" class="link-btn" style="color:#b42318; width: 100%; margin-top: 1rem;">Delete Song</button>
+        <form method="post" action="/songs/{{.Song.ID}}/delete" class="song-delete-form"
+              onsubmit="return confirm('Permanently remove this song and all arrangements? This cannot be undone.')">
+            <button type="submit" class="link-btn">Remove song from library</button>
         </form>
         {{end}}
     </div>
 </div>
+<script>
+document.querySelectorAll('.copy-practice-link').forEach(button => {
+    button.addEventListener('click', async () => {
+        const status = button.closest('.practice-result').querySelector('.copy-status');
+        try {
+            await navigator.clipboard.writeText(new URL(button.dataset.copyUrl, window.location.origin).href);
+            status.textContent = 'Copied to clipboard.';
+            button.textContent = 'Copied';
+        } catch {
+            status.textContent = 'Copy was blocked by the browser. Use “Open practice link” and copy its address.';
+        }
+    });
+});
+</script>
 {{end}}
