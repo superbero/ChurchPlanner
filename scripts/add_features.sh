@@ -4,216 +4,118 @@ set -uo pipefail
 [ -f go.mod ] || { echo "✗ run from project root"; exit 1; }
 
 echo "════════════════════════════════════════════════════════════════"
-echo "  Fixing Kebab Menu Stacking Issue"
+echo "  Adding Auto-Date selection based on Service Type"
 echo "════════════════════════════════════════════════════════════════"
 
-echo "▸ [1/3] Rewriting kebab menu CSS cleanly"
-python3 - <<'PYEOF'
-from pathlib import Path
-import re
+echo "▸ [1/2] Updating plan_form.html"
+cat > internal/scheduling/templates/plan_form.html <<'HTMLEOF'
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="/plans">← All plans</a></p>
+        <h1>{{if .IsNew}}New plan{{else}}Edit plan{{end}}</h1>
+    </div>
+</div>
 
-p = Path("internal/web/static/css/app.css")
-src = p.read_text()
+{{with .Error}}
+<div class="error" style="margin-bottom: 1.5rem;">{{.}}</div>
+{{end}}
 
-# Remove any previously added kebab/table fixes to avoid conflicts
-# Remove the block we added earlier
-for marker in [
-    '/* Fix table corners since we removed overflow: hidden */',
-    '/* ── Kebab Menu (Three Dots) ───────────────────────────────────── */',
-]:
-    if marker in src:
-        # Find the end of this block (next blank line followed by new comment, or EOF)
-        start = src.find(marker)
-        # Simple approach: remove up to the next triple newline or end of relevant section
-        # For simplicity, let's just remove everything from marker to end and re-add
-        if marker == '/* Fix table corners since we removed overflow: hidden */':
-            src = src[:start]
-        elif marker == '/* ── Kebab Menu (Three Dots) ───────────────────────────────────── */':
-            # Just remove the kebab CSS block
-            end_marker = '/* '
-            next_idx = src.find('\n\n/* ', start + len(marker))
-            if next_idx != -1:
-                src = src[:start] + src[next_idx:]
-            else:
-                src = src[:start]
+<div class="card" style="max-width: 640px;">
+    <form method="post" action="{{if .IsNew}}/plans{{else}}/plans/{{.Plan.ID}}{{end}}">
 
-# Ensure table-container is correct
-src = re.sub(
-    r'\.table-container\s*\{[^}]*\}',
-    '''.table-container {
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    overflow: visible;
-    box-shadow: var(--shadow-sm);
-}''',
-    src,
-    count=1
-)
+        <label>Service type
+            <select name="service_type_id" id="service-type-select" required>
+                {{range .ServiceTypes}}
+                <option value="{{.ID}}" {{if eq .ID $.Plan.ServiceTypeID}}selected{{end}}>{{.Name}}</option>
+                {{end}}
+            </select>
+        </label>
 
-# Add fresh, corrected kebab menu CSS
-src += '''
+        <label>Title
+            <input name="title" value="{{.Plan.Title}}" required placeholder="e.g. Sunday Morning Service">
+        </label>
 
-/* ── Kebab Menu (Three Dots) ───────────────────────────────────── */
-/* Ensure table rows don't clip dropdowns */
-.table-container tr {
-    position: static;
-    z-index: auto;
-}
+        <h3 style="margin-top: 1.5rem; margin-bottom: 0.25rem; font-size: 1rem;">Service window</h3>
+        <p class="muted" style="font-size: 0.85em; margin-top: 0; margin-bottom: 1rem;">
+            The primary service time. A time slot with these exact start/end values is created automatically.
+        </p>
 
-/* Only the row with an open menu gets elevated */
-.table-container tr.menu-open {
-    position: relative;
-    z-index: 100;
-}
+        <label>Date
+            <input type="date" name="service_date" id="service-date-input" value="{{.Plan.ServiceAt.Format "2006-01-02"}}" required>
+        </label>
 
-.kebab-menu {
-    position: relative;
-    display: inline-block;
-}
+        <div class="row">
+            <label>Start time
+                <input type="time" name="service_start" value="{{.Plan.ServiceAt.Format "15:04"}}" required>
+            </label>
+            <label>End time
+                <input type="time" name="service_end" value="{{.Plan.ServiceEndsAt.Format "15:04"}}" required>
+            </label>
+        </div>
 
-.kebab-btn {
-    list-style: none;
-    cursor: pointer;
-    padding: 0.35rem 0.6rem;
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    font-size: 1.2rem;
-    font-weight: bold;
-    border: 1px solid transparent;
-    user-select: none;
-}
-.kebab-btn::-webkit-details-marker {
-    display: none;
-}
-.kebab-btn:hover {
-    background: var(--bg-hover);
-    border-color: var(--border);
-    color: var(--text-main);
-}
+        <label>Notes
+            <textarea name="notes" rows="4" placeholder="Optional internal notes...">{{.Plan.Notes}}</textarea>
+        </label>
 
-.kebab-dropdown {
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: 0.25rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15), 0 4px 6px rgba(0,0,0,0.05);
-    min-width: 160px;
-    z-index: 9999;
-    padding: 0.5rem 0;
-}
+        <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+            <button type="submit" class="button">Save</button>
+            <a href="{{if .IsNew}}/plans{{else}}/plans/{{.Plan.ID}}{{end}}" class="button-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
 
-.kebab-dropdown a,
-.kebab-dropdown button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 0.5rem 1rem;
-    font: inherit;
-    font-size: 0.9rem;
-    color: var(--text-main);
-    background: transparent;
-    border: 0;
-    text-decoration: none;
-    cursor: pointer;
-}
-.kebab-dropdown a:hover,
-.kebab-dropdown button:hover {
-    background: var(--bg-hover);
-    text-decoration: none;
-}
-.kebab-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 0.5rem 0;
-}
-.kebab-dropdown .kebab-danger {
-    color: var(--danger);
-}
-.kebab-dropdown .kebab-danger:hover {
-    background: var(--danger-bg);
-}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeSelect = document.getElementById('service-type-select');
+        const dateInput = document.getElementById('service-date-input');
 
-/* Table corner rounding (replacing overflow: hidden) */
-.table-container thead tr:first-child th:first-child {
-    border-top-left-radius: var(--radius-md);
-}
-.table-container thead tr:first-child th:last-child {
-    border-top-right-radius: var(--radius-md);
-}
-.table-container tbody tr:last-child td:first-child {
-    border-bottom-left-radius: var(--radius-md);
-}
-.table-container tbody tr:last-child td:last-child {
-    border-bottom-right-radius: var(--radius-md);
-}
-'''
-p.write_text(src)
-print("  ✓ CSS completely rewritten for kebab menu")
-PYEOF
+        if (!typeSelect || !dateInput) return;
 
-echo "▸ [2/3] Adding JS to toggle menu-open class"
-python3 - <<'PYEOF'
-from pathlib import Path
-p = Path("internal/web/static/js/app.js")
-src = p.read_text()
+        typeSelect.addEventListener('change', function() {
+            // Get the visible text of the selected option
+            const selectedText = this.options[this.selectedIndex].text.trim();
 
-if '// Kebab menu row elevation' not in src:
-    src += '''
+            let targetDay = -1;
+            if (selectedText.includes('Sunday')) targetDay = 0;
+            else if (selectedText.includes('Midweek') || selectedText.includes('Wednesday')) targetDay = 3;
+            else if (selectedText.includes('Louange') || selectedText.includes('Friday')) targetDay = 5;
 
-// Kebab menu row elevation
-// Prevents table rows from painting over the dropdown menu
-(function () {
-    document.addEventListener('toggle', function (e) {
-        if (!e.target.matches('details.kebab-menu')) return;
+            // If it's a custom type like Cohesion or Training Day, targetDay stays -1 (manual)
 
-        const tr = e.target.closest('tr');
-        if (!tr) return;
+            if (targetDay !== -1) {
+                const today = new Date();
+                const currentDay = today.getDay();
+                let distance = targetDay - currentDay;
 
-        if (e.target.open) {
-            // Close all other open menus first
-            document.querySelectorAll('details.kebab-menu[open]').forEach(d => {
-                if (d !== e.target) d.open = false;
-            });
-            tr.classList.add('menu-open');
-        } else {
-            tr.classList.remove('menu-open');
-        }
-    }, true); // useCapture=true because toggle doesn't bubble
+                // If the target day is today or has passed this week, jump to next week
+                if (distance <= 0) {
+                    distance += 7;
+                }
 
-    // Close menu when clicking outside
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest('details.kebab-menu')) {
-            document.querySelectorAll('details.kebab-menu[open]').forEach(d => {
-                d.open = false;
-            });
+                // Calculate the next date
+                const nextDate = new Date(today.getTime() + distance * 24 * 60 * 60 * 1000);
+
+                // Format as YYYY-MM-DD for the input
+                const yyyy = nextDate.getFullYear();
+                const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(nextDate.getDate()).padStart(2, '0');
+
+                dateInput.value = `${yyyy}-${mm}-${dd}`;
+            }
+        });
+
+        // If the user creates a new plan and hasn't picked a date, trigger the logic on load
+        if (!dateInput.value && typeSelect.value) {
+            typeSelect.dispatchEvent(new Event('change'));
         }
     });
-})();
-'''
-    p.write_text(src)
-    print("  ✓ JS toggle logic added")
-else:
-    print("  · JS already present")
-PYEOF
+</script>
+{{end}}
+HTMLEOF
+echo "  ✓ plan_form.html updated with auto-date logic"
 
-echo "▸ [3/3] Bumping cache & building"
-python3 - <<'PYEOF'
-from pathlib import Path
-import re
-p = Path("internal/web/templates/layout.html")
-src = p.read_text()
-m = re.search(r'app\.(css|js)\?v=(\d+)', src)
-if m:
-    new_v = int(m.group(2)) + 1
-    src = src.replace(f'app.css?v={m.group(2)}', f'app.css?v={new_v}')
-    src = src.replace(f'app.js?v={m.group(2)}', f'app.js?v={new_v}')
-    p.write_text(src)
-PYEOF
-
+echo "▸ [2/2] Build & Restart"
 if ! go build ./...; then
     echo "✗ build failed — paste errors"
     exit 1

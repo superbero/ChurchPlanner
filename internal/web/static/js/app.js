@@ -382,3 +382,34 @@ window.removeStaged = function(index) {
         });
     });
 })();
+
+
+// Kebab menu row elevation
+// Prevents table rows from painting over the dropdown menu
+(function () {
+    document.addEventListener('toggle', function (e) {
+        if (!e.target.matches('details.kebab-menu')) return;
+
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+
+        if (e.target.open) {
+            // Close all other open menus first
+            document.querySelectorAll('details.kebab-menu[open]').forEach(d => {
+                if (d !== e.target) d.open = false;
+            });
+            tr.classList.add('menu-open');
+        } else {
+            tr.classList.remove('menu-open');
+        }
+    }, true); // useCapture=true because toggle doesn't bubble
+
+    // Close menu when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('details.kebab-menu')) {
+            document.querySelectorAll('details.kebab-menu[open]').forEach(d => {
+                d.open = false;
+            });
+        }
+    });
+})();

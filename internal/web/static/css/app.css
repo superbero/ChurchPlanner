@@ -637,10 +637,11 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 
 /* Table Container */
 .table-container {
-    background: #fff;
+    background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
+    border-radius: var(--radius-md);
+    overflow: visible;
+    box-shadow: var(--shadow-sm);
 }
 .table-container table {
     margin: 0;
@@ -1663,12 +1664,26 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 }
 
 
+
+
 /* ── Kebab Menu (Three Dots) ───────────────────────────────────── */
+/* Ensure table rows don't clip dropdowns */
+.table-container tr {
+    position: static;
+    z-index: auto;
+}
+
+/* Only the row with an open menu gets elevated */
+.table-container tr.menu-open {
+    position: relative;
+    z-index: 100;
+}
+
 .kebab-menu {
     position: relative;
     display: inline-block;
-    text-align: left;
 }
+
 .kebab-btn {
     list-style: none;
     cursor: pointer;
@@ -1678,6 +1693,7 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     font-size: 1.2rem;
     font-weight: bold;
     border: 1px solid transparent;
+    user-select: none;
 }
 .kebab-btn::-webkit-details-marker {
     display: none;
@@ -1687,6 +1703,7 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     border-color: var(--border);
     color: var(--text-main);
 }
+
 .kebab-dropdown {
     position: absolute;
     right: 0;
@@ -1695,11 +1712,12 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15), 0 4px 6px rgba(0,0,0,0.05);
     min-width: 160px;
-    z-index: 100;
+    z-index: 9999;
     padding: 0.5rem 0;
 }
+
 .kebab-dropdown a,
 .kebab-dropdown button {
     display: block;
@@ -1717,6 +1735,7 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 .kebab-dropdown a:hover,
 .kebab-dropdown button:hover {
     background: var(--bg-hover);
+    text-decoration: none;
 }
 .kebab-divider {
     height: 1px;
@@ -1730,29 +1749,38 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
     background: var(--danger-bg);
 }
 
-
-/* Fix table corners since we removed overflow: hidden */
-thead tr:first-child th:first-child {
+/* Table corner rounding (replacing overflow: hidden) */
+.table-container thead tr:first-child th:first-child {
     border-top-left-radius: var(--radius-md);
 }
-thead tr:first-child th:last-child {
+.table-container thead tr:first-child th:last-child {
     border-top-right-radius: var(--radius-md);
 }
-tbody tr:last-child td:first-child {
+.table-container tbody tr:last-child td:first-child {
     border-bottom-left-radius: var(--radius-md);
 }
-tbody tr:last-child td:last-child {
+.table-container tbody tr:last-child td:last-child {
     border-bottom-right-radius: var(--radius-md);
 }
 
-/* Ensure the kebab menu sits above the other rows */
-tr {
-    position: relative;
-    z-index: 1;
+
+/* Danger Button (Delete) */
+.button-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-surface);
+    color: var(--danger);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: 0.9rem;
+    border: 1px solid var(--danger);
+    cursor: pointer;
+    transition: all 0.15s;
 }
-tr:has(.kebab-menu[open]) {
-    z-index: 50;
-}
-.kebab-menu {
-    z-index: 10;
+.button-danger:hover {
+    background: var(--danger);
+    color: #fff;
+    text-decoration: none;
 }
