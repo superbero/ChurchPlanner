@@ -6,7 +6,11 @@
     <form method="post" action="/people/{{.User.ID}}" class="profile-form">
 
         <h2>Account</h2>
-        <label>Email <input value="{{.User.Email}}" disabled></label>
+        <label>Email
+            <input type="email" name="email" value="{{.User.Email}}" required maxlength="254"
+                   {{if not .CanAssignPrivilegedRoles}}readonly{{end}}>
+            {{if not .CanAssignPrivilegedRoles}}<small class="muted">Only an organization administrator can change this address.</small>{{end}}
+        </label>
         <label>Title / Position <input name="title" value="{{.User.Title}}" placeholder="e.g. Worship Director"></label>
 
         <div class="row">

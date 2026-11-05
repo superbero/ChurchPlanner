@@ -2,12 +2,17 @@ package people
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 )
+
+var ErrEmailTaken = errors.New("email address is already in use")
 
 type Repository struct{ db *pgxpool.Pool }
 
@@ -96,16 +101,30 @@ func (r *Repository) Create(ctx context.Context, name, title, email, password, r
 	return id, err
 }
 
-func (r *Repository) Update(ctx context.Context, id, title, phone, vocalLow, vocalHigh, role, status string) error {
+func (r *Repository) Update(ctx context.Context, id, title, email, phone, vocalLow, vocalHigh, role, status string) error {
 	if role == "" {
 		role = auth.RoleScheduledViewer
 	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	var exists bool
+	if err := r.db.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM users WHERE lower(email) = $1 AND id <> $2)
+	`, email, id).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrEmailTaken
+	}
 	_, err := r.db.Exec(ctx, `
 		UPDATE users
-		SET title = $2, phone = $3, vocal_low = $4, vocal_high = $5, role = $6, status = $7,
+		SET title = $2, email = $3, phone = $4, vocal_low = $5, vocal_high = $6, role = $7, status = $8,
 		    updated_at = now()
 		WHERE id = $1
-	`, id, title, phone, vocalLow, vocalHigh, role, status)
+	`, id, title, email, phone, vocalLow, vocalHigh, role, status)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrEmailTaken
+	}
 	return err
 }
 

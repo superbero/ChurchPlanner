@@ -87,6 +87,8 @@ func TestPeopleEditTemplateUsesUserStatusTitleAndMemberships(t *testing.T) {
 	}
 	for _, want := range []string{
 		`action="/people/user-1"`, `name="title" value="Worship Director"`,
+		`type="email" name="email" value="alex@example.com" required maxlength="254"`,
+		`readonly`,
 		`value="suspended" selected`, `value="editor"`,
 		`type="tel" name="phone"`, `placeholder="+1 555-0100"`,
 		`pattern="\+[1-9][0-9\s().-]{5,24}"`,
@@ -97,9 +99,31 @@ func TestPeopleEditTemplateUsesUserStatusTitleAndMemberships(t *testing.T) {
 			t.Errorf("people edit page missing %q", want)
 		}
 	}
+
 	for _, wrong := range []string{`value="volunteer"`, `value="guest"`} {
 		if strings.Contains(response.Body.String(), wrong) {
 			t.Errorf("people edit page contains obsolete role option %q", wrong)
 		}
+	}
+}
+
+func TestPeopleAdminCanEditEmail(t *testing.T) {
+	renderer := newPeopleTestRenderer(t)
+	response := httptest.NewRecorder()
+	renderer.Render(response, httptest.NewRequest(http.MethodGet, "/people/user-1", nil), http.StatusOK,
+		"people_view", map[string]any{
+			"User":                     auth.User{ID: "user-1", Name: "Alex Doe", Email: "alex@example.com"},
+			"Positions":                []scheduling.Position{},
+			"SkillMap":                 map[string]bool{},
+			"Teams":                    []scheduling.Team{},
+			"MembershipRoles":          map[string]string{},
+			"CanAssignPrivilegedRoles": true,
+		})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if !strings.Contains(response.Body.String(), `type="email" name="email" value="alex@example.com" required maxlength="254"`) ||
+		strings.Contains(response.Body.String(), `readonly`) {
+		t.Errorf("admin email field is not editable")
 	}
 }

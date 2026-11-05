@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"regexp"
 	"strings"
 
@@ -132,6 +133,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid account status", http.StatusBadRequest)
 		return
 	}
+	email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
+	parsedEmail, emailErr := mail.ParseAddress(email)
+	if emailErr != nil || parsedEmail.Address != email || len(email) > 254 {
+		http.Error(w, "Enter a valid email address.", http.StatusUnprocessableEntity)
+		return
+	}
+	if email != strings.ToLower(strings.TrimSpace(target.Email)) && requester.Role != auth.RoleAdmin {
+		http.Error(w, "only an organization administrator can change a user's email address", http.StatusForbidden)
+		return
+	}
 	phone, err := normalizePhone(r.FormValue("phone"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -142,12 +153,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		id,
 		strings.TrimSpace(r.FormValue("title")),
+		email,
 		phone,
 		strings.TrimSpace(r.FormValue("vocal_low")),
 		strings.TrimSpace(r.FormValue("vocal_high")),
 		role,
 		status,
 	); err != nil {
+		if errors.Is(err, ErrEmailTaken) {
+			http.Error(w, "That email address is already associated with another account.", http.StatusConflict)
+			return
+		}
 		httpx.ServerError(w, err)
 		return
 	}

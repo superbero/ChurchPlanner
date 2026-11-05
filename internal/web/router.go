@@ -83,7 +83,13 @@ func NewRouter(d Deps) (http.Handler, error) {
 
 	// --- Public: login ---
 	r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
-		renderer.Render(w, r, http.StatusOK, "web_login", nil)
+		var data map[string]any
+		if r.URL.Query().Get("error") == "account_suspended" {
+			data = map[string]any{
+				"Error": "Your account has been suspended. Please contact your church leader or administrator for assistance.",
+			}
+		}
+		renderer.Render(w, r, http.StatusOK, "web_login", data)
 	})
 	r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
