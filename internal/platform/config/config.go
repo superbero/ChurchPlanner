@@ -19,6 +19,8 @@ type Config struct {
 	SMTPUser string
 	SMTPPass string
 	SMTPFrom string
+
+	AppEncryptionKey string
 }
 
 func Load() (Config, error) {
@@ -31,11 +33,12 @@ func Load() (Config, error) {
 		TranslateAPIKey: os.Getenv("TRANSLATE_API_KEY"),
 		PrimaryLanguage: getenv("PRIMARY_LANGUAGE", "en"),
 
-		SMTPHost: getenv("SMTP_HOST", ""),
-		SMTPPort: getenv("SMTP_PORT", "587"),
-		SMTPUser: os.Getenv("SMTP_USER"),
-		SMTPPass: os.Getenv("SMTP_PASS"),
-		SMTPFrom: getenv("SMTP_FROM", "noreply@church.local"),
+		SMTPHost:         getenv("SMTP_HOST", ""),
+		SMTPPort:         getenv("SMTP_PORT", "587"),
+		SMTPUser:         os.Getenv("SMTP_USER"),
+		SMTPPass:         os.Getenv("SMTP_PASS"),
+		SMTPFrom:         getenv("SMTP_FROM", "noreply@church.local"),
+		AppEncryptionKey: os.Getenv("APP_ENCRYPTION_KEY"),
 	}
 
 	if c.DatabaseURL == "" {

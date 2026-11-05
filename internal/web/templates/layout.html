@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{block "title" .}}Church Planner{{end}}</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=49">
+    <link rel="stylesheet" href="/static/css/app.css?v=50">
     <script src="/static/js/app.js?v=13" defer></script>
 </head>
 <body>
@@ -20,6 +20,7 @@
                     <a href="/songs">Songs</a>
                     <a href="/calendar">Calendar</a>
                     <a href="/reports/ccli">Reports</a>
+                    <a href="/settings/email">Email settings</a>
                 {{else if eq .CurrentUser.Role "manager"}}
                     <a href="/plans">Plans</a>
                     <a href="/people">People</a>

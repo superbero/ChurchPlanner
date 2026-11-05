@@ -1,0 +1,50 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <h1>Email delivery</h1>
+        <p class="muted">Configure SMTP for password reset links and other ChurchPlanner email.</p>
+    </div>
+</div>
+
+{{if .Saved}}<p class="password-reset-success" role="status">SMTP settings saved.</p>{{end}}
+{{if .TestSent}}<p class="password-reset-success" role="status">Test email sent.</p>{{end}}
+
+<section class="email-settings-card">
+    {{if .Configured}}
+    <p><strong>Status:</strong> SMTP is configured{{if .PasswordSet}} and the password is stored encrypted.{{end}}</p>
+    {{else}}
+    <p><strong>Status:</strong> SMTP is not configured.</p>
+    {{end}}
+    <form method="post" action="/settings/email">
+        <label>SMTP host
+            <input name="host" value="{{.Host}}" required placeholder="smtp.gmail.com" autocomplete="off">
+        </label>
+        <label>SMTP port
+            <input name="port" type="number" value="{{if .Port}}{{.Port}}{{else}}587{{end}}" required min="1" max="65535">
+        </label>
+        <label>SMTP username
+            <input name="username" value="{{.Username}}" autocomplete="username">
+        </label>
+        <label>SMTP app password
+            <input type="password" name="password" autocomplete="new-password"
+                   placeholder="{{if .PasswordSet}}Leave blank to keep current password{{else}}Enter SMTP password or app password{{end}}">
+            <small class="muted">Credentials are encrypted in the database. Set APP_ENCRYPTION_KEY in the app environment before saving. Keep the key backed up and unchanged.</small>
+        </label>
+        <label>From email address
+            <input type="email" name="from_address" value="{{.FromAddress}}" required placeholder="noreply@example.com">
+        </label>
+        <button type="submit">Save SMTP settings</button>
+    </form>
+</section>
+
+<section class="email-settings-card">
+    <h2>Send a test email</h2>
+    <p class="muted">Save the SMTP settings first, then send a test message to verify delivery.</p>
+    <form method="post" action="/settings/email/test">
+        <label>Send test to
+            <input type="email" name="test_email" required placeholder="you@example.com">
+        </label>
+        <button type="submit" class="button-secondary">Send test email</button>
+    </form>
+</section>
+{{end}}

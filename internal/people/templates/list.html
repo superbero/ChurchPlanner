@@ -27,6 +27,10 @@
     </div>
 </form>
 
+{{if .PasswordReset}}
+<p class="password-reset-success" role="status">A password reset link was sent to the person. The link expires in 30 minutes and can only be used once.</p>
+{{end}}
+
 <div class="table-container">
     <table>
         <thead>
@@ -71,6 +75,22 @@
                 </td>
                 <td class="actions-cell">
                     <a href="/people/{{.ID}}" class="button-secondary btn-sm">Edit Profile</a>
+                    {{if $.CanResetPasswords}}
+                    <button type="button" class="button-secondary btn-sm"
+                            onclick="document.getElementById('reset-password-{{.ID}}').showModal()">Reset password</button>
+                    <dialog id="reset-password-{{.ID}}" class="password-reset-dialog"
+                            aria-labelledby="reset-password-title-{{.ID}}">
+                        <form method="post" action="/people/{{.ID}}/password-reset">
+                            <h2 id="reset-password-title-{{.ID}}">Send password reset link</h2>
+                            <p>A one-time link will be sent to <strong>{{.Email}}</strong>. It expires in 30 minutes. The person will choose their own new password.</p>
+                            <div class="password-reset-dialog-actions">
+                                <button type="button" class="button-secondary"
+                                        onclick="this.closest('dialog').close()">Cancel</button>
+                                <button type="submit">Send reset link</button>
+                            </div>
+                        </form>
+                    </dialog>
+                    {{end}}
                 </td>
             </tr>
         {{else}}

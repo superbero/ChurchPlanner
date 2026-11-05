@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -13,6 +15,7 @@ import (
 )
 
 var ErrEmailTaken = errors.New("email address is already in use")
+var ErrInvalidResetToken = errors.New("invalid or expired password reset token")
 
 type Repository struct{ db *pgxpool.Pool }
 
@@ -126,6 +129,72 @@ func (r *Repository) Update(ctx context.Context, id, title, email, phone, vocalL
 		return ErrEmailTaken
 	}
 	return err
+}
+
+func (r *Repository) CreatePasswordReset(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id = $1`, userID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`, userID, tokenHash, expiresAt); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) DeletePasswordReset(ctx context.Context, tokenHash string) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM password_reset_tokens WHERE token_hash = $1`, tokenHash)
+	return err
+}
+
+func (r *Repository) HasValidPasswordReset(ctx context.Context, tokenHash string) (bool, error) {
+	var valid bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM password_reset_tokens
+			WHERE token_hash = $1 AND expires_at > now()
+		)
+	`, tokenHash).Scan(&valid)
+	return valid, err
+}
+
+func (r *Repository) CompletePasswordReset(ctx context.Context, tokenHash, password string) error {
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var userID string
+	err = tx.QueryRow(ctx, `
+		DELETE FROM password_reset_tokens
+		WHERE token_hash = $1 AND expires_at > now()
+		RETURNING user_id
+	`, tokenHash).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrInvalidResetToken
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1
+	`, userID, hash); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *Repository) PositionsFor(ctx context.Context, userID string) ([]string, error) {

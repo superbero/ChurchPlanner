@@ -47,6 +47,17 @@ and administrators can view unpublished plans; team leaders can view drafts
 when leading a team on the plan. Legacy `volunteer` accounts migrate to
 Scheduled Viewer and `guest` accounts to Viewer.
 
+## Email delivery
+
+Organization administrators can configure SMTP from **Email settings** in the
+app and send a test message. SMTP credentials are encrypted in the database
+using `APP_ENCRYPTION_KEY`; set this key in the application environment before
+saving settings. Generate a strong persistent key (for example, with
+`openssl rand -base64 32`) and keep a protected backup. Do not rotate or lose
+the key without first updating the stored SMTP password, or the app will no
+longer be able to decrypt it. SMTP can also continue to be supplied through
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`.
+
 ## Module rules (enforced by `internal/`)
 
 - A module may import `internal/platform/*` and its own subpackages only.

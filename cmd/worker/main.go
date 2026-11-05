@@ -34,7 +34,7 @@ func main() {
 	}
 	defer db.Close()
 
-	mail := mailer.New(cfg)
+	mail := mailer.New(cfg, db)
 	repo := scheduling.NewAssignmentRepository(db)
 
 	logger.Info("worker started")
@@ -74,7 +74,7 @@ func processNotifications(ctx context.Context, repo *scheduling.AssignmentReposi
 
 	for _, p := range pending {
 		url := baseURL + "/my-schedule"
-		err := mail.SendAssignmentNotification(
+		err := mail.SendAssignmentNotification(ctx,
 			p.Email,
 			p.Name,
 			p.PositionName,

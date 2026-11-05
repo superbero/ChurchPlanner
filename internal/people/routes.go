@@ -25,13 +25,20 @@ func Templates() fs.FS {
 
 type Module struct{ handler *Handler }
 
-func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
+func New(db *pgxpool.Pool, renderer *httpx.Renderer, resetMailer passwordResetMailer, publicBaseURL string) *Module {
 	return &Module{handler: &Handler{
-		repo:        NewRepository(db),
-		schedRepo:   scheduling.NewAssignmentRepository(db),
-		memberships: scheduling.NewTeamMembershipRepository(db),
-		renderer:    renderer,
+		repo:          NewRepository(db),
+		schedRepo:     scheduling.NewAssignmentRepository(db),
+		memberships:   scheduling.NewTeamMembershipRepository(db),
+		renderer:      renderer,
+		mailer:        resetMailer,
+		publicBaseURL: publicBaseURL,
 	}}
+}
+
+func (m *Module) PublicRoutes(r chi.Router) {
+	r.Get("/reset-password", m.handler.ShowPasswordReset)
+	r.Post("/reset-password", m.handler.CompletePasswordReset)
 }
 
 func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
@@ -40,11 +47,12 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 		r.Route("/people", func(r chi.Router) {
 			r.Get("/", m.handler.List)
 			r.Get("/new", m.handler.New)
-		r.Get("/bulk", m.handler.ShowBulkImport)
-		r.Post("/bulk", m.handler.BulkImport)
+			r.Get("/bulk", m.handler.ShowBulkImport)
+			r.Post("/bulk", m.handler.BulkImport)
 			r.Post("/", m.handler.Create)
 			r.Get("/{id}", m.handler.View)
 			r.Post("/{id}", m.handler.Update)
+			r.Post("/{id}/password-reset", m.handler.ResetPassword)
 		})
 	})
 }

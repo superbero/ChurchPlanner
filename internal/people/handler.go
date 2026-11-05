@@ -1,13 +1,22 @@
 package people
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/csv"
+	"encoding/hex"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
@@ -16,13 +25,21 @@ import (
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 )
 
+const passwordResetLifetime = 30 * time.Minute
+
+type passwordResetMailer interface {
+	SendPasswordReset(ctx context.Context, to, name, link string) error
+}
+
 var phoneInputCharacters = regexp.MustCompile(`^[+0-9().\-\s]+$`)
 
 type Handler struct {
-	repo        *Repository
-	schedRepo   *scheduling.AssignmentRepository
-	memberships *scheduling.TeamMembershipRepository
-	renderer    *httpx.Renderer
+	repo          *Repository
+	schedRepo     *scheduling.AssignmentRepository
+	memberships   *scheduling.TeamMembershipRepository
+	renderer      *httpx.Renderer
+	mailer        passwordResetMailer
+	publicBaseURL string
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -35,9 +52,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.renderer.Render(w, r, http.StatusOK, "people_list", map[string]any{
-		"Users":        users,
-		"Query":        q,
-		"StatusFilter": status,
+		"Users":             users,
+		"Query":             q,
+		"StatusFilter":      status,
+		"CanResetPasswords": canAssignPrivilegedRoles(r),
+		"PasswordReset":     r.URL.Query().Get("password_reset") == "sent",
 	})
 }
 
@@ -196,6 +215,156 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/people/"+id, http.StatusSeeOther)
+}
+
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	requester, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if requester.Role != auth.RoleAdmin {
+		http.Error(w, "only an organization administrator can reset passwords", http.StatusForbidden)
+		return
+	}
+
+	target, err := h.repo.Get(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	baseURL, err := passwordResetBaseURL(h.publicBaseURL)
+	if err != nil {
+		slog.Error("password reset base URL is not configured correctly", "err", err)
+		http.Error(w, "Password reset email is not configured.", http.StatusServiceUnavailable)
+		return
+	}
+	if h.mailer == nil {
+		http.Error(w, "Password reset email is not configured.", http.StatusServiceUnavailable)
+		return
+	}
+
+	token, tokenHash, err := newPasswordResetToken()
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	if err := h.repo.CreatePasswordReset(r.Context(), target.ID, tokenHash, time.Now().Add(passwordResetLifetime)); err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	link := baseURL + "/reset-password#" + token
+	if err := h.mailer.SendPasswordReset(r.Context(), target.Email, target.Name, link); err != nil {
+		if deleteErr := h.repo.DeletePasswordReset(r.Context(), tokenHash); deleteErr != nil {
+			slog.Error("failed to remove unsent password reset token", "err", deleteErr)
+		}
+		slog.Error("failed to send password reset email", "user_id", target.ID, "err", err)
+		http.Error(w, "Could not send the password reset email. Please try again later.", http.StatusServiceUnavailable)
+		return
+	}
+	http.Redirect(w, r, "/people?password_reset=sent", http.StatusSeeOther)
+}
+
+func (h *Handler) ShowPasswordReset(w http.ResponseWriter, r *http.Request) {
+	setPasswordResetHeaders(w)
+	h.renderer.Render(w, r, http.StatusOK, "people_reset_password", map[string]any{
+		"Invalid": r.URL.Query().Get("error") == "invalid",
+	})
+}
+
+func (h *Handler) CompletePasswordReset(w http.ResponseWriter, r *http.Request) {
+	setPasswordResetHeaders(w)
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := r.ParseForm(); err != nil {
+		h.renderPasswordResetError(w, r, "Invalid password reset request.", http.StatusBadRequest, "")
+		return
+	}
+	token := r.FormValue("token")
+	tokenHash, err := hashPasswordResetToken(token)
+	if err != nil {
+		h.renderPasswordResetError(w, r, "This reset link is invalid or has expired. Ask an administrator to send a new one.", http.StatusBadRequest, "")
+		return
+	}
+	valid, err := h.repo.HasValidPasswordReset(r.Context(), tokenHash)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	if !valid {
+		h.renderPasswordResetError(w, r, "This reset link is invalid or has expired. Ask an administrator to send a new one.", http.StatusBadRequest, "")
+		return
+	}
+
+	password := r.FormValue("password")
+	confirmation := r.FormValue("password_confirmation")
+	if utf8.RuneCountInString(password) < 12 {
+		h.renderPasswordResetError(w, r, "Choose a password with at least 12 characters.", http.StatusUnprocessableEntity, token)
+		return
+	}
+	if len(password) > 72 {
+		h.renderPasswordResetError(w, r, "Password must be no more than 72 bytes.", http.StatusUnprocessableEntity, token)
+		return
+	}
+	if password != confirmation {
+		h.renderPasswordResetError(w, r, "The passwords do not match.", http.StatusUnprocessableEntity, token)
+		return
+	}
+	if err := h.repo.CompletePasswordReset(r.Context(), tokenHash, password); err != nil {
+		if errors.Is(err, ErrInvalidResetToken) {
+			h.renderPasswordResetError(w, r, "This reset link is invalid or has expired. Ask an administrator to send a new one.", http.StatusBadRequest, "")
+			return
+		}
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/login?password_reset=success", http.StatusSeeOther)
+}
+
+func (h *Handler) renderPasswordResetError(w http.ResponseWriter, r *http.Request, message string, status int, token string) {
+	h.renderer.Render(w, r, status, "people_reset_password", map[string]any{
+		"Error": message,
+		"Token": token,
+	})
+}
+
+func setPasswordResetHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+}
+
+func passwordResetBaseURL(value string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("PUBLIC_BASE_URL must be an absolute HTTP(S) URL without query or fragment")
+	}
+	hostname := parsed.Hostname()
+	if parsed.Scheme != "https" && hostname != "localhost" {
+		ip := net.ParseIP(hostname)
+		if ip == nil || !ip.IsLoopback() {
+			return "", errors.New("PUBLIC_BASE_URL must use HTTPS except for localhost development")
+		}
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func newPasswordResetToken() (string, string, error) {
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		return "", "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(random)
+	hash := sha256.Sum256([]byte(token))
+	return token, hex.EncodeToString(hash[:]), nil
+}
+
+func hashPasswordResetToken(token string) (string, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(decoded) != 32 {
+		return "", errors.New("invalid reset token")
+	}
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:]), nil
 }
 
 func normalizePhone(value string) (string, error) {

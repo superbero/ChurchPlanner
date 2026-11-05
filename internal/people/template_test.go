@@ -42,8 +42,9 @@ func TestPeopleListUsesCurrentViewModelAndEditRoute(t *testing.T) {
 				Skills:    "Vocals, Guitar",
 				TeamRoles: "Worship (leader)",
 			}},
-			"Query":        "",
-			"StatusFilter": "",
+			"Query":             "",
+			"StatusFilter":      "",
+			"CanResetPasswords": true,
 		})
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -51,6 +52,9 @@ func TestPeopleListUsesCurrentViewModelAndEditRoute(t *testing.T) {
 	for _, want := range []string{
 		"Alex Doe", "Worship Director", "Worship (leader)",
 		"Vocals", "Guitar", "alex@example.com", `href="/people/user-1"`,
+		`onclick="document.getElementById('reset-password-user-1').showModal()"`,
+		`action="/people/user-1/password-reset"`, "Send password reset link",
+		"The person will choose their own new password.",
 	} {
 		if !strings.Contains(response.Body.String(), want) {
 			t.Errorf("people list missing %q", want)
@@ -59,6 +63,24 @@ func TestPeopleListUsesCurrentViewModelAndEditRoute(t *testing.T) {
 	for _, wrong := range []string{".People", ".SystemRole", "/people/user-1/edit"} {
 		if strings.Contains(response.Body.String(), wrong) {
 			t.Errorf("people list contains stale output %q", wrong)
+		}
+	}
+}
+
+func TestPasswordResetTemplateUsesTokenFromFragment(t *testing.T) {
+	renderer := newPeopleTestRenderer(t)
+	response := httptest.NewRecorder()
+	renderer.Render(response, httptest.NewRequest(http.MethodGet, "/reset-password", nil), http.StatusOK,
+		"people_reset_password", map[string]any{})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	for _, want := range []string{
+		`action="/reset-password"`, `name="token"`, `name="password"`,
+		`name="password_confirmation"`, `window.location.hash.slice(1)`,
+	} {
+		if !strings.Contains(response.Body.String(), want) {
+			t.Errorf("password reset page missing %q", want)
 		}
 	}
 }
@@ -87,7 +109,7 @@ func TestPeopleEditTemplateUsesUserStatusTitleAndMemberships(t *testing.T) {
 	}
 	for _, want := range []string{
 		`action="/people/user-1"`, `name="title" value="Worship Director"`,
-		`type="email" name="email" value="alex@example.com" required maxlength="254"`,
+		`id="profile-email" type="email" name="email" value="alex@example.com" required maxlength="254" readonly`,
 		`readonly`,
 		`value="suspended" selected`, `value="editor"`,
 		`type="tel" name="phone"`, `placeholder="+1 555-0100"`,
@@ -122,8 +144,13 @@ func TestPeopleAdminCanEditEmail(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
-	if !strings.Contains(response.Body.String(), `type="email" name="email" value="alex@example.com" required maxlength="254"`) ||
-		strings.Contains(response.Body.String(), `readonly`) {
-		t.Errorf("admin email field is not editable")
+	for _, want := range []string{
+		`id="profile-email" type="email" name="email" value="alex@example.com" required maxlength="254" readonly`,
+		`id="edit-email-btn" class="button-secondary btn-sm" aria-pressed="false">Change</button>`,
+		`editEmailButton.addEventListener('click'`,
+	} {
+		if !strings.Contains(response.Body.String(), want) {
+			t.Errorf("admin email editor missing %q", want)
+		}
 	}
 }

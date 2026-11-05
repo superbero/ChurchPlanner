@@ -119,7 +119,11 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, status int, 
 	if data == nil {
 		dataMap = make(map[string]any)
 	} else if m, ok := data.(map[string]any); ok {
-		dataMap = m
+		if m == nil {
+			dataMap = make(map[string]any)
+		} else {
+			dataMap = m
+		}
 	} else {
 		http.Error(w, "renderer requires map[string]any", http.StatusInternalServerError)
 		return

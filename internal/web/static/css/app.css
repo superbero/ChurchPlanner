@@ -340,6 +340,18 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 .profile-form h2 { margin-top: 1.5rem; }
 .profile-form label small { display: block; margin-top: .35rem; line-height: 1.4; }
 .profile-form input[type="tel"] { width: 100%; }
+.email-edit-row { display: flex; align-items: center; gap: .5rem; }
+.email-edit-row input { flex: 1; min-width: 0; }
+.email-edit-row .btn-sm { white-space: nowrap; }
+.password-reset-dialog { width: min(32rem, calc(100vw - 2rem)); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; box-shadow: 0 16px 48px rgba(15, 23, 42, .25); }
+.password-reset-dialog::backdrop { background: rgba(15, 23, 42, .48); }
+.password-reset-dialog h2 { margin-top: 0; }
+.password-reset-dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.25rem; }
+.password-reset-success { padding: .75rem; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; }
+.password-reset-page { max-width: 32rem; margin: 3rem auto; padding: 1.5rem; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+.email-settings-card { max-width: 42rem; margin: 1rem 0; padding: 1rem 1.25rem; background: #fff; border: 1px solid var(--border); border-radius: 8px; }
+.email-settings-card h2 { margin-top: 0; }
+.email-settings-card label small { display: block; margin-top: .35rem; line-height: 1.4; }
 
 
 

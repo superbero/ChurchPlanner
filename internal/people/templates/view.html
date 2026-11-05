@@ -7,8 +7,10 @@
 
         <h2>Account</h2>
         <label>Email
-            <input type="email" name="email" value="{{.User.Email}}" required maxlength="254"
-                   {{if not .CanAssignPrivilegedRoles}}readonly{{end}}>
+            <span class="email-edit-row">
+                <input id="profile-email" type="email" name="email" value="{{.User.Email}}" required maxlength="254" readonly>
+                {{if .CanAssignPrivilegedRoles}}<button type="button" id="edit-email-btn" class="button-secondary btn-sm" aria-pressed="false">Change</button>{{end}}
+            </span>
             {{if not .CanAssignPrivilegedRoles}}<small class="muted">Only an organization administrator can change this address.</small>{{end}}
         </label>
         <label>Title / Position <input name="title" value="{{.User.Title}}" placeholder="e.g. Worship Director"></label>
@@ -94,6 +96,18 @@
 </div>
 <script>
 (() => {
+    const email = document.getElementById('profile-email');
+    const editEmailButton = document.getElementById('edit-email-btn');
+    if (email && editEmailButton) {
+        editEmailButton.addEventListener('click', () => {
+            const editing = email.readOnly;
+            email.readOnly = !editing;
+            editEmailButton.textContent = editing ? 'Done' : 'Change';
+            editEmailButton.setAttribute('aria-pressed', String(editing));
+            if (editing) email.focus();
+        });
+    }
+
     const panel = document.getElementById('active-skills');
     const picker = document.getElementById('skill-picker');
     const addButton = document.getElementById('add-skill-btn');

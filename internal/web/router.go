@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
@@ -13,10 +14,12 @@ import (
 	"github.com/yourchurch/churchplanner/internal/calendar"
 	"github.com/yourchurch/churchplanner/internal/checkin"
 	"github.com/yourchurch/churchplanner/internal/communications"
+	"github.com/yourchurch/churchplanner/internal/emailsettings"
 	"github.com/yourchurch/churchplanner/internal/people"
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/config"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
+	"github.com/yourchurch/churchplanner/internal/platform/mailer"
 	"github.com/yourchurch/churchplanner/internal/reports"
 	"github.com/yourchurch/churchplanner/internal/scheduling"
 	"github.com/yourchurch/churchplanner/internal/songs"
@@ -60,6 +63,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		{"reports", reports.Templates()},
 		{"checkin", checkin.Templates()},
 		{"communications", communications.Templates()},
+		{"emailsettings", emailsettings.Templates()},
 	} {
 		if err := renderer.Add(add.prefix, add.fsys, "*.html"); err != nil {
 			return nil, err
@@ -89,15 +93,21 @@ func NewRouter(d Deps) (http.Handler, error) {
 				"Error": "Your account has been suspended. Please contact your church leader or administrator for assistance.",
 			}
 		}
+		if r.URL.Query().Get("password_reset") == "success" {
+			if data == nil {
+				data = make(map[string]any)
+			}
+			data["Message"] = "Your password has been updated. Sign in with your new password."
+		}
 		renderer.Render(w, r, http.StatusOK, "web_login", data)
 	})
 	r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
-		email := r.FormValue("email")
+		email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
 		password := r.FormValue("password")
 
 		var id, hash string
 		err := d.DB.QueryRow(r.Context(),
-			`SELECT id, password_hash FROM users WHERE email = $1`, email,
+			`SELECT id, password_hash FROM users WHERE lower(email) = $1`, email,
 		).Scan(&id, &hash)
 		if err != nil || !auth.CheckPassword(hash, password) {
 			renderer.Render(w, r, http.StatusUnauthorized, "web_login", map[string]any{"Error": "Invalid credentials"})
@@ -120,10 +130,14 @@ func NewRouter(d Deps) (http.Handler, error) {
 	})
 	schedulingModule := scheduling.New(d.DB, renderer)
 	checkinModule := checkin.New(d.DB, renderer)
+	emailMailer := mailer.New(d.Config, d.DB)
+	peopleModule := people.New(d.DB, renderer, emailMailer, d.Config.PublicBaseURL)
+	emailSettingsHandler := emailsettings.New(emailMailer, renderer)
 
 	// Public: no auth required
 	songsModule.PublicRoutes(r)
 	checkinModule.PublicRoutes(r)
+	peopleModule.PublicRoutes(r)
 
 	// Plan readers can view all plans. Team leaders can also enter the planning
 	// area for scoped team assignments; scheduled viewers remain assignment-only.
@@ -210,7 +224,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 		// People managers and organization administrators.
 		r.Group(func(r chi.Router) {
 			r.Use(authn.RequireRoles(auth.RoleManager))
-			people.New(d.DB, renderer).Routes(r, authn)
+			peopleModule.Routes(r, authn)
 		})
 
 		// Organization administrators only.
@@ -218,6 +232,7 @@ func NewRouter(d Deps) (http.Handler, error) {
 			r.Use(authn.RequireRoles(auth.RoleAdmin))
 			teams.New(d.DB, renderer).Routes(r, authn)
 			reports.New(d.DB, renderer).Routes(r)
+			emailSettingsHandler.Routes(r, authn)
 		})
 	})
 
