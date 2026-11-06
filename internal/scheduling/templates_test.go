@@ -1,8 +1,10 @@
 package scheduling
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -10,6 +12,27 @@ import (
 
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
+
+func TestAddTimeDurationOptionsUseFifteenMinuteIncrementsUpToFiveHours(t *testing.T) {
+	template, err := fs.ReadFile(Templates(), "plan_view.html")
+	if err != nil {
+		t.Fatalf("read plan view template: %v", err)
+	}
+
+	content := string(template)
+	position := 0
+	for minutes := 15; minutes <= 300; minutes += 15 {
+		option := `value="` + strconv.Itoa(minutes) + `"`
+		found := strings.Index(content[position:], option)
+		if found < 0 {
+			t.Fatalf("duration option %d minutes not found in order", minutes)
+		}
+		position += found + len(option)
+	}
+	if strings.Contains(content[position:], `value="315"`) {
+		t.Error("duration options extend beyond five hours")
+	}
+}
 
 func TestTemplatesParse(t *testing.T) {
 	renderer, err := httpx.NewRenderer(fstest.MapFS{
