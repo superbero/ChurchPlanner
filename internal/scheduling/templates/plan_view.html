@@ -79,23 +79,21 @@
                     <li class="item-row scripture-item-row" draggable="true" data-item-id="{{.ID}}">
                         <span class="drag-handle">⋮⋮</span>
                         <div class="scripture-item-heading">
-                            <div class="item-main">
-                                <button type="button" class="scripture-toggle item-scripture"
-                                        aria-expanded="false" aria-controls="scripture-text-{{.ID}}">
-                                    {{.Title}}
-                                    <span class="scripture-toggle-indicator" aria-hidden="true">+</span>
-                                </button>
-                                <span class="scripture-translation">World English Bible (WEB)</span>
-                            </div>
-                            <div class="item-actions">
-                                <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" class="action-link">Edit</a>
-                                <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/duplicate" style="display:inline">
-                                    <button class="link-btn" type="submit" title="Copy this item to the end of this service section">Copy</button>
-                                </form>
-                                <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove this item?')">
-                                    <button class="link-btn" type="submit" style="color: var(--danger);">×</button>
-                                </form>
-                            </div>
+                            <button type="button" class="scripture-toggle item-scripture"
+                                    aria-expanded="false" aria-controls="scripture-text-{{.ID}}">
+                                {{.Title}}
+                                <span class="scripture-toggle-indicator" aria-hidden="true">+</span>
+                            </button>
+                            <span class="scripture-translation">World English Bible (WEB)</span>
+                        </div>
+                        <div class="item-actions scripture-item-actions">
+                            <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" class="action-link">Edit</a>
+                            <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/duplicate" style="display:inline">
+                                <button class="link-btn" type="submit" title="Copy this item to the end of this service section">Copy</button>
+                            </form>
+                            <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove this item?')">
+                                <button class="link-btn" type="submit" style="color: var(--danger);">×</button>
+                            </form>
                         </div>
                         <p id="scripture-text-{{.ID}}" class="scripture-text scripture-item-text" hidden>{{.Notes}}</p>
                     </li>

@@ -64,6 +64,7 @@ func TestPlanViewRendersItemCopyAndSafeTimeEditControls(t *testing.T) {
 		`For God so loved the world.`,
 		`&lt;script&gt;alert(1)&lt;/script&gt;`,
 		`class="scripture-toggle item-scripture"`,
+		`class="item-actions scripture-item-actions"`,
 		`aria-expanded="false"`,
 		`class="scripture-text scripture-item-text" hidden`,
 		`button.setAttribute('aria-expanded', String(!expanded))`,
