@@ -510,26 +510,27 @@ func (h *Handler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	in, err := parsePlanInput(r)
-	if err != nil {
-		httpx.ServerError(w, err)
-		return
-	}
 	before, err := h.plans.Get(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	p, err := h.plans.Update(r.Context(), id, in)
+	in, err := parsePlanInput(r)
+	if err != nil {
+		before.ServiceTypeID = strings.TrimSpace(r.FormValue("service_type_id"))
+		before.Title = strings.TrimSpace(r.FormValue("title"))
+		before.Notes = strings.TrimSpace(r.FormValue("notes"))
+		h.renderEditPlanForm(w, r, before, "Enter a valid date, start time, and end time.", map[string]string{
+			"ServiceDate":  strings.TrimSpace(r.FormValue("service_date")),
+			"ServiceStart": strings.TrimSpace(r.FormValue("service_start")),
+			"ServiceEnd":   strings.TrimSpace(r.FormValue("service_end")),
+		})
+		return
+	}
+	_, err = h.plans.Update(r.Context(), id, in)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
-	}
-	// If the plan has a tracked Service time and the date/time actually moved,
-	// sync that specific slot so the plan view stays consistent.
-	if before.ServiceTimeID != "" &&
-		(!before.ServiceAt.Equal(p.ServiceAt) || !before.ServiceEndsAt.Equal(p.ServiceEndsAt)) {
-		_ = h.plans.UpdateTime(r.Context(), before.ServiceTimeID, "service", "Service", p.ServiceAt, p.ServiceEndsAt)
 	}
 	http.Redirect(w, r, "/plans/"+id, http.StatusSeeOther)
 }
@@ -781,12 +782,15 @@ func parsePlanInput(r *http.Request) (CreatePlanInput, error) {
 		var t time.Time
 		var err error
 		if len(raw) > 10 {
-			t, err = time.Parse("2006-01-02T15:04", raw)
+			t, err = time.ParseInLocation("2006-01-02T15:04", raw, time.Local)
 		} else {
-			t, err = time.Parse("2006-01-02", raw)
+			t, err = time.ParseInLocation("2006-01-02", raw, time.Local)
 		}
 		if err != nil {
 			return CreatePlanInput{}, err
+		}
+		if t.Year() <= 1 {
+			return CreatePlanInput{}, errors.New("service date must be valid")
 		}
 		return CreatePlanInput{
 			ServiceTypeID: strings.TrimSpace(r.FormValue("service_type_id")),
@@ -801,9 +805,12 @@ func parsePlanInput(r *http.Request) (CreatePlanInput, error) {
 		return CreatePlanInput{}, errors.New("date, start time, and end time are required")
 	}
 
-	d, err := time.Parse("2006-01-02", dateStr)
+	d, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
 	if err != nil {
 		return CreatePlanInput{}, err
+	}
+	if d.Year() <= 1 {
+		return CreatePlanInput{}, errors.New("service date must be valid")
 	}
 	start, err := time.Parse("15:04", startStr)
 	if err != nil {
@@ -814,11 +821,14 @@ func parsePlanInput(r *http.Request) (CreatePlanInput, error) {
 		return CreatePlanInput{}, err
 	}
 
-	startDt := time.Date(d.Year(), d.Month(), d.Day(), start.Hour(), start.Minute(), 0, 0, time.UTC)
-	endDt := time.Date(d.Year(), d.Month(), d.Day(), end.Hour(), end.Minute(), 0, 0, time.UTC)
+	startDt := time.Date(d.Year(), d.Month(), d.Day(), start.Hour(), start.Minute(), 0, 0, time.Local)
+	endDt := time.Date(d.Year(), d.Month(), d.Day(), end.Hour(), end.Minute(), 0, 0, time.Local)
 	if !endDt.After(startDt) {
 		// Treat as crossing midnight
 		endDt = endDt.Add(24 * time.Hour)
+	}
+	if !endDt.After(startDt) {
+		return CreatePlanInput{}, errors.New("service window must have a valid date and end after the start")
 	}
 
 	return CreatePlanInput{
@@ -1118,13 +1128,38 @@ func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	message := ""
+	if plan.ServiceAt.Year() <= 1 || plan.ServiceEndsAt.Year() <= 1 || !plan.ServiceEndsAt.After(plan.ServiceAt) {
+		message = "This plan has an invalid service window. Enter a valid date and time before saving."
+	}
+	h.renderEditPlanForm(w, r, plan, message, nil)
+}
+
+func (h *Handler) renderEditPlanForm(w http.ResponseWriter, r *http.Request, plan Plan, message string, values map[string]string) {
 	types, _ := h.svcTypes.List(r.Context())
+	if values == nil {
+		values = planFormTimeValues(plan)
+	}
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
 		"ServiceTypes":       types,
 		"NextServiceWindows": map[string]Plan{},
 		"IsNew":              false,
 		"Plan":               plan,
+		"Error":              message,
+		"FormValues":         values,
 	})
+}
+
+func planFormTimeValues(plan Plan) map[string]string {
+	values := map[string]string{"ServiceDate": "", "ServiceStart": "", "ServiceEnd": ""}
+	if plan.ServiceAt.Year() > 1 {
+		values["ServiceDate"] = plan.ServiceAt.Format("2006-01-02")
+		values["ServiceStart"] = plan.ServiceAt.Format("15:04")
+	}
+	if plan.ServiceEndsAt.Year() > 1 {
+		values["ServiceEnd"] = plan.ServiceEndsAt.Format("15:04")
+	}
+	return values
 }
 
 func (h *Handler) AddTime(w http.ResponseWriter, r *http.Request) {

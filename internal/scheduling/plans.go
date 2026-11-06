@@ -158,7 +158,13 @@ func (r *PlanRepository) CreateWithServiceTime(ctx context.Context, in CreatePla
 }
 
 func (r *PlanRepository) Update(ctx context.Context, id string, in CreatePlanInput) (Plan, error) {
-	p, err := scanPlan(r.db.QueryRow(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return Plan{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	p, err := scanPlan(tx.QueryRow(ctx, `
 		UPDATE plans SET
 			title=$2, service_at=$3, service_ends_at=$4, notes=$5, updated_at=now()
 		WHERE id=$1
@@ -167,7 +173,23 @@ func (r *PlanRepository) Update(ctx context.Context, id string, in CreatePlanInp
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Plan{}, ErrPlanNotFound
 	}
-	return p, err
+	if err != nil {
+		return Plan{}, err
+	}
+	if p.ServiceTimeID != "" {
+		result, err := tx.Exec(ctx, `
+			UPDATE plan_times
+			SET starts_at = $3, ends_at = $4
+			WHERE id = $1 AND plan_id = $2
+		`, p.ServiceTimeID, p.ID, p.ServiceAt, p.ServiceEndsAt)
+		if err != nil {
+			return Plan{}, err
+		}
+		if result.RowsAffected() == 0 {
+			return Plan{}, fmt.Errorf("primary service time %q for plan %q was not found", p.ServiceTimeID, p.ID)
+		}
+	}
+	return p, tx.Commit(ctx)
 }
 
 func (r *PlanRepository) Publish(ctx context.Context, id string, published bool) error {

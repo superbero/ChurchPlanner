@@ -19,12 +19,15 @@ func TestParsePlanInputWithSeparateDateAndTimes(t *testing.T) {
 		t.Fatalf("parsePlanInput() error = %v", err)
 	}
 
-	if got, want := input.ServiceAt.Format(time.RFC3339),
-		"2026-11-02T23:30:00Z"; got != want {
+	if got, want := input.ServiceAt.Format("2006-01-02 15:04"),
+		"2026-11-02 23:30"; got != want {
 		t.Errorf("ServiceAt = %s, want %s", got, want)
 	}
-	if got, want := input.ServiceEndsAt.Format(time.RFC3339),
-		"2026-11-03T00:45:00Z"; got != want {
+	if input.ServiceAt.Location() != time.Local {
+		t.Errorf("ServiceAt location = %v, want local time", input.ServiceAt.Location())
+	}
+	if got, want := input.ServiceEndsAt.Format("2006-01-02 15:04"),
+		"2026-11-03 00:45"; got != want {
 		t.Errorf("ServiceEndsAt = %s, want %s", got, want)
 	}
 }
@@ -49,6 +52,7 @@ func TestParsePlanInputRejectsPartialOrInvalidTimes(t *testing.T) {
 		body string
 	}{
 		{name: "missing end time", body: "service_date=2026-11-02&service_start=10%3A00"},
+		{name: "zero date", body: "service_date=0001-01-01&service_start=00%3A00&service_end=01%3A00"},
 		{name: "invalid date", body: "service_date=2026-02-30&service_start=10%3A00&service_end=11%3A00"},
 		{name: "invalid time", body: "service_date=2026-11-02&service_start=25%3A00&service_end=26%3A00"},
 	}

@@ -16,10 +16,10 @@
         <label>Service type
             <select name="service_type_id" id="service-type-select" required>
                 {{range .ServiceTypes}}
-                <option value="{{.ID}}" {{with index $.NextServiceWindows .ID}}
+                <option value="{{.ID}}" {{if $.IsNew}}{{with index $.NextServiceWindows .ID}}
                         data-next-date="{{.ServiceAt.Format "2006-01-02"}}"
                         data-next-start="{{.ServiceAt.Format "15:04"}}"
-                        data-next-end="{{.ServiceEndsAt.Format "15:04"}}"{{end}}
+                        data-next-end="{{.ServiceEndsAt.Format "15:04"}}"{{end}}{{end}}
                         {{if eq .ID $.Plan.ServiceTypeID}}selected{{end}}>{{.Name}}</option>
                 {{end}}
             </select>
@@ -43,21 +43,25 @@
 
         <h3 style="margin-top: 1.5rem; margin-bottom: 0.25rem; font-size: 1rem;">Service window</h3>
         <p class="muted service-date-help" id="service-date-help">
+            {{if .IsNew}}
             The last plan for this service type sets the next suggested date and time. If there is no plan yet, a weekday suggestion is used. You can change these before saving.
+            {{else}}
+            Changing the service type will not automatically change this plan's date or time.
+            {{end}}
         </p>
 
         <label>Date
             <input type="date" name="service_date" id="service-date-input"
-                   value="{{.Plan.ServiceAt.Format "2006-01-02"}}"
+                   value="{{if .FormValues}}{{.FormValues.ServiceDate}}{{else if not .Plan.ServiceAt.IsZero}}{{.Plan.ServiceAt.Format "2006-01-02"}}{{end}}"
                    data-calendar-date="{{if .IsNew}}{{.CalendarDateProvided}}{{else}}true{{end}}" required>
         </label>
 
         <div class="row">
             <label>Start time
-                <input type="time" name="service_start" value="{{.Plan.ServiceAt.Format "15:04"}}" required>
+                <input type="time" name="service_start" value="{{if .FormValues}}{{.FormValues.ServiceStart}}{{else if not .Plan.ServiceAt.IsZero}}{{.Plan.ServiceAt.Format "15:04"}}{{end}}" required>
             </label>
             <label>End time
-                <input type="time" name="service_end" value="{{.Plan.ServiceEndsAt.Format "15:04"}}" required>
+                <input type="time" name="service_end" value="{{if .FormValues}}{{.FormValues.ServiceEnd}}{{else if not .Plan.ServiceEndsAt.IsZero}}{{.Plan.ServiceEndsAt.Format "15:04"}}{{end}}" required>
             </label>
         </div>
 
