@@ -30,6 +30,24 @@ type PlanTime struct {
 	EndsAt   time.Time
 }
 
+type ServiceTemplate struct {
+	ID            string
+	ServiceTypeID string
+	ServiceType   string
+	Name          string
+	Times         []ServiceTemplateTime
+}
+
+type ServiceTemplateTime struct {
+	ID                 string
+	TemplateID         string
+	Position           int
+	Kind               string
+	Name               string
+	StartOffsetMinutes int
+	DurationMinutes    int
+}
+
 type Team struct {
 	ID   string
 	Name string

@@ -13,11 +13,12 @@ import (
 )
 
 type Handler struct {
-	svcTypes *ServiceTypeRepository
-	plans    *PlanRepository
-	assign   *AssignmentRepository
-	members  *TeamMembershipRepository
-	renderer *httpx.Renderer
+	svcTypes  *ServiceTypeRepository
+	plans     *PlanRepository
+	templates *ServiceTemplateRepository
+	assign    *AssignmentRepository
+	members   *TeamMembershipRepository
+	renderer  *httpx.Renderer
 }
 
 // ---- Plans list ----
@@ -54,17 +55,23 @@ func (h *Handler) PlansIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plans", map[string]any{
-		"ServiceTypes": types,
-		"Plans":        plans,
-		"SelectedType": selectedType,
-		"DateRange":    dateRange,
-		"Limit":        limit,
-		"TypeName":     typeName,
+		"ServiceTypes":       types,
+		"Plans":              plans,
+		"SelectedType":       selectedType,
+		"DateRange":          dateRange,
+		"Limit":              limit,
+		"TypeName":           typeName,
+		"CanManageTemplates": canManageTemplates(r),
 	})
 }
 
 func (h *Handler) NewPlan(w http.ResponseWriter, r *http.Request) {
 	types, err := h.svcTypes.List(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	templates, err := h.templates.List(r.Context())
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
@@ -80,9 +87,10 @@ func (h *Handler) NewPlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
-		"ServiceTypes": types,
-		"IsNew":        true,
-		"Plan":         Plan{ServiceAt: defaultStart, ServiceEndsAt: defaultStart.Add(90 * time.Minute)},
+		"ServiceTypes":     types,
+		"ServiceTemplates": templates,
+		"IsNew":            true,
+		"Plan":             Plan{ServiceAt: defaultStart, ServiceEndsAt: defaultStart.Add(90 * time.Minute)},
 	})
 }
 
@@ -92,12 +100,152 @@ func (h *Handler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
-	p, err := h.plans.CreateWithServiceTime(r.Context(), in)
+	templateID := strings.TrimSpace(r.FormValue("service_template_id"))
+	var p Plan
+	if templateID == "" {
+		p, err = h.plans.CreateWithServiceTime(r.Context(), in)
+	} else {
+		p, err = h.plans.CreateWithServiceTemplate(r.Context(), in, templateID)
+		if errors.Is(err, ErrServiceTemplateNotFound) || errors.Is(err, ErrInvalidServiceTemplate) {
+			http.Error(w, "The selected service template is invalid or no longer available.", http.StatusUnprocessableEntity)
+			return
+		}
+	}
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
 	http.Redirect(w, r, "/plans/"+p.ID, http.StatusSeeOther)
+}
+
+func (h *Handler) ServiceTemplatesIndex(w http.ResponseWriter, r *http.Request) {
+	templates, err := h.templates.List(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	types, err := h.svcTypes.List(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	h.renderer.Render(w, r, http.StatusOK, "scheduling_service_templates", map[string]any{
+		"Templates":    templates,
+		"ServiceTypes": types,
+	})
+}
+
+func (h *Handler) CreateServiceTemplate(w http.ResponseWriter, r *http.Request) {
+	template, err := parseServiceTemplateInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	serviceTypes, err := h.svcTypes.List(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	validServiceType := false
+	for _, serviceType := range serviceTypes {
+		if serviceType.ID == template.ServiceTypeID {
+			validServiceType = true
+			break
+		}
+	}
+	if !validServiceType {
+		http.Error(w, "The selected service type is invalid.", http.StatusUnprocessableEntity)
+		return
+	}
+	if err := h.templates.Create(r.Context(), template); err != nil {
+		if errors.Is(err, ErrServiceTemplateExists) {
+			http.Error(w, "A template with this name already exists for the selected service type.", http.StatusConflict)
+			return
+		}
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/plans/templates", http.StatusSeeOther)
+}
+
+func (h *Handler) DeleteServiceTemplate(w http.ResponseWriter, r *http.Request) {
+	err := h.templates.Delete(r.Context(), chi.URLParam(r, "templateID"))
+	if errors.Is(err, ErrServiceTemplateNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/plans/templates", http.StatusSeeOther)
+}
+
+func canManageTemplates(r *http.Request) bool {
+	u, ok := auth.UserFrom(r.Context())
+	return ok && auth.CanEditContent(u.Role)
+}
+
+func parseServiceTemplateInput(r *http.Request) (ServiceTemplate, error) {
+	if err := r.ParseForm(); err != nil {
+		return ServiceTemplate{}, errors.New("invalid template form")
+	}
+	template := ServiceTemplate{
+		ServiceTypeID: strings.TrimSpace(r.FormValue("service_type_id")),
+		Name:          strings.TrimSpace(r.FormValue("name")),
+	}
+	if template.ServiceTypeID == "" || template.Name == "" || len(template.Name) > 100 {
+		return ServiceTemplate{}, errors.New("select a service type and enter a template name of 1 to 100 characters")
+	}
+	kinds := r.Form["section_kind"]
+	names := r.Form["section_name"]
+	offsets := r.Form["section_offset"]
+	durations := r.Form["section_duration"]
+	if len(kinds) == 0 || len(kinds) > 12 || len(names) != len(kinds) ||
+		len(offsets) != len(kinds) || len(durations) != len(kinds) {
+		return ServiceTemplate{}, errors.New("a template must contain between 1 and 12 complete sections")
+	}
+
+	serviceCount := 0
+	for i := range kinds {
+		kind := strings.TrimSpace(kinds[i])
+		name := strings.TrimSpace(names[i])
+		if name == "" || len(name) > 100 {
+			return ServiceTemplate{}, errors.New("each section needs a name of 1 to 100 characters")
+		}
+		offset, err := strconv.Atoi(strings.TrimSpace(offsets[i]))
+		if err != nil || offset < -1440 || offset > 1440 {
+			return ServiceTemplate{}, errors.New("section offsets must be between -1440 and 1440 minutes")
+		}
+		duration, err := strconv.Atoi(strings.TrimSpace(durations[i]))
+		if err != nil {
+			return ServiceTemplate{}, errors.New("enter a valid section duration")
+		}
+		switch kind {
+		case "service":
+			serviceCount++
+			if offset != 0 || duration != 0 {
+				return ServiceTemplate{}, errors.New("the service section uses the plan's service time and must have offset and duration set to zero")
+			}
+		case "rehearsal", "other":
+			if duration < 1 || duration > 720 {
+				return ServiceTemplate{}, errors.New("non-service sections must last between 1 and 720 minutes")
+			}
+		default:
+			return ServiceTemplate{}, errors.New("invalid section type")
+		}
+		template.Times = append(template.Times, ServiceTemplateTime{
+			Position:           i,
+			Kind:               kind,
+			Name:               name,
+			StartOffsetMinutes: offset,
+			DurationMinutes:    duration,
+		})
+	}
+	if serviceCount != 1 {
+		return ServiceTemplate{}, errors.New("a template must contain exactly one service section")
+	}
+	return template, nil
 }
 
 func (h *Handler) renderPlan(w http.ResponseWriter, r *http.Request, planID string, errMsg string) {

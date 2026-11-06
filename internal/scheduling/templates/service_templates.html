@@ -1,0 +1,116 @@
+{{define "content"}}
+<div class="page-header">
+    <div>
+        <p class="breadcrumb"><a href="/plans">← Plans</a></p>
+        <h1>Service templates</h1>
+        <p class="muted">Create reusable, service-type-specific section schedules.</p>
+    </div>
+</div>
+
+<div class="card" style="max-width: 760px; margin-bottom: 1.5rem;">
+    <h2 style="margin-top: 0;">Create template</h2>
+    <form method="post" action="/plans/templates" id="template-form">
+        <label>Service type
+            <select name="service_type_id" required>
+                <option value="">Select a service type</option>
+                {{range .ServiceTypes}}
+                <option value="{{.ID}}">{{.Name}}</option>
+                {{end}}
+            </select>
+        </label>
+        <label>Template name
+            <input name="name" maxlength="100" required placeholder="e.g. Sunday morning">
+        </label>
+
+        <h3>Ordered sections</h3>
+        <p class="muted">Section offsets are relative to the plan's service start. The primary service section is required.</p>
+        <div id="template-sections">
+            <div class="template-section row" style="align-items: end; gap: .75rem; margin-bottom: .75rem;">
+                <input type="hidden" name="section_kind" value="service">
+                <input type="hidden" name="section_offset" value="0">
+                <input type="hidden" name="section_duration" value="0">
+                <label style="flex: 2;">Primary section
+                    <input name="section_name" value="Service" maxlength="100" required>
+                </label>
+                <span class="muted" style="padding-bottom: .6rem;">Plan service time</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: .75rem; margin: 1rem 0;">
+            <button type="button" class="button-secondary" id="add-rehearsal">Add rehearsal</button>
+            <button type="button" class="button-secondary" id="add-other">Add section</button>
+        </div>
+        <button type="submit" class="button">Save template</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2 style="margin-top: 0;">Existing templates</h2>
+    {{if .Templates}}
+    <div class="table-container">
+        <table>
+            <thead><tr><th>Template</th><th>Service type</th><th>Sections</th><th></th></tr></thead>
+            <tbody>
+            {{range .Templates}}
+                <tr>
+                    <td><strong>{{.Name}}</strong></td>
+                    <td>{{.ServiceType}}</td>
+                    <td>
+                        {{range $i, $section := .Times}}{{if $i}}, {{end}}{{$section.Name}}{{end}}
+                    </td>
+                    <td style="text-align: right;">
+                        <form method="post" action="/plans/templates/{{.ID}}/delete" onsubmit="return confirm('Delete this service template?')" style="margin: 0;">
+                            <button type="submit" class="button-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <p class="muted">No service templates have been created.</p>
+    {{end}}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sections = document.getElementById('template-sections');
+
+        function addSection(kind, label) {
+            if (sections.querySelectorAll('.template-section').length >= 12) {
+                alert('A template can contain at most 12 sections.');
+                return;
+            }
+            const row = document.createElement('div');
+            row.className = 'template-section row';
+            row.style.cssText = 'align-items: end; gap: .75rem; margin-bottom: .75rem;';
+            row.innerHTML = `
+                <input type="hidden" name="section_kind" value="${kind}">
+                <label style="flex: 2;">${label} name
+                    <input name="section_name" maxlength="100" value="${label}" required>
+                </label>
+                <label>Offset (minutes)
+                    <input type="number" name="section_offset" min="-1440" max="1440" value="0" required>
+                </label>
+                <label>Duration (minutes)
+                    <input type="number" name="section_duration" min="1" max="720" value="30" required>
+                </label>
+                <button type="button" class="button-danger btn-sm remove-section">Remove</button>
+            `;
+            sections.appendChild(row);
+        }
+
+        document.getElementById('add-rehearsal').addEventListener('click', function() {
+            addSection('rehearsal', 'Rehearsal');
+        });
+        document.getElementById('add-other').addEventListener('click', function() {
+            addSection('other', 'Other');
+        });
+        sections.addEventListener('click', function(event) {
+            if (event.target.closest('.remove-section')) {
+                event.target.closest('.template-section').remove();
+            }
+        });
+    });
+</script>
+{{end}}

@@ -7,6 +7,7 @@
     <div class="action-bar">
         <a class="button" href="/plans/new">New Plan</a>
         <a class="button-secondary" href="/plans/bulk">Bulk Create</a>
+        {{if .CanManageTemplates}}<a class="button-secondary" href="/plans/templates">Service Templates</a>{{end}}
         <a class="button-secondary" href="/my-schedule">My Schedule</a>
     </div>
 </div>

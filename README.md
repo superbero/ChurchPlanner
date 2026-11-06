@@ -50,6 +50,15 @@ and administrators can view unpublished plans; team leaders can view drafts
 when leading a team on the plan. Legacy `volunteer` accounts migrate to
 Scheduled Viewer and `guest` accounts to Viewer.
 
+## Service templates
+
+Editors and administrators can create reusable service templates from the
+Plans page. Templates are tied to a service type and define ordered sections,
+such as rehearsals and the primary service, with offsets and durations relative
+to the plan's service start. When creating a plan, choosing a template adds its
+sections; leaving the template selector blank keeps the standard plan-creation
+flow.
+
 ## Password resets
 
 Organization administrators can send a password reset link from the People

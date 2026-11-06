@@ -26,25 +26,32 @@ type Module struct{ handler *Handler }
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	return &Module{handler: &Handler{
-		svcTypes: NewServiceTypeRepository(db),
-		plans:    NewPlanRepository(db),
-		assign:   NewAssignmentRepository(db),
-		members:  NewTeamMembershipRepository(db),
-		renderer: renderer,
+		svcTypes:  NewServiceTypeRepository(db),
+		plans:     NewPlanRepository(db),
+		templates: NewServiceTemplateRepository(db),
+		assign:    NewAssignmentRepository(db),
+		members:   NewTeamMembershipRepository(db),
+		renderer:  renderer,
 	}}
 }
 
 func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 	r.Route("/plans", func(r chi.Router) {
 		r.Get("/", m.handler.PlansIndex)
+		r.Group(func(r chi.Router) {
+			r.Use(authn.RequireRoles(auth.RoleEditor))
+			r.Get("/templates", m.handler.ServiceTemplatesIndex)
+			r.Post("/templates", m.handler.CreateServiceTemplate)
+			r.Post("/templates/{templateID}/delete", m.handler.DeleteServiceTemplate)
+		})
 		r.Get("/{id}", m.handler.ViewPlan)
 
 		r.Group(func(r chi.Router) {
 			r.Use(authn.RequireRoles(auth.RoleEditor))
 
 			r.Get("/new", m.handler.NewPlan)
-		r.Get("/bulk", m.handler.ShowBulkPlan)
-		r.Post("/bulk", m.handler.BulkCreatePlans)
+			r.Get("/bulk", m.handler.ShowBulkPlan)
+			r.Post("/bulk", m.handler.BulkCreatePlans)
 			r.Post("/", m.handler.CreatePlan)
 			r.Get("/{id}/edit", m.handler.EditPlan)
 			r.Post("/{id}", m.handler.UpdatePlan)
@@ -54,11 +61,11 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 			r.Post("/{id}/times", m.handler.AddTime)
 			r.Post("/{id}/times/reorder", m.handler.ReorderTimes)
 			r.Post("/{id}/times/{tid}", m.handler.UpdateTime)
-		r.Post("/{id}/times/{tid}/delete", m.handler.DeleteTime)
-		r.Post("/{id}/times/{tid}/duplicate", m.handler.DuplicateTime)
+			r.Post("/{id}/times/{tid}/delete", m.handler.DeleteTime)
+			r.Post("/{id}/times/{tid}/duplicate", m.handler.DuplicateTime)
 
 			r.Post("/{id}/items", m.handler.AddItem)
-		r.Post("/{id}/items/batch", m.handler.BatchAddItems)
+			r.Post("/{id}/items/batch", m.handler.BatchAddItems)
 			r.Get("/{id}/items/{iid}/edit", m.handler.EditItemForm)
 			r.Post("/{id}/items/{iid}", m.handler.UpdateItem)
 			r.Post("/{id}/items/{iid}/delete", m.handler.DeleteItem)

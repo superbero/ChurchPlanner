@@ -21,6 +21,18 @@
             </select>
         </label>
 
+        {{if .IsNew}}
+        <label>Service template <span class="muted">(optional)</span>
+            <select name="service_template_id" id="service-template-select">
+                <option value="">Start with a blank plan</option>
+                {{range .ServiceTemplates}}
+                <option value="{{.ID}}" data-service-type="{{.ServiceTypeID}}">{{.Name}} — {{.ServiceType}}</option>
+                {{end}}
+            </select>
+        </label>
+        <p class="muted" style="font-size: 0.85em;">A template adds its ordered sections relative to the service start time.</p>
+        {{end}}
+
         <label>Title
             <input name="title" value="{{.Plan.Title}}" required placeholder="e.g. Sunday Morning Service">
         </label>
@@ -58,8 +70,23 @@
     document.addEventListener('DOMContentLoaded', function() {
         const typeSelect = document.getElementById('service-type-select');
         const dateInput = document.getElementById('service-date-input');
+        const templateSelect = document.getElementById('service-template-select');
 
         if (!typeSelect || !dateInput) return;
+
+        function filterTemplates() {
+            if (!templateSelect) return;
+            const selectedType = typeSelect.value;
+            for (const option of templateSelect.options) {
+                if (!option.value) continue;
+                const matches = option.dataset.serviceType === selectedType;
+                option.hidden = !matches;
+                option.disabled = !matches;
+                if (!matches && option.selected) templateSelect.value = '';
+            }
+        }
+        filterTemplates();
+        typeSelect.addEventListener('change', filterTemplates);
 
         typeSelect.addEventListener('change', function() {
             // Get the visible text of the selected option
