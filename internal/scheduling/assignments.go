@@ -79,10 +79,8 @@ func (r *AssignmentRepository) ListItems(ctx context.Context, planID string) ([]
 	return out, rows.Err()
 }
 
-// CreateItem inserts a song/header/note into a plan. If the item is a song with
-// an arrangement + key, it also writes a song_key_history row dated to the plan's
-// service date. This is the "key used on a specific date" feature that was a
-// placeholder before plans existed.
+// CreateItem inserts a plan item. If the item is a song with an arrangement +
+// key, it also writes a song_key_history row dated to the plan's service date.
 func (r *AssignmentRepository) CreateItem(ctx context.Context, planID string, in CreatePlanItemInput) (PlanItem, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

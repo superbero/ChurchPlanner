@@ -230,6 +230,10 @@ h2 + table, h3 + table { margin-bottom: 1rem; }
 .item-actions a { color: #666; text-decoration: none; padding: 0 .2rem; }
 .item-actions a:hover { color: var(--accent); }
 .item-header, .item-note { font-weight: 600; color: #555; font-size: .9em; text-transform: uppercase; letter-spacing: .05em; }
+.item-scripture { color: var(--accent); font-weight: 600; }
+.scripture-translation { display: block; color: #667085; font-size: .8em; margin-top: .15rem; }
+.scripture-text { white-space: pre-line; font-size: .92em; line-height: 1.55; margin: .4rem 0 0; }
+.scripture-preview { margin-top: 1rem; padding: 1rem; border-radius: var(--radius-md); background: var(--bg-body); max-height: 35vh; overflow-y: auto; }
 
 .add-item { margin-top: .75rem; }
 .add-item summary {

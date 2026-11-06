@@ -38,7 +38,10 @@ func TestPlanViewRendersItemCopyAndSafeTimeEditControls(t *testing.T) {
 					ID: "time-1", Kind: "service", Name: "Children's Service",
 					StartsAt: start, EndsAt: start.Add(90 * time.Minute),
 				},
-				Items: []PlanItem{{ID: "item-1", Kind: "header", Title: "Welcome"}},
+				Items: []PlanItem{
+					{ID: "item-1", Kind: "header", Title: "Welcome"},
+					{ID: "item-2", Kind: "scripture", Title: "John 3:16", Notes: "For God so loved the world.\n<script>alert(1)</script>"},
+				},
 			}},
 			"NextStart":             start,
 			"Teams":                 []TeamWithPositions{},
@@ -56,6 +59,11 @@ func TestPlanViewRendersItemCopyAndSafeTimeEditControls(t *testing.T) {
 		`data-time-name="Children&#39;s Service"`,
 		`action="/plans/plan-1/items/item-1/duplicate"`,
 		`title="Copy this item to the end of this service section"`,
+		`+ Add Scripture`,
+		`World English Bible (WEB)`,
+		`For God so loved the world.`,
+		`&lt;script&gt;alert(1)&lt;/script&gt;`,
+		`https://bible-api.com/`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("plan view is missing %q", expected)

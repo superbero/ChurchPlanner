@@ -47,10 +47,11 @@
                 {{else}}
                     {{.Title}}
                 {{end}}
+                {{if eq .Kind "scripture"}}<span class="scripture-translation">World English Bible (WEB)</span>{{end}}
             </span>
             {{if .Key}}<span class="item-key">Key {{.Key}}</span>{{end}}
             {{if .DurationMinutes}}<span class="item-length">{{.DurationMinutes}}m</span>{{end}}
-            {{if .Notes}}<p class="muted">{{.Notes}}</p>{{end}}
+            {{if .Notes}}<p class="{{if eq .Kind "scripture"}}scripture-text{{else}}muted{{end}}">{{.Notes}}</p>{{end}}
         </li>
         {{else}}
         <li class="item-empty">No items listed for this time.</li>

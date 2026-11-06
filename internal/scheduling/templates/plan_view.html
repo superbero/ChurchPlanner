@@ -77,7 +77,7 @@
                     {{range .Items}}
                     <li class="item-row" draggable="true" data-item-id="{{.ID}}">
                         <span class="drag-handle">⋮⋮</span>
-                        <span class="item-main">
+                        <div class="item-main">
                             {{if eq .Kind "song"}}
                                 {{if .SongTitle}}
                                     <a href="/songs/{{.SongID}}" class="item-title">{{.SongTitle}}</a>
@@ -85,10 +85,14 @@
                                 {{else}}
                                     {{.Title}}
                                 {{end}}
+                            {{else if eq .Kind "scripture"}}
+                                <span class="item-scripture">{{.Title}}</span>
+                                <span class="scripture-translation">World English Bible (WEB)</span>
+                                {{if .Notes}}<p class="scripture-text">{{.Notes}}</p>{{end}}
                             {{else}}
                                 <span class="item-{{.Kind}}">{{.Title}}</span>
                             {{end}}
-                        </span>
+                        </div>
                         <span class="item-key">{{.Key}}</span>
                         <span class="item-length">{{if .DurationMinutes}}{{.DurationMinutes}}m{{end}}</span>
                         <div class="item-actions">
@@ -108,6 +112,7 @@
 
                 <div class="add-item-container" style="display: flex; gap: 0.5rem;">
                     <button type="button" class="button-secondary btn-sm" onclick="openSongModal('{{.Time.ID}}')">+ Add Song</button>
+                    <button type="button" class="button-secondary btn-sm scripture-open-button" data-time-id="{{.Time.ID}}">+ Add Scripture</button>
 
                     <details class="add-item-details" style="margin:0;">
                         <summary class="button-secondary btn-sm" style="display:inline-block;">+ Add Header/Note</summary>
@@ -314,6 +319,34 @@
     </div>
 </div>
 
+<!-- Scripture Picker Modal -->
+<div id="scripture-modal" class="modal-overlay" style="display: none;" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="scripture-modal-title"
+         style="max-width: 700px; width: 90%;">
+        <button type="button" class="modal-close" id="scripture-modal-close" aria-label="Close scripture picker">×</button>
+        <div class="modal-body" style="padding: 1.5rem;">
+            <h2 id="scripture-modal-title">Add Scripture</h2>
+            <p class="muted">Look up a passage in the reusable World English Bible (WEB), then add its reference and text to this service section.</p>
+            <label>Passage reference
+                <input type="text" id="scripture-reference" placeholder="e.g. John 3:16-18" autocomplete="off">
+            </label>
+            <button type="button" class="button-secondary" id="scripture-preview-button">Preview passage</button>
+            <p id="scripture-status" class="muted" role="status" aria-live="polite"></p>
+            <div id="scripture-preview" class="scripture-preview" hidden></div>
+            <form method="post" action="/plans/{{.Plan.ID}}/items" id="scripture-add-form">
+                <input type="hidden" name="plan_time_id" id="scripture-plan-time-id">
+                <input type="hidden" name="kind" value="scripture">
+                <input type="hidden" name="title" id="scripture-title">
+                <input type="hidden" name="notes" id="scripture-text">
+                <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+                    <button type="button" class="button-secondary" id="scripture-cancel-button">Cancel</button>
+                    <button type="submit" class="button" id="scripture-add-button" disabled>Add Scripture</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Edit Time Modal -->
 <div id="edit-time-modal" class="modal-overlay" style="display: none;" onclick="closeEditTimeModal(event)">
     <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px;">
@@ -365,6 +398,107 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        const scriptureModal = document.getElementById('scripture-modal');
+        const scriptureReference = document.getElementById('scripture-reference');
+        const scripturePreview = document.getElementById('scripture-preview');
+        const scriptureStatus = document.getElementById('scripture-status');
+        const scripturePreviewButton = document.getElementById('scripture-preview-button');
+        const scriptureAddButton = document.getElementById('scripture-add-button');
+        const scriptureTitle = document.getElementById('scripture-title');
+        const scriptureText = document.getElementById('scripture-text');
+        const scriptureForm = document.getElementById('scripture-add-form');
+        let scriptureController;
+
+        function closeScriptureModal() {
+            scriptureModal.style.display = 'none';
+            scriptureModal.setAttribute('aria-hidden', 'true');
+            scriptureController?.abort();
+        }
+
+        document.querySelectorAll('.scripture-open-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.getElementById('scripture-plan-time-id').value = button.dataset.timeId;
+                scriptureModal.style.display = 'flex';
+                scriptureModal.setAttribute('aria-hidden', 'false');
+                scriptureReference.focus();
+            });
+        });
+        document.getElementById('scripture-modal-close').addEventListener('click', closeScriptureModal);
+        document.getElementById('scripture-cancel-button').addEventListener('click', closeScriptureModal);
+        scriptureModal.addEventListener('click', event => {
+            if (event.target === scriptureModal) closeScriptureModal();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && scriptureModal.style.display !== 'none') closeScriptureModal();
+        });
+        scriptureReference.addEventListener('input', () => {
+            scriptureController?.abort();
+            scriptureAddButton.disabled = true;
+            scriptureTitle.value = '';
+            scriptureText.value = '';
+            scripturePreview.hidden = true;
+            scriptureStatus.textContent = '';
+        });
+        scripturePreviewButton.addEventListener('click', async () => {
+            const reference = scriptureReference.value.trim();
+            if (!reference) {
+                scriptureStatus.textContent = 'Enter a Bible reference to look up.';
+                return;
+            }
+            scriptureController?.abort();
+            scriptureController = new AbortController();
+            let timedOut = false;
+            const timeout = setTimeout(() => {
+                timedOut = true;
+                scriptureController.abort();
+            }, 10000);
+            scripturePreviewButton.disabled = true;
+            scriptureAddButton.disabled = true;
+            scriptureStatus.textContent = 'Looking up passage…';
+            scripturePreview.hidden = true;
+            try {
+                const url = `https://bible-api.com/${encodeURIComponent(reference)}?translation=web`;
+                const response = await fetch(url, { signal: scriptureController.signal });
+                const passage = await response.json();
+                if (!response.ok || !passage.reference || !passage.text || passage.translation_id !== 'web') {
+                    throw new Error('Passage not found. Check the reference and try again.');
+                }
+                if (passage.reference.length > 200 || passage.text.length > 20000) {
+                    throw new Error('Please select a shorter passage.');
+                }
+                scriptureTitle.value = passage.reference;
+                scriptureText.value = passage.text.trim();
+                scripturePreview.replaceChildren();
+                const heading = document.createElement('strong');
+                heading.textContent = passage.reference;
+                const translation = document.createElement('span');
+                translation.className = 'scripture-translation';
+                translation.textContent = 'World English Bible (WEB) · Public Domain';
+                const text = document.createElement('p');
+                text.className = 'scripture-text';
+                text.textContent = passage.text.trim();
+                scripturePreview.append(heading, translation, text);
+                scripturePreview.hidden = false;
+                scriptureAddButton.disabled = false;
+                scriptureStatus.textContent = 'Passage ready to add.';
+            } catch (error) {
+                if (timedOut) {
+                    scriptureStatus.textContent = 'The passage lookup timed out. Please try again.';
+                } else if (error.name !== 'AbortError') {
+                    scriptureStatus.textContent = error.message || 'Could not load the passage. Please try again.';
+                }
+            } finally {
+                clearTimeout(timeout);
+                scripturePreviewButton.disabled = false;
+            }
+        });
+        scriptureForm.addEventListener('submit', event => {
+            if (!scriptureTitle.value || !scriptureText.value) {
+                event.preventDefault();
+                scriptureStatus.textContent = 'Preview a passage before adding it.';
+            }
+        });
+
         document.querySelectorAll('.edit-time-button').forEach(button => {
             button.addEventListener('click', () => openEditTimeModal(button));
         });

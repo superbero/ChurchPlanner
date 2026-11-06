@@ -574,13 +574,26 @@ func (h *Handler) DeleteTime(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	duration, _ := strconv.Atoi(r.FormValue("duration_minutes"))
+	kind := strings.TrimSpace(r.FormValue("kind"))
+	title := strings.TrimSpace(r.FormValue("title"))
+	notes := strings.TrimSpace(r.FormValue("notes"))
+	if kind == "scripture" {
+		if title == "" || len(title) > 200 || notes == "" || len(notes) > 20000 {
+			http.Error(w, "A valid scripture reference and passage text are required.", http.StatusUnprocessableEntity)
+			return
+		}
+		if strings.TrimSpace(r.FormValue("plan_time_id")) == "" {
+			http.Error(w, "Choose a service section for the scripture passage.", http.StatusUnprocessableEntity)
+			return
+		}
+	}
 	in := CreatePlanItemInput{
-		Kind:            r.FormValue("kind"),
-		Title:           strings.TrimSpace(r.FormValue("title")),
+		Kind:            kind,
+		Title:           title,
 		ArrangementID:   strings.TrimSpace(r.FormValue("arrangement_id")),
 		Key:             strings.TrimSpace(r.FormValue("key")),
 		DurationMinutes: duration,
-		Notes:           strings.TrimSpace(r.FormValue("notes")),
+		Notes:           notes,
 		PlanTimeID:      strings.TrimSpace(r.FormValue("plan_time_id")),
 	}
 	if in.Kind == "" {
