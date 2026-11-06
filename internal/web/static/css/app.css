@@ -1860,6 +1860,7 @@ table input[type="checkbox"] { width: 1rem; height: 1rem; }
 .bulk-preview-table { min-width: 760px; margin: 0; }
 .bulk-preview-table th { position: sticky; top: 0; z-index: 1; }
 .bulk-preview-table td { vertical-align: top; }
+.bulk-preview-table td:first-child { min-width: 210px; }
 .bulk-preview-table input[type="checkbox"] { width: 1rem; height: 1rem; }
 .bulk-preview-table td:nth-child(3) { min-width: 260px; }
 .bulk-row-author, .bulk-row-hint { display: block; margin-top: .2rem; color: #667085; font-size: .85rem; }
@@ -1867,6 +1868,9 @@ table input[type="checkbox"] { width: 1rem; height: 1rem; }
 .bulk-row-content summary { width: fit-content; color: #475467; font-size: .8rem; cursor: pointer; }
 .bulk-row-content pre { max-width: 420px; max-height: 180px; overflow: auto; margin: .4rem 0 0; padding: .65rem; color: #344054; background: #f8fafc; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
 .bulk-row-errors { margin: .3rem 0 0; padding-left: 1rem; color: #b42318; font-size: .8rem; }
+.bulk-decision-label, .bulk-target-label { margin: .55rem 0 0; font-size: .82rem; font-weight: 600; }
+.bulk-decision-label select, .bulk-target-label select { display: block; width: 100%; margin-top: .2rem; font: inherit; }
+.bulk-target-label[hidden] { display: none; }
 .bulk-row-invalid td { background: #fff8f7; }
 .bulk-row-duplicate td { background: #fffcf5; }
 .bulk-import-complete { display: flex; align-items: flex-start; gap: 1rem; max-width: 760px; margin: 1rem auto; }

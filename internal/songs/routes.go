@@ -25,20 +25,22 @@ func Templates() fs.FS {
 type Module struct{ handler *Handler }
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer, cfg HandlerConfig) *Module {
+	songRepo := NewRepository(db)
 	arrRepo := NewArrangementRepository(db)
 	health := NewHealthService(db)
 	translator := NewTranslator(cfg.TranslateAPIURL, cfg.TranslateAPIKey)
 	return &Module{handler: &Handler{
-		svc:      NewService(NewRepository(db), NewHistoryRepository(db)),
-		arr:      NewArrangementService(arrRepo),
-		tags:     NewTagService(db),
-		revs:     NewRevisionRepository(db),
-		practice: NewPracticeRepository(db),
-		health:   health,
-		sugg:     NewSuggestionService(db, health),
-		trans:    translator,
-		cfg:      cfg,
-		renderer: renderer,
+		svc:        NewService(songRepo, NewHistoryRepository(db)),
+		arr:        NewArrangementService(arrRepo),
+		tags:       NewTagService(db),
+		revs:       NewRevisionRepository(db),
+		practice:   NewPracticeRepository(db),
+		health:     health,
+		sugg:       NewSuggestionService(db, health),
+		trans:      translator,
+		bulkImport: songRepo,
+		cfg:        cfg,
+		renderer:   renderer,
 	}}
 }
 

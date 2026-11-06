@@ -2,14 +2,41 @@ package songs
 
 import (
 	"bytes"
+	"context"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/go-pdf/fpdf"
 )
+
+type testBulkImportStore struct {
+	matches   map[string][]SongImportMatch
+	decisions map[int]bulkImportDecision
+}
+
+func (s testBulkImportStore) FindBulkImportMatches(_ context.Context, records []bulkImportRecord) (map[string][]SongImportMatch, error) {
+	return s.matches, nil
+}
+
+func (s *testBulkImportStore) ImportMany(_ context.Context, records []bulkImportRecord, decisions map[int]bulkImportDecision) (int, int, int, error) {
+	s.decisions = decisions
+	var imported, arrangements, skipped int
+	for _, decision := range decisions {
+		switch decision.Action {
+		case bulkImportActionNew:
+			imported++
+		case bulkImportActionArrangement:
+			arrangements++
+		case bulkImportActionSkip:
+			skipped++
+		}
+	}
+	return imported, arrangements, skipped, nil
+}
 
 func TestParseBulkImportCSVSupportsChordProAliasAndMultilineContent(t *testing.T) {
 	input := "title,author,key,tempo,chordpro\r\n" +
@@ -137,7 +164,7 @@ func TestParseUploadedSongExtractsPDFText(t *testing.T) {
 	}
 }
 
-func TestBulkImportTemplateRendersSelectedRowsAndCompletion(t *testing.T) {
+func TestBulkImportTemplateRendersDecisionsAndCompletion(t *testing.T) {
 	renderer := newSongTemplateRenderer(t)
 	render := func(data map[string]any) string {
 		t.Helper()
@@ -155,14 +182,19 @@ func TestBulkImportTemplateRendersSelectedRowsAndCompletion(t *testing.T) {
 			bulkImportRecord: bulkImportRecord{
 				CSVRow: 2, Title: "Test song", SourceContent: "[G]Test lyrics",
 			},
-			Selected: true,
+			Matches: []SongImportMatch{{
+				ID: "song-1", Title: "Test song", Author: "Test artist", ExactTitleAuthor: true,
+			}},
+			Decision: bulkImportActionSkip,
 		}},
-		"Payload":      `[{"csv_row":2,"title":"Test song","source_content":"[G]Test lyrics"}]`,
-		"ValidCount":   1,
-		"SelectedRows": []int{2},
+		"Payload":        `[{"csv_row":2,"title":"Test song","source_content":"[G]Test lyrics"}]`,
+		"ValidCount":     1,
+		"DuplicateCount": 1,
 	})
 	for _, expected := range []string{
-		"Test song", "Import selected songs", `value="2" checked`,
+		"Test song", "Apply decisions", `name="decision_2"`,
+		`value="new"`, `value="skip"`, `value="arrangement"`,
+		"same title and author", `href="/songs/song-1"`, `name="target_2"`,
 		`name="payload"`, "[G]Test lyrics",
 	} {
 		if !strings.Contains(preview, expected) {
@@ -176,11 +208,37 @@ func TestBulkImportTemplateRendersSelectedRowsAndCompletion(t *testing.T) {
 		}
 	}
 
-	completed := render(map[string]any{"Complete": true, "Imported": 2, "Skipped": 1})
-	for _, expected := range []string{"Import complete", "2 songs were added", "1 duplicate row was skipped"} {
+	completed := render(map[string]any{"Complete": true, "Imported": 2, "Arrangements": 1, "Skipped": 1})
+	for _, expected := range []string{"Import complete", "2 new songs were added", "1 arrangement was added", "1 row was skipped as requested"} {
 		if !strings.Contains(completed, expected) {
 			t.Errorf("bulk import completion is missing %q", expected)
 		}
+	}
+}
+
+func TestSaveBulkImportUsesEachRowDecision(t *testing.T) {
+	store := &testBulkImportStore{}
+	handler := &Handler{renderer: newSongTemplateRenderer(t), bulkImport: store}
+	body := "payload=" + url.QueryEscape(`[{"csv_row":1,"title":"Existing title","author":"Writer","source_content":"[G]First"},{"csv_row":2,"title":"Another song","source_content":"[C]Second"},{"csv_row":3,"title":"Third song","source_content":"[D]Third"}]`) +
+		"&decision_1=skip&decision_2=new&decision_3=arrangement&target_3=song-3"
+	request := httptest.NewRequest(http.MethodPost, "/songs/import/bulk/save", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+
+	handler.SaveBulkImport(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if store.decisions[1].Action != bulkImportActionSkip || store.decisions[2].Action != bulkImportActionNew {
+		t.Fatalf("saved decisions = %#v", store.decisions)
+	}
+	if store.decisions[3].Action != bulkImportActionArrangement || store.decisions[3].TargetSong != "song-3" {
+		t.Fatalf("arrangement decision = %#v", store.decisions[3])
+	}
+	if !strings.Contains(response.Body.String(), "1 new song was added") ||
+		!strings.Contains(response.Body.String(), "1 arrangement was added") ||
+		!strings.Contains(response.Body.String(), "1 row was skipped as requested") {
+		t.Fatalf("completion did not report chosen actions: %s", response.Body.String())
 	}
 }
 
@@ -207,7 +265,10 @@ func TestPreviewBulkImportAcceptsMultipleSongFiles(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/songs/import/bulk/preview", &body)
 	request.Header.Set("Content-Type", writer.FormDataContentType())
 	response := httptest.NewRecorder()
-	handler := &Handler{renderer: newSongTemplateRenderer(t)}
+	handler := &Handler{
+		renderer:   newSongTemplateRenderer(t),
+		bulkImport: &testBulkImportStore{},
+	}
 	handler.PreviewBulkImport(response, request)
 
 	if response.Code != http.StatusOK {

@@ -3,7 +3,7 @@
     <div>
         <p class="song-breadcrumb"><a href="/songs">Songs</a><span aria-hidden="true">/</span><a href="/songs/import">Import</a><span aria-hidden="true">/</span>Bulk import</p>
         <h1>Import songs in bulk</h1>
-        <p class="muted">Upload a CSV or multiple song files, review every item, then add selected songs together.</p>
+        <p class="muted">Upload a CSV or multiple song files, review every item, and choose what to do with each row.</p>
     </div>
     <a href="/songs/import" class="button-secondary">Single-song import</a>
 </div>
@@ -15,8 +15,10 @@
     <span class="bulk-import-complete-icon" aria-hidden="true">✓</span>
     <div>
         <h2>Import complete</h2>
-        <p>{{.Imported}} {{if eq .Imported 1}}song was{{else}}songs were{{end}} added to your library.</p>
-        {{if .Skipped}}<p class="muted">{{.Skipped}} duplicate {{if eq .Skipped 1}}row was{{else}}rows were{{end}} skipped.</p>{{end}}
+    {{if .Imported}}<p>{{.Imported}} {{if eq .Imported 1}}new song was{{else}}new songs were{{end}} added to your library.</p>{{end}}
+    {{if .Arrangements}}<p>{{.Arrangements}} {{if eq .Arrangements 1}}arrangement was{{else}}arrangements were{{end}} added to existing songs.</p>{{end}}
+    {{if .Skipped}}<p class="muted">{{.Skipped}} {{if eq .Skipped 1}}row was{{else}}rows were{{end}} skipped as requested.</p>{{end}}
+    {{if and (eq .Imported 0) (eq .Arrangements 0) (eq .Skipped 0)}}<p>No songs were imported.</p>{{end}}
         <div class="bulk-import-complete-actions">
             <a href="/songs" class="button">View song library</a>
             <a href="/songs/import/bulk" class="button-secondary">Import more songs</a>
@@ -31,7 +33,7 @@
             <div>
                 <span class="import-step">REVIEW BEFORE IMPORT</span>
                 <h2>{{len .Rows}} songs found</h2>
-                <p class="muted">Valid unique rows are selected by default. Rows already duplicated in this file are left unchecked.</p>
+                <p class="muted">Review each song and choose whether to add it, skip it, or add its chart as an arrangement.</p>
             </div>
             <div class="bulk-preview-counts">
                 <span class="bulk-count-valid">{{.ValidCount}} ready</span>
@@ -43,28 +45,41 @@
         <form method="post" action="/songs/import/bulk/save" id="bulk-import-save-form">
             <input type="hidden" name="payload" value="{{.Payload}}">
             <div class="bulk-import-toolbar">
-                <label class="check">
-                    <input type="checkbox" id="select-valid-rows">
-                    Select ready songs
-                </label>
-                <span id="bulk-selection-count" class="muted" aria-live="polite">{{.ValidCount}} selected</span>
-                <button type="submit" class="button" id="bulk-import-submit">Import selected songs</button>
+                <button type="button" class="button-secondary btn-sm" data-bulk-decision="new">Import all valid rows as new songs</button>
+                <button type="button" class="button-secondary btn-sm" data-bulk-decision="skip-suggested">Skip suggested matches</button>
+                <span id="bulk-selection-count" class="muted" aria-live="polite"></span>
+                <button type="submit" class="button" id="bulk-import-submit">Apply decisions</button>
             </div>
             <div class="bulk-preview-table-wrap">
                 <table class="bulk-preview-table">
                     <thead>
-                        <tr><th>Select</th><th>File / row</th><th>Song</th><th>Key</th><th>Tempo</th><th>Review status</th></tr>
+                        <tr><th>Decision</th><th>File / row</th><th>Song</th><th>Key</th><th>Tempo</th><th>Review status</th></tr>
                     </thead>
                     <tbody>
                     {{range .Rows}}
-                        <tr class="{{if .Errors}}bulk-row-invalid{{else if .Duplicate}}bulk-row-duplicate{{end}}">
+                        <tr class="{{if .Errors}}bulk-row-invalid{{else if or .Duplicate .Matches}}bulk-row-duplicate{{end}}">
                             <td>
-                                {{if and (not .Errors) (not .Duplicate)}}
-                                <input type="checkbox" class="bulk-row-select" name="selected_rows"
-                                       value="{{.CSVRow}}" {{if .Selected}}checked{{end}}
-                                       aria-label="Select {{.Title}}">
-                                {{else}}
+                                {{if .Errors}}
                                 <span aria-hidden="true">—</span>
+                                {{else}}
+                                <label class="bulk-decision-label">Choose action
+                                    <select name="decision_{{.CSVRow}}" class="bulk-row-decision"
+                                            data-suggested-match="{{if or .Matches .Duplicate}}true{{else}}false{{end}}">
+                                        <option value="new" {{if eq .Decision "new"}}selected{{end}}>Import as a new song</option>
+                                        <option value="skip" {{if eq .Decision "skip"}}selected{{end}}>Skip this row</option>
+                                        {{if .Matches}}<option value="arrangement" {{if eq .Decision "arrangement"}}selected{{end}}>Add as arrangement</option>{{end}}
+                                    </select>
+                                </label>
+                                {{if .Matches}}
+                                <label class="bulk-target-label">Existing song
+                                    <select name="target_{{.CSVRow}}" class="bulk-row-target">
+                                        <option value="">Choose matching song</option>
+                                        {{range .Matches}}
+                                        <option value="{{.ID}}">{{.Title}}{{if .Author}} — {{.Author}}{{end}}</option>
+                                        {{end}}
+                                    </select>
+                                </label>
+                                {{end}}
                                 {{end}}
                             </td>
                             <td>{{if .SourceName}}{{.SourceName}} · row {{.CSVRow}}{{else}}{{.CSVRow}}{{end}}</td>
@@ -82,11 +97,25 @@
                                 {{if .Errors}}
                                 <span class="bulk-status-invalid">Needs attention</span>
                                 <ul class="bulk-row-errors">{{range .Errors}}<li>{{.}}</li>{{end}}</ul>
-                                {{else if .Duplicate}}
-                                <span class="bulk-status-duplicate">Duplicate in CSV</span>
-                                <span class="bulk-row-hint">Only the first matching title and author is selected.</span>
                                 {{else}}
-                                <span class="bulk-status-ready">Ready</span>
+                                    {{if .Matches}}
+                                    <span class="bulk-status-duplicate">Possible existing match</span>
+                                    {{range .Matches}}
+                                    <span class="bulk-row-hint">
+                                        <a href="/songs/{{.ID}}" target="_blank" rel="noopener">{{.Title}}</a>
+                                        {{if .Author}} · {{.Author}}{{end}}
+                                        {{if .ExactTitleAuthor}}(same title and author){{else}}(same title){{end}}
+                                        {{if .Archived}} · archived{{end}}
+                                    </span>
+                                    {{end}}
+                                    {{end}}
+                                    {{if .Duplicate}}
+                                    <span class="bulk-status-duplicate">Repeated in this upload</span>
+                                    <span class="bulk-row-hint">This title and author appeared earlier in the uploaded file.</span>
+                                    {{end}}
+                                    {{if and (not .Matches) (not .Duplicate)}}
+                                    <span class="bulk-status-ready">No likely match</span>
+                                    {{end}}
                                 {{end}}
                             </td>
                         </tr>
@@ -118,8 +147,8 @@
         <section class="bulk-import-guide">
             <h2>Import behavior</h2>
             <p>For CSV, <code>title</code> and one content column (<code>source_content</code>, <code>chordpro</code>, or <code>lyrics</code>) are required. <code>author</code>, <code>key</code>, and <code>tempo</code> are optional.</p>
-            <p>PDF text is extracted; XML metadata and lyrics are converted to ChordPro. Plain text and ChordPro content are supported directly. Songs matching an existing title and author are skipped to avoid accidental duplicates.</p>
-            <p>All selected songs and arrangements are saved together. If any save fails, the batch is rolled back.</p>
+            <p>PDF text is extracted; XML metadata and lyrics are converted to ChordPro. Plain text and ChordPro content are supported directly. Existing songs with the same title are suggested for review; the importer never silently discards them.</p>
+            <p>Choose to create a new song, skip the row, or add the imported chart as an arrangement to an existing same-title song. All decisions save together; if any save fails, the batch is rolled back.</p>
         </section>
         {{end}}
     </section>
@@ -139,34 +168,58 @@
         }
     });
 
-    const rowChecks = [...document.querySelectorAll('.bulk-row-select')];
-    const selectAll = document.getElementById('select-valid-rows');
+    const decisions = [...document.querySelectorAll('.bulk-row-decision')];
     const selectionCount = document.getElementById('bulk-selection-count');
-    const submit = document.getElementById('bulk-import-submit');
-    if (!selectAll) return;
+    if (!decisions.length) return;
 
-    function updateSelection() {
-        const selected = rowChecks.filter(check => check.checked).length;
-        selectionCount.textContent = `${selected} selected`;
-        selectAll.checked = rowChecks.length > 0 && selected === rowChecks.length;
-        selectAll.indeterminate = selected > 0 && selected < rowChecks.length;
-        submit.disabled = selected === 0;
+    function updateDecisions() {
+        const newSongs = decisions.filter(select => select.value === 'new').length;
+        const arrangements = decisions.filter(select => select.value === 'arrangement').length;
+        const skipped = decisions.filter(select => select.value === 'skip').length;
+        selectionCount.textContent = `${newSongs} new · ${arrangements} arrangements · ${skipped} skipped`;
+        decisions.forEach(select => {
+            const target = select.closest('td').querySelector('.bulk-target-label');
+            if (!target) return;
+            const showTarget = select.value === 'arrangement';
+            target.hidden = !showTarget;
+            const targetSelect = target.querySelector('select');
+            targetSelect.required = showTarget;
+            if (showTarget && !targetSelect.value) {
+                targetSelect.selectedIndex = 1;
+            } else if (!showTarget) {
+                targetSelect.value = '';
+            }
+        });
     }
 
-    selectAll.addEventListener('change', () => {
-        rowChecks.forEach(check => check.checked = selectAll.checked);
-        updateSelection();
-    });
-    rowChecks.forEach(check => check.addEventListener('change', updateSelection));
+    document.querySelectorAll('[data-bulk-decision]').forEach(button => button.addEventListener('click', () => {
+        const decision = button.dataset.bulkDecision;
+        decisions.forEach(select => {
+            if (decision === 'new') {
+                select.value = 'new';
+            } else if (select.dataset.suggestedMatch === 'true') {
+                select.value = 'skip';
+            }
+        });
+        updateDecisions();
+    }));
+    decisions.forEach(select => select.addEventListener('change', updateDecisions));
     document.getElementById('bulk-import-save-form').addEventListener('submit', event => {
-        const selected = rowChecks.filter(check => check.checked).length;
-        if (!selected) {
+        if (decisions.some(select => select.value === 'arrangement' &&
+            !select.closest('td').querySelector('.bulk-row-target').value)) {
             event.preventDefault();
+            alert('Choose an existing song for each arrangement decision.');
             return;
         }
-        if (!confirm(`Import ${selected} selected songs? Existing duplicates will be skipped.`)) event.preventDefault();
+        const counts = decisions.reduce((total, select) => {
+            total[select.value] += 1;
+            return total;
+        }, {new: 0, arrangement: 0, skip: 0});
+        if (!confirm(`Apply these decisions: ${counts.new} new songs, ${counts.arrangement} arrangements, ${counts.skip} skipped?`)) {
+            event.preventDefault();
+        }
     });
-    updateSelection();
+    updateDecisions();
 })();
 </script>
 {{end}}

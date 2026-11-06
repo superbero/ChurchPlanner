@@ -18,16 +18,17 @@ import (
 )
 
 type Handler struct {
-	svc      *Service
-	arr      *ArrangementService
-	tags     *TagService
-	revs     *RevisionRepository
-	practice *PracticeRepository
-	health   *HealthService
-	sugg     *SuggestionService
-	trans    *Translator
-	cfg      HandlerConfig
-	renderer *httpx.Renderer
+	svc        *Service
+	arr        *ArrangementService
+	tags       *TagService
+	revs       *RevisionRepository
+	practice   *PracticeRepository
+	health     *HealthService
+	sugg       *SuggestionService
+	trans      *Translator
+	bulkImport bulkImportStore
+	cfg        HandlerConfig
+	renderer   *httpx.Renderer
 }
 
 type HandlerConfig struct {

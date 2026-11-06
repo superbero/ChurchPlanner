@@ -12,12 +12,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
 
 const (
 	maxBulkImportRows = 200
 	maxBulkImportSize = 15 << 20
+
+	bulkImportActionNew         = "new"
+	bulkImportActionSkip        = "skip"
+	bulkImportActionArrangement = "arrangement"
 )
 
 type bulkImportRecord struct {
@@ -35,8 +40,29 @@ type bulkImportPreviewRow struct {
 	bulkImportRecord
 	Errors    []string
 	Duplicate bool
-	Selected  bool
+	Matches   []SongImportMatch
+	Decision  string
 }
+
+type SongImportMatch struct {
+	ID               string
+	Title            string
+	Author           string
+	ExactTitleAuthor bool
+	Archived         bool
+}
+
+type bulkImportDecision struct {
+	Action     string
+	TargetSong string
+}
+
+type bulkImportStore interface {
+	FindBulkImportMatches(context.Context, []bulkImportRecord) (map[string][]SongImportMatch, error)
+	ImportMany(context.Context, []bulkImportRecord, map[int]bulkImportDecision) (int, int, int, error)
+}
+
+var ErrBulkImportTargetNotFound = errors.New("bulk import target song no longer matches")
 
 func (h *Handler) ShowBulkImport(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, r, http.StatusOK, "songs_bulk_import", nil)
@@ -68,13 +94,13 @@ func (h *Handler) PreviewBulkImport(w http.ResponseWriter, r *http.Request) {
 		files = r.MultipartForm.File["csv_file"]
 	}
 	if len(files) == 0 {
-		h.renderBulkImport(w, r, http.StatusBadRequest, "Choose one or more song files to continue.", nil, "", nil)
+		h.renderBulkImport(w, r, http.StatusBadRequest, "Choose one or more song files to continue.", nil, "")
 		return
 	}
 	if len(files) > maxBulkImportRows {
 		h.renderBulkImport(w, r, http.StatusUnprocessableEntity,
 			fmt.Sprintf("A bulk import can contain at most %d files or songs.", maxBulkImportRows),
-			nil, "", nil)
+			nil, "")
 		return
 	}
 	csvCount := 0
@@ -85,7 +111,7 @@ func (h *Handler) PreviewBulkImport(w http.ResponseWriter, r *http.Request) {
 	}
 	if csvCount > 0 && (csvCount != 1 || len(files) != 1) {
 		h.renderBulkImport(w, r, http.StatusUnprocessableEntity,
-			"Upload a CSV by itself, or select multiple song files without a CSV.", nil, "", nil)
+			"Upload a CSV by itself, or select multiple song files without a CSV.", nil, "")
 		return
 	}
 
@@ -144,28 +170,34 @@ func (h *Handler) PreviewBulkImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		h.renderBulkImport(w, r, http.StatusUnprocessableEntity, err.Error(), nil, "", nil)
+		h.renderBulkImport(w, r, http.StatusUnprocessableEntity, err.Error(), nil, "")
 		return
 	}
 	if len(records) > maxBulkImportRows {
 		h.renderBulkImport(w, r, http.StatusUnprocessableEntity,
 			fmt.Sprintf("A bulk import can contain at most %d files or songs.", maxBulkImportRows),
-			nil, "", nil)
+			nil, "")
 		return
 	}
 	rows := validateBulkImportRecords(records)
+	matches, err := h.bulkImport.FindBulkImportMatches(r.Context(), records)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	for i := range rows {
+		rows[i].Matches = matches[bulkImportMatchKey(rows[i].Title, rows[i].Author)]
+		rows[i].Decision = bulkImportActionNew
+		if len(rows[i].Matches) > 0 || rows[i].Duplicate {
+			rows[i].Decision = bulkImportActionSkip
+		}
+	}
 	payload, err := json.Marshal(records)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
-	var selected []int
-	for _, row := range rows {
-		if len(row.Errors) == 0 && !row.Duplicate {
-			selected = append(selected, row.CSVRow)
-		}
-	}
-	h.renderBulkImport(w, r, http.StatusOK, "", rows, string(payload), selected)
+	h.renderBulkImport(w, r, http.StatusOK, "", rows, string(payload))
 }
 
 func (h *Handler) SaveBulkImport(w http.ResponseWriter, r *http.Request) {
@@ -179,75 +211,67 @@ func (h *Handler) SaveBulkImport(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(strings.NewReader(r.FormValue("payload")))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&records); err != nil || len(records) > maxBulkImportRows {
-		h.renderBulkImport(w, r, http.StatusBadRequest, "The import preview expired or is invalid. Upload the CSV again.", nil, "", nil)
+		h.renderBulkImport(w, r, http.StatusBadRequest, "The import preview expired or is invalid. Upload the CSV again.", nil, "")
 		return
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		h.renderBulkImport(w, r, http.StatusBadRequest, "The import preview expired or is invalid. Upload the CSV again.", nil, "", nil)
+		h.renderBulkImport(w, r, http.StatusBadRequest, "The import preview expired or is invalid. Upload the CSV again.", nil, "")
 		return
 	}
-	selected := make(map[int]bool)
-	for _, raw := range r.Form["selected_rows"] {
-		index, err := strconv.Atoi(raw)
-		if err != nil || index < 1 {
-			h.renderBulkImport(w, r, http.StatusBadRequest, "One or more selected rows are invalid.", nil, "", nil)
-			return
-		}
-		selected[index] = true
-	}
-	if len(selected) == 0 {
-		h.renderBulkImport(w, r, http.StatusBadRequest, "Select at least one valid song to import.", nil, "", nil)
-		return
-	}
-
-	toImport := make([]bulkImportRecord, 0, len(selected))
+	toImport := make([]bulkImportRecord, 0, len(records))
+	decisions := make(map[int]bulkImportDecision, len(records))
 	seenRows := make(map[int]bool, len(records))
 	for _, record := range records {
 		if record.CSVRow < 1 || seenRows[record.CSVRow] {
-			h.renderBulkImport(w, r, http.StatusBadRequest, "The import preview contains duplicate or invalid rows.", nil, "", nil)
+			h.renderBulkImport(w, r, http.StatusBadRequest, "The import preview contains duplicate or invalid rows.", nil, "")
 			return
 		}
 		seenRows[record.CSVRow] = true
-		if !selected[record.CSVRow] {
+		if err := validateBulkImportRecord(record); err != nil {
 			continue
 		}
-		if err := validateBulkImportRecord(record); err != nil {
-			h.renderBulkImport(w, r, http.StatusBadRequest, "A selected row is invalid. Upload the CSV and review it again.", nil, "", nil)
+		action := r.FormValue(fmt.Sprintf("decision_%d", record.CSVRow))
+		targetSong := strings.TrimSpace(r.FormValue(fmt.Sprintf("target_%d", record.CSVRow)))
+		if action != bulkImportActionNew && action != bulkImportActionSkip && action != bulkImportActionArrangement {
+			h.renderBulkImport(w, r, http.StatusBadRequest, "Choose an import decision for every valid song.", nil, "")
+			return
+		}
+		if action == bulkImportActionArrangement && targetSong == "" {
+			h.renderBulkImport(w, r, http.StatusBadRequest, "Choose an existing song before adding an arrangement.", nil, "")
 			return
 		}
 		toImport = append(toImport, record)
+		decisions[record.CSVRow] = bulkImportDecision{Action: action, TargetSong: targetSong}
 	}
-	for row := range selected {
-		if !seenRows[row] {
-			h.renderBulkImport(w, r, http.StatusBadRequest, "A selected row is missing from the import preview.", nil, "", nil)
-			return
-		}
+	if len(toImport) == 0 {
+		h.renderBulkImport(w, r, http.StatusBadRequest, "There are no valid songs to review or import.", nil, "")
+		return
 	}
 
-	imported, skipped, err := h.svc.ImportMany(r.Context(), toImport)
+	imported, arrangements, skipped, err := h.bulkImport.ImportMany(r.Context(), toImport, decisions)
 	if err != nil {
+		if errors.Is(err, ErrBulkImportTargetNotFound) {
+			h.renderBulkImport(w, r, http.StatusConflict, "A selected existing song no longer matches this import. Upload the files again and review the updated matches.", nil, "")
+			return
+		}
 		httpx.ServerError(w, err)
 		return
 	}
 	h.renderer.Render(w, r, http.StatusOK, "songs_bulk_import", map[string]any{
-		"Imported": imported,
-		"Skipped":  skipped,
-		"Complete": true,
+		"Imported":     imported,
+		"Arrangements": arrangements,
+		"Skipped":      skipped,
+		"Complete":     true,
 	})
 }
 
-func (h *Handler) renderBulkImport(w http.ResponseWriter, r *http.Request, status int, message string, rows []bulkImportPreviewRow, payload string, selected []int) {
+func (h *Handler) renderBulkImport(w http.ResponseWriter, r *http.Request, status int, message string, rows []bulkImportPreviewRow, payload string) {
 	validCount, invalidCount, duplicateCount := 0, 0, 0
-	selectedSet := make(map[int]bool, len(selected))
-	for _, row := range selected {
-		selectedSet[row] = true
-	}
 	for i := range rows {
-		rows[i].Selected = selectedSet[rows[i].CSVRow]
 		switch {
 		case len(rows[i].Errors) > 0:
 			invalidCount++
-		case rows[i].Duplicate:
+		case rows[i].Duplicate || len(rows[i].Matches) > 0:
 			duplicateCount++
 		default:
 			validCount++
@@ -257,7 +281,6 @@ func (h *Handler) renderBulkImport(w http.ResponseWriter, r *http.Request, statu
 		"Error":          message,
 		"Rows":           rows,
 		"Payload":        payload,
-		"SelectedRows":   selected,
 		"ValidCount":     validCount,
 		"InvalidCount":   invalidCount,
 		"DuplicateCount": duplicateCount,
@@ -401,77 +424,167 @@ func validateBulkImportRecords(records []bulkImportRecord) []bulkImportPreviewRo
 	return rows
 }
 
-func (r *Repository) ImportMany(ctx context.Context, records []bulkImportRecord) (imported, skipped int, err error) {
+func bulkImportIdentityTitle(title string) string {
+	return strings.ToLower(strings.TrimSpace(title))
+}
+
+func bulkImportMatchKey(title, author string) string {
+	return bulkImportIdentityTitle(title) + "\x00" + strings.ToLower(strings.TrimSpace(author))
+}
+
+func (r *Repository) FindBulkImportMatches(ctx context.Context, records []bulkImportRecord) (map[string][]SongImportMatch, error) {
+	titles := make([]string, 0, len(records))
+	authors := make([]string, 0, len(records))
+	seen := make(map[string]bool, len(records))
+	for _, record := range records {
+		title := bulkImportIdentityTitle(record.Title)
+		author := strings.ToLower(strings.TrimSpace(record.Author))
+		key := bulkImportMatchKey(title, author)
+		if title == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		titles = append(titles, title)
+		authors = append(authors, author)
+	}
+	matches := make(map[string][]SongImportMatch, len(titles))
+	if len(titles) == 0 {
+		return matches, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		WITH requested AS (
+			SELECT * FROM unnest($1::text[], $2::text[]) AS requested(title, author)
+		), candidates AS (
+			SELECT DISTINCT requested.title AS requested_title,
+				requested.author AS source_author,
+				s.id AS song_id, s.title AS song_title, s.author AS song_author,
+				lower(btrim(s.author)) = requested.author AS exact_author,
+				s.archived AS archived
+			FROM requested
+			JOIN songs s ON lower(btrim(s.title)) = requested.title
+		)
+		SELECT requested_title, source_author, song_id, song_title, song_author, exact_author, archived
+		FROM (
+			SELECT candidates.*,
+				row_number() OVER (
+					PARTITION BY requested_title, source_author
+					ORDER BY exact_author DESC, song_author, song_id
+				) AS match_position
+			FROM candidates
+		) ranked
+		WHERE match_position <= 5
+		ORDER BY requested_title, source_author, match_position
+	`, titles, authors)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var title string
+		var sourceAuthor string
+		var match SongImportMatch
+		if err := rows.Scan(&title, &sourceAuthor, &match.ID, &match.Title, &match.Author, &match.ExactTitleAuthor, &match.Archived); err != nil {
+			return nil, err
+		}
+		matches[bulkImportMatchKey(title, sourceAuthor)] = append(matches[bulkImportMatchKey(title, sourceAuthor)], match)
+	}
+	return matches, rows.Err()
+}
+
+func (r *Repository) ImportMany(ctx context.Context, records []bulkImportRecord, decisions map[int]bulkImportDecision) (imported, arrangements, skipped int, err error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	defer tx.Rollback(ctx)
 
-	seen := make(map[string]bool, len(records))
 	for _, record := range records {
 		if err := validateBulkImportRecord(record); err != nil {
-			return 0, 0, fmt.Errorf("CSV record %d: %w", record.CSVRow, err)
+			return 0, 0, 0, fmt.Errorf("CSV record %d: %w", record.CSVRow, err)
 		}
-		identity := strings.ToLower(strings.TrimSpace(record.Title)) + "\x00" +
-			strings.ToLower(strings.TrimSpace(record.Author))
-		if seen[identity] {
+		decision, ok := decisions[record.CSVRow]
+		if !ok {
+			return 0, 0, 0, fmt.Errorf("CSV record %d: import decision is required", record.CSVRow)
+		}
+		switch decision.Action {
+		case bulkImportActionSkip:
 			skipped++
 			continue
-		}
-		seen[identity] = true
-
-		var exists bool
-		if err := tx.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM songs
-				WHERE lower(btrim(title)) = lower(btrim($1))
-				  AND lower(btrim(author)) = lower(btrim($2))
-			)
-		`, record.Title, record.Author).Scan(&exists); err != nil {
-			return 0, 0, err
-		}
-		if exists {
-			skipped++
-			continue
-		}
-
-		var songID string
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO songs (title, author)
-			VALUES ($1, $2)
-			RETURNING id
-		`, strings.TrimSpace(record.Title), strings.TrimSpace(record.Author)).Scan(&songID); err != nil {
-			return 0, 0, err
-		}
-		lyrics, chords := parseChart(record.SourceContent, "chordpro")
-		var arrangementID string
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO song_arrangements (
-				song_id, name, bpm, original_key, source_content, format,
-				primary_language, lyrics, chords, is_default
-			) VALUES ($1, 'Original', $2, $3, $4, 'chordpro', 'en', $5, $6, TRUE)
-			RETURNING id
-		`, songID, record.Tempo, strings.TrimSpace(record.Key), record.SourceContent,
-			lyrics, chords).Scan(&arrangementID); err != nil {
-			return 0, 0, err
-		}
-		if strings.TrimSpace(record.Key) != "" {
-			if _, err := tx.Exec(ctx, `
-				INSERT INTO arrangement_keys (arrangement_id, name, key, is_default)
-				VALUES ($1, 'Original', $2, TRUE)
-			`, arrangementID, strings.TrimSpace(record.Key)); err != nil {
-				return 0, 0, err
+		case bulkImportActionNew:
+			var songID string
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO songs (title, author)
+				VALUES ($1, $2)
+				RETURNING id
+			`, strings.TrimSpace(record.Title), strings.TrimSpace(record.Author)).Scan(&songID); err != nil {
+				return 0, 0, 0, err
 			}
+			if err := insertBulkImportArrangement(ctx, tx, songID, record, true); err != nil {
+				return 0, 0, 0, err
+			}
+			imported++
+		case bulkImportActionArrangement:
+			var songID string
+			err := tx.QueryRow(ctx, `
+				SELECT id FROM songs
+				WHERE id = $1 AND lower(btrim(title)) = $2
+				FOR UPDATE
+			`, decision.TargetSong, bulkImportIdentityTitle(record.Title)).Scan(&songID)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return 0, 0, 0, ErrBulkImportTargetNotFound
+			}
+			if err != nil {
+				return 0, 0, 0, err
+			}
+			var hasDefault bool
+			if err := tx.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT 1 FROM song_arrangements
+					WHERE song_id = $1 AND is_default = TRUE
+				)
+			`, songID).Scan(&hasDefault); err != nil {
+				return 0, 0, 0, err
+			}
+			if err := insertBulkImportArrangement(ctx, tx, songID, record, !hasDefault); err != nil {
+				return 0, 0, 0, err
+			}
+			arrangements++
+		default:
+			return 0, 0, 0, fmt.Errorf("CSV record %d: invalid import decision", record.CSVRow)
 		}
-		imported++
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	return imported, skipped, nil
+	return imported, arrangements, skipped, nil
 }
 
-func (s *Service) ImportMany(ctx context.Context, records []bulkImportRecord) (int, int, error) {
-	return s.repo.ImportMany(ctx, records)
+func insertBulkImportArrangement(ctx context.Context, tx pgx.Tx, songID string, record bulkImportRecord, isDefault bool) error {
+	lyrics, chords := parseChart(record.SourceContent, "chordpro")
+	name := "Imported arrangement"
+	if isDefault {
+		name = "Original"
+	} else {
+		name = fmt.Sprintf("Imported arrangement (row %d)", record.CSVRow)
+	}
+	var arrangementID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO song_arrangements (
+			song_id, name, bpm, original_key, source_content, format,
+			primary_language, lyrics, chords, is_default
+		) VALUES ($1, $2, $3, $4, $5, 'chordpro', 'en', $6, $7, $8)
+		RETURNING id
+	`, songID, name, record.Tempo, strings.TrimSpace(record.Key), record.SourceContent,
+		lyrics, chords, isDefault).Scan(&arrangementID); err != nil {
+		return err
+	}
+	if strings.TrimSpace(record.Key) != "" {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO arrangement_keys (arrangement_id, name, key, is_default)
+			VALUES ($1, 'Original', $2, TRUE)
+		`, arrangementID, strings.TrimSpace(record.Key)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
