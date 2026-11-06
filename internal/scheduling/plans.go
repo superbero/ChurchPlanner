@@ -94,6 +94,28 @@ func (r *PlanRepository) Get(ctx context.Context, id string) (Plan, error) {
 	return p, err
 }
 
+func (r *PlanRepository) LatestByServiceType(ctx context.Context) (map[string]Plan, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT ON (service_type_id) `+planColumns+`
+		FROM plans
+		ORDER BY service_type_id, service_at DESC, created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	latest := make(map[string]Plan)
+	for rows.Next() {
+		plan, err := scanPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		latest[plan.ServiceTypeID] = plan
+	}
+	return latest, rows.Err()
+}
+
 func (r *PlanRepository) Create(ctx context.Context, in CreatePlanInput) (Plan, error) {
 	return scanPlan(r.db.QueryRow(ctx, `
 		INSERT INTO plans (service_type_id, title, service_at, service_ends_at, notes)

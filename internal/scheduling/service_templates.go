@@ -19,8 +19,35 @@ type ServiceTemplateRepository struct {
 	db *pgxpool.Pool
 }
 
+type scheduledTemplateTime struct {
+	start time.Time
+	end   time.Time
+}
+
 func NewServiceTemplateRepository(db *pgxpool.Pool) *ServiceTemplateRepository {
 	return &ServiceTemplateRepository{db: db}
+}
+
+func validateTemplateTimeConflicts(times []ServiceTemplateTime, serviceStart, serviceEnd time.Time) error {
+	if !serviceEnd.After(serviceStart) {
+		return ErrInvalidTimeRange
+	}
+
+	scheduled := make([]scheduledTemplateTime, 0, len(times))
+	for _, item := range times {
+		start, end := serviceStart, serviceEnd
+		if item.Kind != "service" {
+			start = serviceStart.Add(time.Duration(item.StartOffsetMinutes) * time.Minute)
+			end = start.Add(time.Duration(item.DurationMinutes) * time.Minute)
+		}
+		for _, existing := range scheduled {
+			if start.Before(existing.end) && end.After(existing.start) {
+				return ErrTimeConflict
+			}
+		}
+		scheduled = append(scheduled, scheduledTemplateTime{start: start, end: end})
+	}
+	return nil
 }
 
 func (r *ServiceTemplateRepository) List(ctx context.Context) ([]ServiceTemplate, error) {
@@ -180,6 +207,9 @@ func (r *PlanRepository) CreateWithServiceTemplate(ctx context.Context, in Creat
 	rows.Close()
 	if invalid || serviceCount != 1 || len(times) == 0 {
 		return Plan{}, ErrInvalidServiceTemplate
+	}
+	if err := validateTemplateTimeConflicts(times, in.ServiceAt, in.ServiceEndsAt); err != nil {
+		return Plan{}, err
 	}
 
 	plan, err := scanPlan(tx.QueryRow(ctx, `

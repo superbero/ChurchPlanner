@@ -76,21 +76,46 @@ func (h *Handler) NewPlan(w http.ResponseWriter, r *http.Request) {
 		httpx.ServerError(w, err)
 		return
 	}
+	latestByType, err := h.plans.LatestByServiceType(r.Context())
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
 
-	defaultStart := time.Now().AddDate(0, 0, 7).Truncate(time.Hour)
+	now := time.Now()
+	defaultStart := now.AddDate(0, 0, 7).Truncate(time.Hour)
+	defaultEnd := defaultStart.Add(90 * time.Minute)
+	serviceTypeID := r.URL.Query().Get("type")
+	nextServiceWindows := make(map[string]Plan, len(latestByType))
+	for id, latest := range latestByType {
+		start, end := nextServiceWindow(latest.ServiceAt, latest.ServiceEndsAt, now)
+		latest.ServiceAt, latest.ServiceEndsAt = start, end
+		nextServiceWindows[id] = latest
+	}
+	if serviceTypeID == "" && len(types) > 0 {
+		serviceTypeID = types[0].ID
+	}
+	if latest, ok := latestByType[serviceTypeID]; ok {
+		defaultStart, defaultEnd = nextServiceWindow(latest.ServiceAt, latest.ServiceEndsAt, now)
+	}
 
 	// If the calendar passed ?date=YYYY-MM-DD, use it and default to 10:00 AM
+	calendarDateProvided := false
 	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
 		if t, err := time.Parse("2006-01-02", dateStr); err == nil {
 			defaultStart = t.Add(10 * time.Hour) // 10:00 AM default
+			defaultEnd = defaultStart.Add(90 * time.Minute)
+			calendarDateProvided = true
 		}
 	}
 
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
-		"ServiceTypes":     types,
-		"ServiceTemplates": templates,
-		"IsNew":            true,
-		"Plan":             Plan{ServiceAt: defaultStart, ServiceEndsAt: defaultStart.Add(90 * time.Minute)},
+		"ServiceTypes":         types,
+		"ServiceTemplates":     templates,
+		"NextServiceWindows":   nextServiceWindows,
+		"CalendarDateProvided": calendarDateProvided,
+		"IsNew":                true,
+		"Plan":                 Plan{ServiceTypeID: serviceTypeID, ServiceAt: defaultStart, ServiceEndsAt: defaultEnd},
 	})
 }
 
@@ -108,6 +133,10 @@ func (h *Handler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 		p, err = h.plans.CreateWithServiceTemplate(r.Context(), in, templateID)
 		if errors.Is(err, ErrServiceTemplateNotFound) || errors.Is(err, ErrInvalidServiceTemplate) {
 			http.Error(w, "The selected service template is invalid or no longer available.", http.StatusUnprocessableEntity)
+			return
+		}
+		if errors.Is(err, ErrTimeConflict) {
+			http.Error(w, "This template creates overlapping time sections. Delete and recreate it with offsets and durations that do not overlap the primary service or one another, then try again.", http.StatusUnprocessableEntity)
 			return
 		}
 	}
@@ -798,6 +827,18 @@ func parsePlanInput(r *http.Request) (CreatePlanInput, error) {
 	}, nil
 }
 
+func nextServiceWindow(lastStart, lastEnd, now time.Time) (time.Time, time.Time) {
+	nextStart := lastStart.AddDate(0, 0, 7)
+	for !nextStart.After(now) {
+		nextStart = nextStart.AddDate(0, 0, 7)
+	}
+	duration := lastEnd.Sub(lastStart)
+	if duration <= 0 {
+		duration = 90 * time.Minute
+	}
+	return nextStart, nextStart.Add(duration)
+}
+
 // ---- Item edit ----
 
 func (h *Handler) EditItemForm(w http.ResponseWriter, r *http.Request) {
@@ -1041,9 +1082,10 @@ func (h *Handler) EditPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	types, _ := h.svcTypes.List(r.Context())
 	h.renderer.Render(w, r, http.StatusOK, "scheduling_plan_form", map[string]any{
-		"ServiceTypes": types,
-		"IsNew":        false,
-		"Plan":         plan,
+		"ServiceTypes":       types,
+		"NextServiceWindows": map[string]Plan{},
+		"IsNew":              false,
+		"Plan":               plan,
 	})
 }
 

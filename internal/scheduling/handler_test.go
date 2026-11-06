@@ -1,6 +1,7 @@
 package scheduling
 
 import (
+	"errors"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -59,6 +60,86 @@ func TestParsePlanInputRejectsPartialOrInvalidTimes(t *testing.T) {
 				"application/x-www-form-urlencoded")
 			if _, err := parsePlanInput(request); err == nil {
 				t.Fatal("parsePlanInput() unexpectedly succeeded")
+			}
+		})
+	}
+}
+
+func TestNextServiceWindowUsesFollowingWeekAndKeepsDuration(t *testing.T) {
+	lastStart := time.Date(2026, time.November, 1, 9, 30, 0, 0, time.UTC)
+	lastEnd := lastStart.Add(2 * time.Hour)
+	now := time.Date(2026, time.November, 3, 12, 0, 0, 0, time.UTC)
+
+	nextStart, nextEnd := nextServiceWindow(lastStart, lastEnd, now)
+	if got, want := nextStart.Format(time.RFC3339), "2026-11-08T09:30:00Z"; got != want {
+		t.Errorf("next start = %s, want %s", got, want)
+	}
+	if got, want := nextEnd.Sub(nextStart), 2*time.Hour; got != want {
+		t.Errorf("next service duration = %s, want %s", got, want)
+	}
+}
+
+func TestNextServiceWindowFallsBackToNinetyMinutes(t *testing.T) {
+	lastStart := time.Date(2026, time.November, 1, 9, 30, 0, 0, time.UTC)
+	now := time.Date(2026, time.November, 3, 12, 0, 0, 0, time.UTC)
+
+	nextStart, nextEnd := nextServiceWindow(lastStart, lastStart, now)
+	if got, want := nextEnd.Sub(nextStart), 90*time.Minute; got != want {
+		t.Errorf("fallback service duration = %s, want %s", got, want)
+	}
+}
+
+func TestNextServiceWindowAdvancesOldPlanToNextFutureOccurrence(t *testing.T) {
+	lastStart := time.Date(2026, time.January, 4, 9, 30, 0, 0, time.UTC)
+	lastEnd := lastStart.Add(90 * time.Minute)
+	now := time.Date(2026, time.November, 6, 12, 0, 0, 0, time.UTC)
+
+	nextStart, _ := nextServiceWindow(lastStart, lastEnd, now)
+	if got, want := nextStart.Format("2006-01-02"), "2026-11-08"; got != want {
+		t.Errorf("next occurrence date = %s, want %s", got, want)
+	}
+}
+
+func TestValidateTemplateTimeConflicts(t *testing.T) {
+	serviceStart := time.Date(2026, 11, 6, 9, 0, 0, 0, time.UTC)
+	serviceEnd := serviceStart.Add(90 * time.Minute)
+	tests := []struct {
+		name    string
+		times   []ServiceTemplateTime
+		wantErr error
+	}{
+		{
+			name: "adjacent sections do not conflict",
+			times: []ServiceTemplateTime{
+				{Kind: "service"},
+				{Kind: "rehearsal", StartOffsetMinutes: -60, DurationMinutes: 30},
+				{Kind: "other", StartOffsetMinutes: -30, DurationMinutes: 30},
+			},
+		},
+		{
+			name: "section overlaps primary service",
+			times: []ServiceTemplateTime{
+				{Kind: "service"},
+				{Kind: "other", StartOffsetMinutes: 0, DurationMinutes: 30},
+			},
+			wantErr: ErrTimeConflict,
+		},
+		{
+			name: "sections overlap each other",
+			times: []ServiceTemplateTime{
+				{Kind: "service"},
+				{Kind: "rehearsal", StartOffsetMinutes: -60, DurationMinutes: 45},
+				{Kind: "other", StartOffsetMinutes: -30, DurationMinutes: 30},
+			},
+			wantErr: ErrTimeConflict,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateTemplateTimeConflicts(test.times, serviceStart, serviceEnd)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("validateTemplateTimeConflicts() error = %v, want %v", err, test.wantErr)
 			}
 		})
 	}
