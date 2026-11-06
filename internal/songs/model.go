@@ -54,6 +54,13 @@ type SongPage struct {
 	PageSize int
 }
 
+type SongSearchSuggestion struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Author   string `json:"author"`
+	Archived bool   `json:"archived"`
+}
+
 const (
 	defaultSongPageSize = 10
 	maxSongPageSize     = 15

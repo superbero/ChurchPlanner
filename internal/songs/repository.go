@@ -64,6 +64,37 @@ func (r *Repository) Search(ctx context.Context, f Filter) ([]Song, error) {
 	return songs, rows.Err()
 }
 
+func (r *Repository) SearchSuggestions(ctx context.Context, query string, includeArchived bool, limit int) ([]SongSearchSuggestion, error) {
+	if limit < 1 || limit > 10 {
+		limit = 8
+	}
+	rows, err := r.db.Query(ctx, `
+		WITH search AS (
+			SELECT plainto_tsquery('english', $1) AS query
+		)
+		SELECT songs.id, songs.title, songs.author, songs.archived
+		FROM songs CROSS JOIN search
+		WHERE songs.search_vector @@ search.query
+		  AND ($2 OR archived = FALSE)
+		ORDER BY ts_rank(songs.search_vector, search.query) DESC, songs.title, songs.id
+		LIMIT $3
+	`, strings.TrimSpace(query), includeArchived, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var suggestions []SongSearchSuggestion
+	for rows.Next() {
+		var suggestion SongSearchSuggestion
+		if err := rows.Scan(&suggestion.ID, &suggestion.Title, &suggestion.Author, &suggestion.Archived); err != nil {
+			return nil, err
+		}
+		suggestions = append(suggestions, suggestion)
+	}
+	return suggestions, rows.Err()
+}
+
 func (r *Repository) SearchPage(ctx context.Context, f Filter, pageNumber, pageSize int) (SongPage, error) {
 	pageSize = normalizeSongPageSize(pageSize)
 	if pageNumber < 1 {

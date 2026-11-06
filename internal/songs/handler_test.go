@@ -30,18 +30,42 @@ func TestRoutesRegisterSuggestions(t *testing.T) {
 	module := &Module{handler: &Handler{}}
 	module.Routes(router, &auth.Authenticator{})
 
-	found := false
+	foundSuggestions := false
+	foundAutocomplete := false
 	err := chi.Walk(router, func(method, route string, _ http.Handler,
 		_ ...func(http.Handler) http.Handler) error {
 		if method == http.MethodGet && route == "/songs/suggest" {
-			found = true
+			foundSuggestions = true
+		}
+		if method == http.MethodGet && route == "/songs/autocomplete" {
+			foundAutocomplete = true
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("Walk() error = %v", err)
 	}
-	if !found {
+	if !foundSuggestions {
 		t.Fatal("GET /songs/suggest is not registered")
+	}
+	if !foundAutocomplete {
+		t.Fatal("GET /songs/autocomplete is not registered")
+	}
+}
+
+func TestIsSuggestionQueryRequiresThreeCharacters(t *testing.T) {
+	tests := []struct {
+		query string
+		want  bool
+	}{
+		{query: "ab", want: false},
+		{query: " abc ", want: true},
+		{query: "éé", want: false},
+		{query: "ééa", want: true},
+	}
+	for _, test := range tests {
+		if got := isSuggestionQuery(test.query); got != test.want {
+			t.Errorf("isSuggestionQuery(%q) = %t, want %t", test.query, got, test.want)
+		}
 	}
 }

@@ -100,6 +100,8 @@ func TestSongListRendersWithoutRemovalControlsWhenUserIsMissing(t *testing.T) {
 		"New · not used", "Never used", "Page 2 / 3",
 		`href="/songs?page=1&amp;page_size=10"`, `href="/songs?page=3&amp;page_size=10"`,
 		`name="page_size"`, `value="10" selected`, `value="15"`, "10 per page", "Never used first",
+		`id="song-library-search"`, `aria-controls="song-search-suggestions"`,
+		`id="song-search-suggestions"`, `/songs/autocomplete?`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("song list is missing %q", expected)

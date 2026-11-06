@@ -15,7 +15,13 @@
 
 <form method="get" action="/songs" class="filter-bar-horizontal">
     <div class="filter-group search-group">
-        <input type="search" name="q" placeholder="Search title, author, lyrics…" value="{{.Filter.Query}}">
+        <div class="song-search-autocomplete">
+            <input type="search" name="q" id="song-library-search" placeholder="Search title, author, lyrics…" value="{{.Filter.Query}}"
+                   autocomplete="off" role="combobox" aria-autocomplete="list"
+                   aria-label="Search song library" aria-controls="song-search-suggestions" aria-expanded="false">
+            <div id="song-search-suggestions" class="song-search-suggestions" role="listbox" aria-label="Song suggestions" hidden></div>
+            <span id="song-search-status" class="sr-only" aria-live="polite"></span>
+        </div>
     </div>
     <div class="filter-group">
         <input type="text" name="key" placeholder="Key (e.g. G)" value="{{.Filter.Key}}" size="10">
@@ -347,5 +353,158 @@ if (selectAllSongs) {
     });
     songSelections.forEach(input => input.addEventListener('change', updateSongSelection));
 }
+</script>
+<style>
+.song-search-autocomplete { position: relative; width: 100%; }
+.song-search-suggestions {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + .25rem);
+    left: 0;
+    right: 0;
+    max-height: 22rem;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 8px 20px rgb(0 0 0 / 12%);
+}
+.song-search-option {
+    display: block;
+    width: 100%;
+    padding: .65rem .8rem;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+    color: var(--fg);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+.song-search-option:last-child { border-bottom: 0; }
+.song-search-option:hover, .song-search-option[aria-selected="true"] { background: var(--bg); }
+.song-search-option small { display: block; color: #666; }
+.song-search-empty { padding: .7rem .8rem; color: #666; }
+</style>
+<script>
+(() => {
+    const input = document.getElementById('song-library-search');
+    const list = document.getElementById('song-search-suggestions');
+    const status = document.getElementById('song-search-status');
+    const archived = document.querySelector('input[name="archived"]');
+    if (!input || !list || !status) return;
+
+    let timer;
+    let request;
+    let activeIndex = -1;
+
+    function closeSuggestions() {
+        list.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        activeIndex = -1;
+    }
+
+    function chooseSuggestion(songId) {
+        window.location.assign(`/songs/${encodeURIComponent(songId)}`);
+    }
+
+    function renderSuggestions(songs) {
+        list.replaceChildren();
+        activeIndex = -1;
+        if (songs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'song-search-empty';
+            empty.textContent = 'No matching songs found.';
+            list.appendChild(empty);
+        } else {
+            songs.forEach(song => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'song-search-option';
+                button.id = `song-search-option-${song.id}`;
+                button.setAttribute('role', 'option');
+                button.setAttribute('aria-selected', 'false');
+                const title = document.createElement('span');
+                title.textContent = song.title;
+                button.appendChild(title);
+                if (song.author || song.archived) {
+                    const detail = document.createElement('small');
+                    detail.textContent = [song.author, song.archived ? 'Archived' : ''].filter(Boolean).join(' · ');
+                    button.appendChild(detail);
+                }
+                button.addEventListener('click', () => chooseSuggestion(song.id));
+                list.appendChild(button);
+            });
+        }
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        status.textContent = songs.length ? `${songs.length} song suggestions available.` : 'No matching songs found.';
+    }
+
+    async function loadSuggestions(query) {
+        request?.abort();
+        request = new AbortController();
+        const params = new URLSearchParams({ q: query });
+        if (archived?.checked) params.set('archived', '1');
+        try {
+            const response = await fetch(`/songs/autocomplete?${params}`, {
+                headers: { Accept: 'application/json' },
+                signal: request.signal
+            });
+            if (!response.ok) throw new Error('Search suggestions are temporarily unavailable.');
+            const songs = await response.json();
+            if (input.value.trim() === query) renderSuggestions(songs);
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            closeSuggestions();
+            status.textContent = error.message || 'Search suggestions are temporarily unavailable.';
+        }
+    }
+
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        request?.abort();
+        const query = input.value.trim();
+        if ([...query].length < 3) {
+            closeSuggestions();
+            status.textContent = '';
+            return;
+        }
+        timer = setTimeout(() => loadSuggestions(query), 250);
+    });
+
+    input.addEventListener('keydown', event => {
+        if (list.hidden) return;
+        const options = [...list.querySelectorAll('[role="option"]')];
+        if (event.key === 'Escape') {
+            closeSuggestions();
+        } else if (event.key === 'ArrowDown' && options.length) {
+            event.preventDefault();
+            activeIndex = (activeIndex + 1) % options.length;
+        } else if (event.key === 'ArrowUp' && options.length) {
+            event.preventDefault();
+            activeIndex = (activeIndex - 1 + options.length) % options.length;
+        } else if (event.key === 'Enter' && activeIndex >= 0) {
+            event.preventDefault();
+            options[activeIndex].click();
+            return;
+        } else {
+            return;
+        }
+        options.forEach((option, index) => option.setAttribute('aria-selected', String(index === activeIndex)));
+        if (activeIndex >= 0) {
+            input.setAttribute('aria-activedescendant', options[activeIndex].id);
+            options[activeIndex].scrollIntoView({ block: 'nearest' });
+        } else {
+            input.removeAttribute('aria-activedescendant');
+        }
+    });
+
+    document.addEventListener('click', event => {
+        if (!event.target.closest('.song-search-autocomplete')) closeSuggestions();
+    });
+    document.querySelector('.filter-bar-horizontal')?.addEventListener('submit', closeSuggestions);
+})();
 </script>
 {{end}}

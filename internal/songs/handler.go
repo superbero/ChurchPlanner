@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
@@ -91,6 +92,33 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		"SelectedTagSlugs": selected,
 		"DeletedCount":     deletedCount,
 	})
+}
+
+func (h *Handler) SearchSuggestions(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if !isSuggestionQuery(query) {
+		writeSongSearchSuggestions(w, []SongSearchSuggestion{})
+		return
+	}
+	suggestions, err := h.svc.SearchSuggestions(
+		r.Context(), query, r.URL.Query().Get("archived") == "1", 8)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	if suggestions == nil {
+		suggestions = []SongSearchSuggestion{}
+	}
+	writeSongSearchSuggestions(w, suggestions)
+}
+
+func isSuggestionQuery(query string) bool {
+	return utf8.RuneCountInString(strings.TrimSpace(query)) >= 3
+}
+
+func writeSongSearchSuggestions(w http.ResponseWriter, suggestions []SongSearchSuggestion) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(suggestions)
 }
 
 func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
