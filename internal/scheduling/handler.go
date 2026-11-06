@@ -930,12 +930,23 @@ func (h *Handler) EditItemForm(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	planID := chi.URLParam(r, "id")
 	itemID := chi.URLParam(r, "iid")
+	item, err := h.assign.GetItem(r.Context(), itemID)
+	if err != nil || item.PlanID != planID {
+		http.NotFound(w, r)
+		return
+	}
+	title := strings.TrimSpace(r.FormValue("title"))
+	notes := strings.TrimSpace(r.FormValue("notes"))
+	if item.Kind == "scripture" && (title == "" || len(title) > 200 || notes == "" || len(notes) > 20000) {
+		http.Error(w, "A valid scripture reference and passage text are required.", http.StatusUnprocessableEntity)
+		return
+	}
 	duration, _ := strconv.Atoi(r.FormValue("duration_minutes"))
-	err := h.assign.UpdateItem(r.Context(), itemID, UpdatePlanItemInput{
-		Title:           strings.TrimSpace(r.FormValue("title")),
+	err = h.assign.UpdateItem(r.Context(), itemID, UpdatePlanItemInput{
+		Title:           title,
 		Key:             strings.TrimSpace(r.FormValue("key")),
 		DurationMinutes: duration,
-		Notes:           strings.TrimSpace(r.FormValue("notes")),
+		Notes:           notes,
 		PlanTimeID:      strings.TrimSpace(r.FormValue("plan_time_id")),
 	})
 	if err != nil {

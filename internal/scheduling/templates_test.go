@@ -110,6 +110,7 @@ func TestEditPlanFormDoesNotRenderZeroServiceWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRenderer() error = %v", err)
 	}
+
 	if err := renderer.Add("scheduling", Templates(), "plan_form.html"); err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
@@ -168,5 +169,48 @@ func TestEditPlanFormDoesNotRenderZeroServiceWindow(t *testing.T) {
 		if !strings.Contains(body, expected) {
 			t.Errorf("edit form did not preserve the service window value %q", expected)
 		}
+	}
+}
+
+func TestScriptureItemEditFormShowsReferenceAndPassageText(t *testing.T) {
+	renderer, err := httpx.NewRenderer(fstest.MapFS{
+		"layout.html": &fstest.MapFile{
+			Data: []byte(`{{define "layout.html"}}{{template "content" .}}{{end}}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRenderer() error = %v", err)
+	}
+	if err := renderer.Add("scheduling", Templates(), "item_form.html"); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	response := httptest.NewRecorder()
+	renderer.Render(response, httptest.NewRequest(http.MethodGet, "/plans/plan-1/items/item-1/edit", nil),
+		http.StatusOK, "scheduling_item_form", map[string]any{
+			"Plan": Plan{ID: "plan-1", Title: "Sunday"},
+			"Item": PlanItem{
+				ID: "item-1", Kind: "scripture", Title: "Genesis 1:1-2",
+				Notes: "1. In the beginning.\n2. The earth was formless.",
+			},
+			"Times": []PlanTime{},
+		})
+	if response.Code != http.StatusOK {
+		t.Fatalf("render status = %d, want %d", response.Code, http.StatusOK)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{
+		"Passage reference",
+		`name="title" value="Genesis 1:1-2"`,
+		"Passage text",
+		"1. In the beginning.",
+		"World English Bible (WEB)",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("scripture edit form is missing %q", expected)
+		}
+	}
+	if strings.Contains(body, "Length (min)") || strings.Contains(body, ">Key<") {
+		t.Error("scripture edit form includes song-only fields")
 	}
 }

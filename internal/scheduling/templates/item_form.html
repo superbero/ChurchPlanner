@@ -2,12 +2,22 @@
 <p><a href="/plans/{{.Plan.ID}}">← {{.Plan.Title}}</a></p>
 <h1>Edit item</h1>
 <form method="post" action="/plans/{{.Plan.ID}}/items/{{.Item.ID}}">
+    {{if eq .Item.Kind "scripture"}}
+    <p class="muted">Translation: World English Bible (WEB) · Public Domain</p>
+    <label>Passage reference
+        <input name="title" value="{{.Item.Title}}" required maxlength="200" placeholder="e.g. John 3:16-18">
+    </label>
+    <label>Passage text
+        <textarea name="notes" rows="12" required maxlength="20000">{{.Item.Notes}}</textarea>
+    </label>
+    {{else}}
     <label>Title <input name="title" value="{{.Item.Title}}" required></label>
     <div class="row">
         <label>Key <input name="key" value="{{.Item.Key}}" size="4"></label>
         <label>Length (min) <input type="number" name="duration_minutes" value="{{if .Item.DurationMinutes}}{{.Item.DurationMinutes}}{{end}}" size="4"></label>
     </div>
     <label>Notes <textarea name="notes" rows="2">{{.Item.Notes}}</textarea></label>
+    {{end}}
 
     <label>Time slot
         <select name="plan_time_id">
