@@ -43,7 +43,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	f := Filter{
 		Query:           q.Get("q"),
 		Key:             q.Get("key"),
-		TagSlugs:        q["tag"],
+		TagSlugs:        normalizeTagSlugs(q["tag"]),
 		IncludeArchived: q.Get("archived") == "1",
 		Sort:            q.Get("sort"),
 	}

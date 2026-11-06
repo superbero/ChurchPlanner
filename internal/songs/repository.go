@@ -143,9 +143,10 @@ func songSearchConditions(f Filter) ([]any, string) {
 	if !f.IncludeArchived {
 		conds = append(conds, "s.archived = FALSE")
 	}
-	if len(f.TagSlugs) > 0 {
-		args = append(args, f.TagSlugs)
-		args = append(args, len(f.TagSlugs))
+	tagSlugs := normalizeTagSlugs(f.TagSlugs)
+	if len(tagSlugs) > 0 {
+		args = append(args, tagSlugs)
+		args = append(args, len(tagSlugs))
 		conds = append(conds, fmt.Sprintf(
 			`(SELECT COUNT(*) FROM song_tags st JOIN tags t ON t.id = st.tag_id
 			  WHERE st.song_id = s.id AND t.slug = ANY($%d)) = $%d`,
@@ -157,6 +158,23 @@ func songSearchConditions(f Filter) ([]any, string) {
 		where = strings.Join(conds, " AND ")
 	}
 	return args, where
+}
+
+func normalizeTagSlugs(slugs []string) []string {
+	normalized := make([]string, 0, len(slugs))
+	seen := make(map[string]struct{}, len(slugs))
+	for _, slug := range slugs {
+		slug = strings.TrimSpace(slug)
+		if slug == "" {
+			continue
+		}
+		if _, ok := seen[slug]; ok {
+			continue
+		}
+		seen[slug] = struct{}{}
+		normalized = append(normalized, slug)
+	}
+	return normalized
 }
 
 func (r *Repository) Get(ctx context.Context, id string) (Song, error) {
