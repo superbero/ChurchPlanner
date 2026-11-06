@@ -75,6 +75,31 @@
 
                 <ul class="item-list" id="list-{{.Time.ID}}">
                     {{range .Items}}
+                    {{if eq .Kind "scripture"}}
+                    <li class="item-row scripture-item-row" draggable="true" data-item-id="{{.ID}}">
+                        <span class="drag-handle">⋮⋮</span>
+                        <div class="scripture-item-heading">
+                            <div class="item-main">
+                                <button type="button" class="scripture-toggle item-scripture"
+                                        aria-expanded="false" aria-controls="scripture-text-{{.ID}}">
+                                    {{.Title}}
+                                    <span class="scripture-toggle-indicator" aria-hidden="true">+</span>
+                                </button>
+                                <span class="scripture-translation">World English Bible (WEB)</span>
+                            </div>
+                            <div class="item-actions">
+                                <a href="/plans/{{$.Plan.ID}}/items/{{.ID}}/edit" class="action-link">Edit</a>
+                                <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/duplicate" style="display:inline">
+                                    <button class="link-btn" type="submit" title="Copy this item to the end of this service section">Copy</button>
+                                </form>
+                                <form method="post" action="/plans/{{$.Plan.ID}}/items/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('Remove this item?')">
+                                    <button class="link-btn" type="submit" style="color: var(--danger);">×</button>
+                                </form>
+                            </div>
+                        </div>
+                        <p id="scripture-text-{{.ID}}" class="scripture-text scripture-item-text" hidden>{{.Notes}}</p>
+                    </li>
+                    {{else}}
                     <li class="item-row" draggable="true" data-item-id="{{.ID}}">
                         <span class="drag-handle">⋮⋮</span>
                         <div class="item-main">
@@ -85,10 +110,6 @@
                                 {{else}}
                                     {{.Title}}
                                 {{end}}
-                            {{else if eq .Kind "scripture"}}
-                                <span class="item-scripture">{{.Title}}</span>
-                                <span class="scripture-translation">World English Bible (WEB)</span>
-                                {{if .Notes}}<p class="scripture-text">{{.Notes}}</p>{{end}}
                             {{else}}
                                 <span class="item-{{.Kind}}">{{.Title}}</span>
                             {{end}}
@@ -105,6 +126,7 @@
                             </form>
                         </div>
                     </li>
+                    {{end}}
                     {{else}}
                     <li class="empty-items">No items yet.</li>
                     {{end}}
@@ -327,10 +349,27 @@
         <div class="modal-body" style="padding: 1.5rem;">
             <h2 id="scripture-modal-title">Add Scripture</h2>
             <p class="muted">Look up a passage in the reusable World English Bible (WEB), then add its reference and text to this service section.</p>
-            <label>Passage reference
-                <input type="text" id="scripture-reference" placeholder="e.g. John 3:16-18" autocomplete="off">
-            </label>
-            <button type="button" class="button-secondary" id="scripture-preview-button">Preview passage</button>
+            <div class="scripture-picker-grid">
+                <label>Book
+                    <select id="scripture-book"><option value="">Select a book…</option></select>
+                </label>
+                <label>Chapter
+                    <select id="scripture-chapter" disabled><option value="">Select a chapter…</option></select>
+                </label>
+                <label>First verse
+                    <select id="scripture-start-verse" disabled><option value="">Select…</option></select>
+                </label>
+                <label>Last verse
+                    <select id="scripture-end-verse" disabled><option value="">Select…</option></select>
+                </label>
+            </div>
+            <details style="margin: .75rem 0;">
+                <summary>Or enter a passage reference</summary>
+                <label>Reference
+                    <input type="text" id="scripture-reference" placeholder="e.g. John 3:16-18" autocomplete="off">
+                </label>
+                <button type="button" class="button-secondary" id="scripture-preview-button">Look up reference</button>
+            </details>
             <p id="scripture-status" class="muted" role="status" aria-live="polite"></p>
             <div id="scripture-preview" class="scripture-preview" hidden></div>
             <form method="post" action="/plans/{{.Plan.ID}}/items" id="scripture-add-form">
@@ -398,8 +437,21 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.scripture-toggle').forEach(button => {
+            button.addEventListener('click', () => {
+                const expanded = button.getAttribute('aria-expanded') === 'true';
+                button.setAttribute('aria-expanded', String(!expanded));
+                document.getElementById(button.getAttribute('aria-controls')).hidden = expanded;
+                button.querySelector('.scripture-toggle-indicator').textContent = expanded ? '+' : '−';
+            });
+        });
+
         const scriptureModal = document.getElementById('scripture-modal');
         const scriptureReference = document.getElementById('scripture-reference');
+        const scriptureBook = document.getElementById('scripture-book');
+        const scriptureChapter = document.getElementById('scripture-chapter');
+        const scriptureStartVerse = document.getElementById('scripture-start-verse');
+        const scriptureEndVerse = document.getElementById('scripture-end-verse');
         const scripturePreview = document.getElementById('scripture-preview');
         const scriptureStatus = document.getElementById('scripture-status');
         const scripturePreviewButton = document.getElementById('scripture-preview-button');
@@ -407,12 +459,148 @@
         const scriptureTitle = document.getElementById('scripture-title');
         const scriptureText = document.getElementById('scripture-text');
         const scriptureForm = document.getElementById('scripture-add-form');
+        const scriptureBooks = [
+            ['Genesis', 50], ['Exodus', 40], ['Leviticus', 27], ['Numbers', 36], ['Deuteronomy', 34],
+            ['Joshua', 24], ['Judges', 21], ['Ruth', 4], ['1 Samuel', 31], ['2 Samuel', 24],
+            ['1 Kings', 22], ['2 Kings', 25], ['1 Chronicles', 29], ['2 Chronicles', 36], ['Ezra', 10],
+            ['Nehemiah', 13], ['Esther', 10], ['Job', 42], ['Psalms', 150], ['Proverbs', 31],
+            ['Ecclesiastes', 12], ['Song of Solomon', 8], ['Isaiah', 66], ['Jeremiah', 52],
+            ['Lamentations', 5], ['Ezekiel', 48], ['Daniel', 12], ['Hosea', 14], ['Joel', 3],
+            ['Amos', 9], ['Obadiah', 1], ['Jonah', 4], ['Micah', 7], ['Nahum', 3], ['Habakkuk', 3],
+            ['Zephaniah', 3], ['Haggai', 2], ['Zechariah', 14], ['Malachi', 4], ['Matthew', 28],
+            ['Mark', 16], ['Luke', 24], ['John', 21], ['Acts', 28], ['Romans', 16],
+            ['1 Corinthians', 16], ['2 Corinthians', 13], ['Galatians', 6], ['Ephesians', 6],
+            ['Philippians', 4], ['Colossians', 4], ['1 Thessalonians', 5], ['2 Thessalonians', 3],
+            ['1 Timothy', 6], ['2 Timothy', 4], ['Titus', 3], ['Philemon', 1], ['Hebrews', 13],
+            ['James', 5], ['1 Peter', 5], ['2 Peter', 3], ['1 John', 5], ['2 John', 1],
+            ['3 John', 1], ['Jude', 1], ['Revelation', 22]
+        ];
+        let chapterVerses = [];
         let scriptureController;
+        let scriptureRequestID = 0;
+
+        scriptureBooks.forEach(([name]) => scriptureBook.add(new Option(name, name)));
+
+        function clearSelectedPassage() {
+            scriptureTitle.value = '';
+            scriptureText.value = '';
+            scriptureAddButton.disabled = true;
+            scripturePreview.hidden = true;
+        }
+
+        function cancelScriptureRequest() {
+            scriptureRequestID++;
+            scriptureController?.abort();
+            scriptureController = null;
+        }
+
+        async function fetchPassage(query) {
+            cancelScriptureRequest();
+            const requestID = scriptureRequestID;
+            scriptureController = new AbortController();
+            const controller = scriptureController;
+            let timedOut = false;
+            const timeout = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, 10000);
+            try {
+                const url = `https://bible-api.com/${encodeURIComponent(query)}?translation=web`;
+                const response = await fetch(url, { signal: controller.signal });
+                const passage = await response.json();
+                if (requestID !== scriptureRequestID) return null;
+                if (!response.ok || !passage.reference || !Array.isArray(passage.verses) ||
+                    !passage.verses.length || passage.translation_id !== 'web') {
+                    throw new Error('Passage not found. Check the selection and try again.');
+                }
+                if (passage.reference.length > 200 || passage.text?.length > 20000) {
+                    throw new Error('Please select a shorter passage.');
+                }
+                return passage;
+            } catch (error) {
+                if (timedOut) throw new Error('The passage lookup timed out. Please try again.');
+                if (error.name === 'AbortError' && requestID !== scriptureRequestID) return null;
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+                if (scriptureController === controller) scriptureController = null;
+            }
+        }
+
+        function showSelectedVerses(reference, verses) {
+            const text = verses.map(verse => `${verse.verse}. ${verse.text.trim()}`)
+                .filter(Boolean).join('\n');
+            if (!reference || !text || text.length > 20000) {
+                clearSelectedPassage();
+                scriptureStatus.textContent = text.length > 20000 ? 'Please select a shorter passage.' : 'No verses found for this selection.';
+                return;
+            }
+            scriptureTitle.value = reference;
+            scriptureText.value = text;
+            scripturePreview.replaceChildren();
+            const heading = document.createElement('strong');
+            heading.textContent = reference;
+            const translation = document.createElement('span');
+            translation.className = 'scripture-translation';
+            translation.textContent = 'World English Bible (WEB) · Public Domain';
+            const passageText = document.createElement('p');
+            passageText.className = 'scripture-text';
+            passageText.textContent = text;
+            scripturePreview.append(heading, translation, passageText);
+            scripturePreview.hidden = false;
+            scriptureAddButton.disabled = false;
+            scriptureStatus.textContent = 'Passage preview ready.';
+        }
+
+        function selectedVerseRange() {
+            const first = Number(scriptureStartVerse.value);
+            const last = Number(scriptureEndVerse.value);
+            if (!first || !last || first > last) return;
+            const verses = chapterVerses.filter(verse => verse.verse >= first && verse.verse <= last);
+            const book = scriptureBook.value;
+            const chapter = scriptureChapter.value;
+            const reference = `${book} ${chapter}:${first}${first === last ? '' : `-${last}`}`;
+            showSelectedVerses(reference, verses);
+        }
+
+        async function loadSelectedChapter() {
+            const book = scriptureBook.value;
+            const chapter = scriptureChapter.value;
+            if (!book || !chapter) return;
+            scriptureReference.value = '';
+            chapterVerses = [];
+            clearSelectedPassage();
+            scriptureStatus.textContent = 'Loading chapter…';
+            scriptureStartVerse.disabled = true;
+            scriptureEndVerse.disabled = true;
+            scripturePreviewButton.disabled = true;
+            try {
+                const passage = await fetchPassage(`${book} ${chapter}`);
+                if (!passage) return;
+                chapterVerses = passage.verses.filter(verse => Number.isInteger(verse.verse));
+                if (!chapterVerses.length) throw new Error('No verses were returned for this chapter.');
+                scriptureStartVerse.replaceChildren();
+                scriptureEndVerse.replaceChildren();
+                chapterVerses.forEach(verse => {
+                    scriptureStartVerse.add(new Option(String(verse.verse), String(verse.verse)));
+                    scriptureEndVerse.add(new Option(String(verse.verse), String(verse.verse)));
+                });
+                scriptureStartVerse.value = String(chapterVerses[0].verse);
+                scriptureEndVerse.value = String(chapterVerses[chapterVerses.length - 1].verse);
+                scriptureStartVerse.disabled = false;
+                scriptureEndVerse.disabled = false;
+                selectedVerseRange();
+            } catch (error) {
+                scriptureStatus.textContent = error.message || 'Could not load the chapter. Please try again.';
+            } finally {
+                scripturePreviewButton.disabled = false;
+            }
+        }
 
         function closeScriptureModal() {
             scriptureModal.style.display = 'none';
             scriptureModal.setAttribute('aria-hidden', 'true');
-            scriptureController?.abort();
+            cancelScriptureRequest();
         }
 
         document.querySelectorAll('.scripture-open-button').forEach(button => {
@@ -420,7 +608,7 @@
                 document.getElementById('scripture-plan-time-id').value = button.dataset.timeId;
                 scriptureModal.style.display = 'flex';
                 scriptureModal.setAttribute('aria-hidden', 'false');
-                scriptureReference.focus();
+                scriptureBook.focus();
             });
         });
         document.getElementById('scripture-modal-close').addEventListener('click', closeScriptureModal);
@@ -432,64 +620,63 @@
             if (event.key === 'Escape' && scriptureModal.style.display !== 'none') closeScriptureModal();
         });
         scriptureReference.addEventListener('input', () => {
-            scriptureController?.abort();
-            scriptureAddButton.disabled = true;
-            scriptureTitle.value = '';
-            scriptureText.value = '';
-            scripturePreview.hidden = true;
+            cancelScriptureRequest();
+            clearSelectedPassage();
             scriptureStatus.textContent = '';
         });
-        scripturePreviewButton.addEventListener('click', async () => {
+        scriptureBook.addEventListener('change', () => {
+            const selectedBook = scriptureBooks.find(([name]) => name === scriptureBook.value);
+            scriptureChapter.replaceChildren(new Option('Select a chapter…', ''));
+            scriptureStartVerse.replaceChildren(new Option('Select…', ''));
+            scriptureEndVerse.replaceChildren(new Option('Select…', ''));
+            scriptureChapter.disabled = !selectedBook;
+            scriptureStartVerse.disabled = true;
+            scriptureEndVerse.disabled = true;
+            clearSelectedPassage();
+            if (!selectedBook) return;
+            for (let chapter = 1; chapter <= selectedBook[1]; chapter++) {
+                scriptureChapter.add(new Option(String(chapter), String(chapter)));
+            }
+            scriptureChapter.value = '1';
+            loadSelectedChapter();
+        });
+        scriptureChapter.addEventListener('change', loadSelectedChapter);
+        [scriptureStartVerse, scriptureEndVerse].forEach(select => {
+            select.addEventListener('change', () => {
+                scriptureReference.value = '';
+                clearSelectedPassage();
+                if (select === scriptureStartVerse &&
+                    Number(scriptureEndVerse.value) < Number(scriptureStartVerse.value)) {
+                    scriptureEndVerse.value = scriptureStartVerse.value;
+                }
+                selectedVerseRange();
+            });
+        });
+
+        async function lookupTypedReference() {
             const reference = scriptureReference.value.trim();
             if (!reference) {
                 scriptureStatus.textContent = 'Enter a Bible reference to look up.';
                 return;
             }
-            scriptureController?.abort();
-            scriptureController = new AbortController();
-            let timedOut = false;
-            const timeout = setTimeout(() => {
-                timedOut = true;
-                scriptureController.abort();
-            }, 10000);
+            clearSelectedPassage();
             scripturePreviewButton.disabled = true;
-            scriptureAddButton.disabled = true;
             scriptureStatus.textContent = 'Looking up passage…';
-            scripturePreview.hidden = true;
             try {
-                const url = `https://bible-api.com/${encodeURIComponent(reference)}?translation=web`;
-                const response = await fetch(url, { signal: scriptureController.signal });
-                const passage = await response.json();
-                if (!response.ok || !passage.reference || !passage.text || passage.translation_id !== 'web') {
-                    throw new Error('Passage not found. Check the reference and try again.');
-                }
-                if (passage.reference.length > 200 || passage.text.length > 20000) {
-                    throw new Error('Please select a shorter passage.');
-                }
-                scriptureTitle.value = passage.reference;
-                scriptureText.value = passage.text.trim();
-                scripturePreview.replaceChildren();
-                const heading = document.createElement('strong');
-                heading.textContent = passage.reference;
-                const translation = document.createElement('span');
-                translation.className = 'scripture-translation';
-                translation.textContent = 'World English Bible (WEB) · Public Domain';
-                const text = document.createElement('p');
-                text.className = 'scripture-text';
-                text.textContent = passage.text.trim();
-                scripturePreview.append(heading, translation, text);
-                scripturePreview.hidden = false;
-                scriptureAddButton.disabled = false;
-                scriptureStatus.textContent = 'Passage ready to add.';
+                const passage = await fetchPassage(reference);
+                if (!passage) return;
+                showSelectedVerses(passage.reference, passage.verses);
             } catch (error) {
-                if (timedOut) {
-                    scriptureStatus.textContent = 'The passage lookup timed out. Please try again.';
-                } else if (error.name !== 'AbortError') {
-                    scriptureStatus.textContent = error.message || 'Could not load the passage. Please try again.';
-                }
+                scriptureStatus.textContent = error.message || 'Could not load the passage. Please try again.';
             } finally {
-                clearTimeout(timeout);
                 scripturePreviewButton.disabled = false;
+            }
+        }
+        scripturePreviewButton.addEventListener('click', lookupTypedReference);
+        scriptureReference.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                lookupTypedReference();
             }
         });
         scriptureForm.addEventListener('submit', event => {

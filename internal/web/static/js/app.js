@@ -193,6 +193,10 @@ window.removeStaged = function(index) {
         row.setAttribute('draggable', 'true');
 
         row.addEventListener('dragstart', function (e) {
+            if (e.target.closest('button, a, input, select, textarea')) {
+                e.preventDefault();
+                return;
+            }
             draggedItem = row;
             row.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';

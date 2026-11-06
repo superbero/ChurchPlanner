@@ -63,7 +63,18 @@ func TestPlanViewRendersItemCopyAndSafeTimeEditControls(t *testing.T) {
 		`World English Bible (WEB)`,
 		`For God so loved the world.`,
 		`&lt;script&gt;alert(1)&lt;/script&gt;`,
+		`class="scripture-toggle item-scripture"`,
+		`aria-expanded="false"`,
+		`class="scripture-text scripture-item-text" hidden`,
+		`button.setAttribute('aria-expanded', String(!expanded))`,
 		`https://bible-api.com/`,
+		`id="scripture-book"`,
+		`id="scripture-chapter"`,
+		`id="scripture-start-verse"`,
+		`id="scripture-end-verse"`,
+		`class="scripture-picker-grid"`,
+		`scriptureReference.addEventListener('keydown'`,
+		`loadSelectedChapter();`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("plan view is missing %q", expected)
