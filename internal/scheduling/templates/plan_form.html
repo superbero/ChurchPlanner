@@ -101,25 +101,7 @@
                 document.querySelector('[name="service_start"]').value = option.dataset.nextStart;
                 document.querySelector('[name="service_end"]').value = option.dataset.nextEnd;
                 dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-                return;
             }
-
-            const selectedText = option.text.trim().toLowerCase();
-            const targetDay = selectedText.includes('sunday') ? 0
-                : selectedText.includes('midweek') || selectedText.includes('wednesday') ? 3
-                : selectedText.includes('louange') || selectedText.includes('friday') ? 5 : -1;
-            if (targetDay < 0) return;
-
-            const nextDate = new Date();
-            let distance = (targetDay - nextDate.getDay() + 7) % 7;
-            if (distance === 0) distance = 7;
-            nextDate.setDate(nextDate.getDate() + distance);
-            dateInput.value = [
-                nextDate.getFullYear(),
-                String(nextDate.getMonth() + 1).padStart(2, '0'),
-                String(nextDate.getDate()).padStart(2, '0')
-            ].join('-');
-            dateInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
         if (dateInput.dataset.calendarDate !== 'true' && typeSelect.value) {
             typeSelect.dispatchEvent(new Event('change'));

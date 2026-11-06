@@ -70,7 +70,8 @@ func TestNextServiceWindowUsesFollowingWeekAndKeepsDuration(t *testing.T) {
 	lastEnd := lastStart.Add(2 * time.Hour)
 	now := time.Date(2026, time.November, 3, 12, 0, 0, 0, time.UTC)
 
-	nextStart, nextEnd := nextServiceWindow(lastStart, lastEnd, now)
+	latest := &Plan{ServiceAt: lastStart, ServiceEndsAt: lastEnd}
+	nextStart, nextEnd := suggestedServiceWindow("Cohesion", latest, now)
 	if got, want := nextStart.Format(time.RFC3339), "2026-11-08T09:30:00Z"; got != want {
 		t.Errorf("next start = %s, want %s", got, want)
 	}
@@ -83,7 +84,8 @@ func TestNextServiceWindowFallsBackToNinetyMinutes(t *testing.T) {
 	lastStart := time.Date(2026, time.November, 1, 9, 30, 0, 0, time.UTC)
 	now := time.Date(2026, time.November, 3, 12, 0, 0, 0, time.UTC)
 
-	nextStart, nextEnd := nextServiceWindow(lastStart, lastStart, now)
+	latest := &Plan{ServiceAt: lastStart, ServiceEndsAt: lastStart}
+	nextStart, nextEnd := suggestedServiceWindow("Cohesion", latest, now)
 	if got, want := nextEnd.Sub(nextStart), 90*time.Minute; got != want {
 		t.Errorf("fallback service duration = %s, want %s", got, want)
 	}
@@ -94,9 +96,43 @@ func TestNextServiceWindowAdvancesOldPlanToNextFutureOccurrence(t *testing.T) {
 	lastEnd := lastStart.Add(90 * time.Minute)
 	now := time.Date(2026, time.November, 6, 12, 0, 0, 0, time.UTC)
 
-	nextStart, _ := nextServiceWindow(lastStart, lastEnd, now)
+	latest := &Plan{ServiceAt: lastStart, ServiceEndsAt: lastEnd}
+	nextStart, _ := suggestedServiceWindow("Sunday Morning", latest, now)
 	if got, want := nextStart.Format("2006-01-02"), "2026-11-08"; got != want {
 		t.Errorf("next occurrence date = %s, want %s", got, want)
+	}
+}
+
+func TestMidweekSuggestionUsesWednesday(t *testing.T) {
+	now := time.Date(2026, time.November, 6, 12, 0, 0, 0, time.UTC)
+	start, end := suggestedServiceWindow("Midweek", nil, now)
+	if got, want := start.Format("2006-01-02"), "2026-11-11"; got != want {
+		t.Errorf("midweek date = %s, want Wednesday %s", got, want)
+	}
+	if got, want := start.Format("15:04"), "10:00"; got != want {
+		t.Errorf("midweek default time = %s, want %s", got, want)
+	}
+	if got, want := end.Sub(start), 90*time.Minute; got != want {
+		t.Errorf("midweek duration = %s, want %s", got, want)
+	}
+}
+
+func TestMidweekLatestPlanStillAlignsToWednesday(t *testing.T) {
+	now := time.Date(2026, time.November, 6, 12, 0, 0, 0, time.UTC)
+	lastStart := time.Date(2026, time.November, 2, 18, 30, 0, 0, time.UTC)
+	latest := &Plan{ServiceAt: lastStart, ServiceEndsAt: lastStart.Add(time.Hour)}
+	start, _ := suggestedServiceWindow("Midweek", latest, now)
+	if got, want := start.Format("2006-01-02 15:04"), "2026-11-11 18:30"; got != want {
+		t.Errorf("next midweek plan = %s, want %s", got, want)
+	}
+}
+
+func TestZeroLatestPlanFallsBackToServiceTypeSuggestion(t *testing.T) {
+	now := time.Date(2026, time.November, 6, 12, 0, 0, 0, time.UTC)
+	latest := &Plan{}
+	start, _ := suggestedServiceWindow("Midweek", latest, now)
+	if got, want := start.Format("2006-01-02"), "2026-11-11"; got != want {
+		t.Errorf("midweek date = %s, want %s", got, want)
 	}
 }
 

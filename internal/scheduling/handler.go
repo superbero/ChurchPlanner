@@ -86,17 +86,20 @@ func (h *Handler) NewPlan(w http.ResponseWriter, r *http.Request) {
 	defaultStart := now.AddDate(0, 0, 7).Truncate(time.Hour)
 	defaultEnd := defaultStart.Add(90 * time.Minute)
 	serviceTypeID := r.URL.Query().Get("type")
-	nextServiceWindows := make(map[string]Plan, len(latestByType))
-	for id, latest := range latestByType {
-		start, end := nextServiceWindow(latest.ServiceAt, latest.ServiceEndsAt, now)
-		latest.ServiceAt, latest.ServiceEndsAt = start, end
-		nextServiceWindows[id] = latest
+	nextServiceWindows := make(map[string]Plan, len(types))
+	for _, serviceType := range types {
+		var latest *Plan
+		if plan, ok := latestByType[serviceType.ID]; ok {
+			latest = &plan
+		}
+		start, end := suggestedServiceWindow(serviceType.Name, latest, now)
+		nextServiceWindows[serviceType.ID] = Plan{ServiceAt: start, ServiceEndsAt: end}
 	}
 	if serviceTypeID == "" && len(types) > 0 {
 		serviceTypeID = types[0].ID
 	}
-	if latest, ok := latestByType[serviceTypeID]; ok {
-		defaultStart, defaultEnd = nextServiceWindow(latest.ServiceAt, latest.ServiceEndsAt, now)
+	if suggested, ok := nextServiceWindows[serviceTypeID]; ok {
+		defaultStart, defaultEnd = suggested.ServiceAt, suggested.ServiceEndsAt
 	}
 
 	// If the calendar passed ?date=YYYY-MM-DD, use it and default to 10:00 AM
@@ -827,16 +830,51 @@ func parsePlanInput(r *http.Request) (CreatePlanInput, error) {
 	}, nil
 }
 
-func nextServiceWindow(lastStart, lastEnd, now time.Time) (time.Time, time.Time) {
-	nextStart := lastStart.AddDate(0, 0, 7)
+func suggestedServiceWindow(serviceType string, latest *Plan, now time.Time) (time.Time, time.Time) {
+	targetWeekday := serviceWeekday(serviceType)
+	if latest == nil || latest.ServiceAt.IsZero() {
+		start := now.AddDate(0, 0, 7).Truncate(time.Hour)
+		if targetWeekday >= 0 {
+			start = nextWeekdayAfter(now, time.Weekday(targetWeekday))
+			start = time.Date(start.Year(), start.Month(), start.Day(), 10, 0, 0, 0, now.Location())
+		}
+		return start, start.Add(90 * time.Minute)
+	}
+
+	nextStart := latest.ServiceAt.AddDate(0, 0, 7)
+	if targetWeekday >= 0 {
+		nextStart = nextWeekdayAfter(latest.ServiceAt, time.Weekday(targetWeekday))
+	}
 	for !nextStart.After(now) {
 		nextStart = nextStart.AddDate(0, 0, 7)
 	}
-	duration := lastEnd.Sub(lastStart)
+	duration := latest.ServiceEndsAt.Sub(latest.ServiceAt)
 	if duration <= 0 {
 		duration = 90 * time.Minute
 	}
 	return nextStart, nextStart.Add(duration)
+}
+
+func serviceWeekday(serviceType string) int {
+	name := strings.ToLower(strings.NewReplacer("-", "", " ", "").Replace(strings.TrimSpace(serviceType)))
+	switch {
+	case strings.Contains(name, "sunday"):
+		return int(time.Sunday)
+	case strings.Contains(name, "midweek"), strings.Contains(name, "wednesday"):
+		return int(time.Wednesday)
+	case strings.Contains(name, "louange"), strings.Contains(name, "friday"):
+		return int(time.Friday)
+	default:
+		return -1
+	}
+}
+
+func nextWeekdayAfter(date time.Time, weekday time.Weekday) time.Time {
+	days := (int(weekday) - int(date.Weekday()) + 7) % 7
+	if days == 0 {
+		days = 7
+	}
+	return date.AddDate(0, 0, days)
 }
 
 // ---- Item edit ----

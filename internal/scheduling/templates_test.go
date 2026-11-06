@@ -38,18 +38,24 @@ func TestNewPlanFormUsesLatestServiceWindowForType(t *testing.T) {
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	start := time.Date(2026, time.November, 8, 9, 0, 0, 0, time.UTC)
-	end := start.Add(2 * time.Hour)
+	sundayStart := time.Date(2026, time.November, 8, 9, 0, 0, 0, time.UTC)
+	sundayEnd := sundayStart.Add(2 * time.Hour)
+	midweekStart := time.Date(2026, time.November, 11, 10, 0, 0, 0, time.UTC)
+	midweekEnd := midweekStart.Add(90 * time.Minute)
 	response := httptest.NewRecorder()
 	renderer.Render(response, httptest.NewRequest(http.MethodGet, "/plans/new", nil), http.StatusOK,
 		"scheduling_plan_form", map[string]any{
-			"ServiceTypes": []ServiceType{{ID: "sunday", Name: "Sunday service"}},
+			"ServiceTypes": []ServiceType{
+				{ID: "sunday", Name: "Sunday service"},
+				{ID: "midweek", Name: "Midweek"},
+			},
 			"NextServiceWindows": map[string]Plan{
-				"sunday": {ServiceAt: start, ServiceEndsAt: end},
+				"sunday":  {ServiceAt: sundayStart, ServiceEndsAt: sundayEnd},
+				"midweek": {ServiceAt: midweekStart, ServiceEndsAt: midweekEnd},
 			},
 			"CalendarDateProvided": false,
 			"IsNew":                true,
-			"Plan":                 Plan{ServiceTypeID: "sunday", ServiceAt: start, ServiceEndsAt: end},
+			"Plan":                 Plan{ServiceTypeID: "midweek", ServiceAt: midweekStart, ServiceEndsAt: midweekEnd},
 		})
 	if response.Code != http.StatusOK {
 		t.Fatalf("render status = %d, want %d", response.Code, http.StatusOK)
@@ -58,10 +64,16 @@ func TestNewPlanFormUsesLatestServiceWindowForType(t *testing.T) {
 		`data-next-date="2026-11-08"`,
 		`data-next-start="09:00"`,
 		`data-next-end="11:00"`,
+		`data-next-date="2026-11-11"`,
+		`data-next-start="10:00"`,
+		`data-next-end="11:30"`,
 		`data-calendar-date="false"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("plan form is missing %q", expected)
 		}
+	}
+	if strings.Contains(response.Body.String(), "0001-01-01") {
+		t.Error("plan form rendered a zero date")
 	}
 }
