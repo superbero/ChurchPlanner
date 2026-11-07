@@ -1,54 +1,66 @@
 {{define "content"}}
 <header class="calendar-header">
-    <h1>{{.MonthName}}</h1>
-    <div class="calendar-nav">
-        <a href="/calendar?year={{.PrevYear}}&amp;month={{.PrevMonth}}" class="button-secondary">← Prev</a>
-        <a href="/calendar" class="button-secondary">Today</a>
-        <a href="/calendar?year={{.NextYear}}&amp;month={{.NextMonth}}" class="button-secondary">Next →</a>
+    <h1 id="cal-title" aria-live="polite">{{.MonthName}}</h1>
+
+    <div class="calendar-tools">
+        <nav class="calendar-nav" aria-label="Month navigation">
+            <a href="/calendar?year={{.PrevYear}}&amp;month={{.PrevMonth}}" class="button-secondary" data-cal-prev aria-label="Previous month">← Prev</a>
+            <a href="/calendar" class="button-secondary">Today</a>
+            <a href="/calendar?year={{.NextYear}}&amp;month={{.NextMonth}}" class="button-secondary" data-cal-next aria-label="Next month">Next →</a>
+        </nav>
+
+        {{with .MonthValue}}
+        <input type="month" value="{{.}}" aria-label="Jump to month" class="cal-jump"
+               onchange="if(this.value){var v=this.value.split('-');location.href='/calendar?year='+v[0]+'&amp;month='+parseInt(v[1],10)}">
+        {{end}}
+
+        {{if .CanManagePlans}}<a href="/plans/new" class="button">+ New plan</a>{{end}}
+
+        {{with .FeedLinks}}
+        <details class="subscribe-menu">
+            <summary class="button">📅 Add to my calendar</summary>
+            <div class="subscribe-menu-body">
+                <p>Your services, always up to date in your own calendar app:</p>
+                <a class="button" href="{{.Google}}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+                <a class="button" href="{{.Outlook365}}" target="_blank" rel="noopener noreferrer">Outlook (work/school)</a>
+                <a class="button" href="{{.OutlookLive}}" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+                <a class="button" href="{{.Webcal}}">Apple Calendar / other</a>
+                <p><a href="/calendar/feed">Copy link / more options</a></p>
+            </div>
+        </details>
+        {{end}}
     </div>
 </header>
-<!-- Paste into index.html inside <header class="calendar-header">, after the calendar-nav div -->
-{{with .FeedLinks}}
-<details class="subscribe-menu">
-    <summary class="button">📅 Add to my calendar</summary>
-    <div class="subscribe-menu-body">
-        <p>Your services, always up to date in your own calendar app:</p>
-        <a class="button" href="{{.Google}}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
-        <a class="button" href="{{.Outlook365}}" target="_blank" rel="noopener noreferrer">Outlook (work/school)</a>
-        <a class="button" href="{{.OutlookLive}}" target="_blank" rel="noopener noreferrer">Outlook.com</a>
-        <a class="button" href="{{.Webcal}}">Apple Calendar / other</a>
-        <p><a href="/calendar/feed">Copy link / more options</a></p>
-    </div>
-</details>
-<style>
-    .subscribe-menu { position: relative; display: inline-block; }
-    .subscribe-menu > summary { cursor: pointer; list-style: none; }
-    .subscribe-menu > summary::-webkit-details-marker { display: none; }
-    .subscribe-menu-body {
-        position: absolute; right: 0; z-index: 20; min-width: 16rem; margin-top: .4rem;
-        padding: .75rem; display: flex; flex-direction: column; gap: .5rem;
-        background: Canvas; color: CanvasText;
-        border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
-        border-radius: .5rem; box-shadow: 0 6px 20px rgba(0,0,0,.18);
-    }
-</style>
-{{end}}
 
-<div class="calendar-grid">
-    <div class="cal-dow">Sun</div>
-    <div class="cal-dow">Mon</div>
-    <div class="cal-dow">Tue</div>
-    <div class="cal-dow">Wed</div>
-    <div class="cal-dow">Thu</div>
-    <div class="cal-dow">Fri</div>
-    <div class="cal-dow">Sat</div>
+<ul class="cal-legend" aria-label="Legend">
+    <li><span class="cal-key cal-key-service"></span> Service</li>
+    {{if .CanManagePlans}}<li><span class="cal-key cal-key-draft"></span> Draft (not published)</li>{{end}}
+    <li><span class="cal-key cal-key-blockout"></span> Unavailable</li>
+</ul>
+
+<div class="calendar-grid" role="grid" aria-labelledby="cal-title">
+    {{range .DayNames}}<div class="cal-dow" role="columnheader">{{.}}</div>
+    {{else}}
+    <div class="cal-dow" role="columnheader">Sun</div>
+    <div class="cal-dow" role="columnheader">Mon</div>
+    <div class="cal-dow" role="columnheader">Tue</div>
+    <div class="cal-dow" role="columnheader">Wed</div>
+    <div class="cal-dow" role="columnheader">Thu</div>
+    <div class="cal-dow" role="columnheader">Fri</div>
+    <div class="cal-dow" role="columnheader">Sat</div>
+    {{end}}
 
     {{range .Days}}
-    <div class="cal-day {{if .IsOther}}cal-other{{end}} {{if .IsToday}}cal-today{{end}}">
+    <div class="cal-day {{if .IsOther}}cal-other{{end}} {{if .IsToday}}cal-today{{end}} {{if not (or .Plans .Blockouts)}}cal-empty{{end}}"
+         role="gridcell" {{if .IsToday}}aria-current="date"{{end}}>
         <div class="cal-date">
-            {{if $.CanManagePlans}}<a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan">+</a>{{end}}
+            {{/* Mobile agenda label; hidden on desktop by CSS */}}
+            <time class="cal-mobile-date" datetime="{{.Date.Format "2006-01-02"}}">{{.Date.Format "Mon 2 Jan"}}</time>
             {{if $.CanManagePlans}}
-            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-day-num">{{.Date.Format "2"}}</a>
+            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-day-num"
+               title="Add a plan on {{.Date.Format "2 January"}}"
+               aria-label="Add a plan on {{.Date.Format "2 January"}}">{{.Date.Format "2"}}</a>
+            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" aria-hidden="true" tabindex="-1">+</a>
             {{else}}
             <span class="cal-day-num">{{.Date.Format "2"}}</span>
             {{end}}
@@ -58,11 +70,11 @@
             {{range .Plans}}
             {{if $.CanOpenPlans}}
             <a href="{{.URL}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
-                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
+                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}{{if not .Published}} <span class="cal-badge">Draft</span>{{end}}
             </a>
             {{else}}
-            <span class="cal-event">
-                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
+            <span class="cal-event {{if not .Published}}cal-draft{{end}}">
+                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}{{if not .Published}} <span class="cal-badge">Draft</span>{{end}}
             </span>
             {{end}}
             {{end}}
@@ -82,7 +94,7 @@
     <form method="post" action="/calendar/blockouts" class="inline-form">
         <label>From <input type="date" name="starts_on" required></label>
         <label>To <input type="date" name="ends_on" required></label>
-        <label>Reason <input type="text" name="reason" placeholder="Vacation, Out of town, etc."></label>
+        <label>Reason <input type="text" name="reason" maxlength="200" placeholder="Vacation, Out of town, etc."></label>
         <button type="submit">Save Blockout</button>
     </form>
 </details>
@@ -106,4 +118,93 @@
     <p class="muted">No unavailable dates overlap this month.</p>
     {{end}}
 </section>
+
+<style>
+    /* Uses system colours (Canvas/CanvasText) so it follows light/dark mode.
+       Loaded after the site stylesheet, so it overrides the older .cal-* rules.
+       Move it into your main stylesheet whenever convenient. */
+    .calendar-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+    .calendar-header h1 { margin: 0; font-size: clamp(1.3rem, 4vw, 1.8rem); }
+    .calendar-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .calendar-nav { display: flex; gap: .35rem; }
+    .calendar-nav a, .calendar-tools .button, .subscribe-menu > summary { min-height: 2.5rem; display: inline-flex; align-items: center; }
+    .cal-jump { min-height: 2.5rem; }
+
+    .cal-legend { display: flex; flex-wrap: wrap; gap: 1rem; list-style: none; padding: 0; margin: 0 0 .75rem; font-size: .82rem; opacity: .85; }
+    .cal-key { display: inline-block; width: .8rem; height: .8rem; border-radius: .2rem; vertical-align: -.1rem; margin-right: .25rem; }
+    .cal-key-service { background: color-mix(in srgb, #2563eb 30%, Canvas); border: 1px solid #2563eb; }
+    .cal-key-draft { border: 1px dashed currentColor; }
+    .cal-key-blockout { background: color-mix(in srgb, #d97706 30%, Canvas); border-left: 3px solid #d97706; }
+
+    .calendar-grid { --cal-line: color-mix(in srgb, CanvasText 18%, transparent);
+        display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+    .cal-dow { text-align: center; font-weight: 600; font-size: .8rem; padding: .35rem 0; opacity: .7; }
+    .cal-day { min-height: 6.5rem; padding: .3rem; border: 1px solid var(--cal-line); border-radius: .45rem; min-width: 0; }
+    .cal-other { opacity: .45; }
+    .cal-today { outline: 2px solid #2563eb; outline-offset: -1px; }
+    .cal-date { display: flex; justify-content: space-between; align-items: center; margin-bottom: .2rem; }
+    .cal-mobile-date { display: none; }
+    .cal-day-num { font-size: .85rem; font-weight: 600; text-decoration: none; color: inherit; }
+    .cal-today .cal-day-num { background: #2563eb; color: #fff; border-radius: 999px; padding: 0 .45rem; }
+    .cal-add-hint { opacity: 0; text-decoration: none; font-weight: 700; padding: 0 .35rem; }
+    .cal-day:hover .cal-add-hint { opacity: .8; }
+    .cal-events { display: flex; flex-direction: column; gap: .2rem; }
+
+    .cal-event { display: block; padding: .15rem .35rem; border-radius: .3rem; font-size: .78rem; line-height: 1.3;
+        text-decoration: none; color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        background: color-mix(in srgb, #2563eb 16%, Canvas); border: 1px solid color-mix(in srgb, #2563eb 45%, transparent); }
+    a.cal-event:hover, a.cal-event:focus-visible { background: color-mix(in srgb, #2563eb 28%, Canvas); }
+    .cal-time { font-weight: 700; margin-right: .15rem; }
+    .cal-draft { background: transparent; border-style: dashed; border-color: currentColor; }
+    .cal-badge { font-size: .65rem; text-transform: uppercase; letter-spacing: .03em; opacity: .75; }
+    .cal-blockout { font-size: .72rem; padding: .1rem .35rem; border-radius: .2rem; border-left: 3px solid #d97706;
+        background: color-mix(in srgb, #d97706 14%, Canvas); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .subscribe-menu { position: relative; display: inline-block; }
+    .subscribe-menu > summary { cursor: pointer; list-style: none; }
+    .subscribe-menu > summary::-webkit-details-marker { display: none; }
+    .subscribe-menu-body { position: absolute; right: 0; z-index: 20; min-width: 16rem; margin-top: .4rem; padding: .75rem;
+        display: flex; flex-direction: column; gap: .5rem; background: Canvas; color: CanvasText;
+        border: 1px solid var(--cal-line, rgba(128,128,128,.4)); border-radius: .5rem; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+
+    /* Phones and narrow windows: a 7-column grid is unreadable, so show an agenda list of only the days that have something. */
+    @media (max-width: 700px) {
+        .calendar-grid { display: block; }
+        .cal-dow { display: none; }
+        .cal-day { min-height: 0; margin-bottom: .4rem; display: flex; gap: .75rem; align-items: flex-start; }
+        .cal-day.cal-empty, .cal-day.cal-other { display: none; }
+        .cal-date { flex: 0 0 6rem; margin: 0; }
+        .cal-mobile-date { display: inline; font-weight: 700; font-size: .9rem; }
+        .cal-day-num, .cal-add-hint { display: none; }
+        .cal-events { flex: 1; min-width: 0; }
+        .cal-event, .cal-blockout { white-space: normal; font-size: .9rem; padding: .3rem .45rem; }
+        .cal-today { outline-offset: 0; }
+        .subscribe-menu-body { right: auto; left: 0; }
+    }
+
+    @media print {
+        .calendar-tools, .add-blockout-panel, .my-blockouts, .cal-legend { display: none; }
+        .cal-day { break-inside: avoid; }
+        .cal-event, .cal-blockout { white-space: normal; }
+    }
+</style>
+
+<script>
+(function () {
+    // Left/Right arrow keys change month (ignored while typing in a field).
+    document.addEventListener('keydown', function (e) {
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        var t = e.target && e.target.tagName;
+        if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+        var sel = e.key === 'ArrowLeft' ? '[data-cal-prev]' : e.key === 'ArrowRight' ? '[data-cal-next]' : null;
+        var a = sel && document.querySelector(sel);
+        if (a) a.click();
+    });
+    // On phones, bring today into view in the agenda list.
+    if (window.matchMedia('(max-width: 700px)').matches) {
+        var today = document.querySelector('.cal-today');
+        if (today) today.scrollIntoView({ block: 'center' });
+    }
+})();
+</script>
 {{end}}

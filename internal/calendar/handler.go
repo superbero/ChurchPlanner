@@ -18,6 +18,18 @@ import (
 
 const maxReasonLen = 200
 
+// First day of the week in the grid. Change to time.Monday for Monday-first;
+// the header labels and the grid both follow this one setting.
+const weekStart = time.Sunday
+
+func dayNames() []string {
+	names := make([]string, 7)
+	for i := range names {
+		names[i] = time.Weekday((int(weekStart) + i) % 7).String()[:3]
+	}
+	return names
+}
+
 type Handler struct {
 	db       *pgxpool.Pool
 	renderer *httpx.Renderer
@@ -76,7 +88,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 
 	firstOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
 	firstOfNext := firstOfMonth.AddDate(0, 1, 0)
-	gridStart, weeks := gridBounds(firstOfMonth, time.Sunday)
+	gridStart, weeks := gridBounds(firstOfMonth, weekStart)
 	gridEnd := gridStart.AddDate(0, 0, weeks*7) // exclusive
 
 	plansByDay, err := h.plansBetween(r.Context(), gridStart, gridEnd, loc)
@@ -118,6 +130,8 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 
 	h.renderer.Render(w, r, http.StatusOK, "calendar_index", map[string]any{
 		"MonthName":   firstOfMonth.Format("January 2006"),
+		"MonthValue":  firstOfMonth.Format("2006-01"), // for <input type="month">
+		"DayNames":    dayNames(),
 		"PrevYear":    prev.Year(),
 		"PrevMonth":   prev.Format("1"),
 		"NextYear":    next.Year(),
