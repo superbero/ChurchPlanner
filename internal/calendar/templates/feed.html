@@ -1,41 +1,30 @@
 {{define "content"}}
 <h1>Add my schedule to my calendar</h1>
-<p>Subscribe once and every service you are scheduled for appears in your own
-calendar app and stays up to date when plans change.</p>
+<p>Every service you are scheduled for appears in your own calendar app and
+stays up to date when plans change.</p>
 
-{{if .HasFeed}}
-<section class="feed-subscribe">
-    <h2>Pick your calendar</h2>
-    <p>
-        <a class="button" href="{{.Links.Google}}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
-        <a class="button" href="{{.Links.Outlook365}}" target="_blank" rel="noopener noreferrer">Outlook (work/school)</a>
-        <a class="button" href="{{.Links.OutlookLive}}" target="_blank" rel="noopener noreferrer">Outlook.com</a>
-        <a class="button" href="{{.Links.Webcal}}">Apple Calendar / other</a>
-    </p>
+{{with .Links}}
+<p>
+    <a class="button" href="{{.Google}}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+    <a class="button" href="{{.Outlook365}}" target="_blank" rel="noopener noreferrer">Outlook (work/school)</a>
+    <a class="button" href="{{.OutlookLive}}" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+    <a class="button" href="{{.Webcal}}">Apple Calendar / other</a>
+</p>
 
-    <h2>Or paste this address</h2>
-    <p>Use "Add calendar → From URL" (Google) or "Subscribe from web" (Outlook).</p>
-    <input type="text" readonly value="{{.Links.HTTPS}}" style="width:100%"
-           onclick="this.select()" aria-label="Calendar feed address">
+<h2>Or copy the address</h2>
+<p>Use "Add calendar → From URL" (Google) or "Subscribe from web" (Outlook).</p>
+<input type="text" readonly value="{{.HTTPS}}" style="width:100%"
+       onclick="this.select()" aria-label="Calendar feed address">
 
-    <p class="muted">
-        This address is private: anyone who has it can see your schedule.
-        Calendar apps refresh subscriptions on their own timetable. Google
-        Calendar in particular can take many hours to show a change.
-    </p>
+<p class="muted">
+    This address is private: anyone who has it can see your schedule.
+    Calendar apps refresh on their own timetable; Google Calendar can take
+    many hours to show a change.
+</p>
 
-    <form method="post" action="/calendar/feed/regenerate" style="display:inline"
-          onsubmit="return confirm('The old address will stop working. Continue?')">
-        <button type="submit" class="button-secondary">Create a new address</button>
-    </form>
-    <form method="post" action="/calendar/feed/disable" style="display:inline"
-          onsubmit="return confirm('Turn off the calendar feed?')">
-        <button type="submit" class="link-btn">Turn off</button>
-    </form>
-</section>
-{{else}}
-<form method="post" action="/calendar/feed/regenerate">
-    <button type="submit">Create my calendar feed</button>
+<form method="post" action="/calendar/feed/regenerate"
+      onsubmit="return confirm('The old address will stop working. Continue?')">
+    <button type="submit" class="button-secondary">Shared it by mistake? Create a new address</button>
 </form>
 {{end}}
 {{end}}

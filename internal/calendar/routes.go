@@ -30,9 +30,10 @@ type Module struct {
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	baseURL := os.Getenv("PUBLIC_BASE_URL")
+	feed := NewFeedHandler(db, renderer, NewPGFeedSource(db, baseURL), baseURL)
 	return &Module{
-		handler: &Handler{db: db, renderer: renderer},
-		feed:    NewFeedHandler(db, renderer, NewPGFeedSource(db, baseURL), baseURL),
+		handler: &Handler{db: db, renderer: renderer, feed: feed},
+		feed:    feed,
 	}
 }
 
@@ -51,6 +52,5 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 
 		r.Get("/calendar/feed", m.feed.Settings)
 		r.Post("/calendar/feed/regenerate", m.feed.Regenerate)
-		r.Post("/calendar/feed/disable", m.feed.Disable)
 	})
 }

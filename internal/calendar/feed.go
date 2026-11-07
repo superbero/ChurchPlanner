@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -132,25 +133,50 @@ func (f *FeedHandler) base(r *http.Request) string {
 	return "https://" + r.Host // fallback; set PUBLIC_BASE_URL in production
 }
 
-func (f *FeedHandler) Settings(w http.ResponseWriter, r *http.Request) {
+// linksFor returns the signed-in user's subscribe links, creating their feed
+// token the first time so nobody has to "set up" anything. It returns nil when
+// not signed in or on error: the calendar page must still render without it.
+func (f *FeedHandler) linksFor(r *http.Request) *SubscribeLinks {
 	u, ok := auth.UserFrom(r.Context())
 	if !ok {
-		http.Error(w, "Sign in required", http.StatusUnauthorized)
-		return
+		return nil
 	}
 	var token string
 	err := f.db.QueryRow(r.Context(),
 		`SELECT token FROM calendar_feed_tokens WHERE user_id = $1`, u.ID).Scan(&token)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		httpx.ServerError(w, err)
+	if errors.Is(err, pgx.ErrNoRows) {
+		token, err = newToken()
+		if err == nil {
+			// DO NOTHING + fallback select makes two racing tabs agree on one token.
+			err = f.db.QueryRow(r.Context(), `
+				WITH ins AS (
+					INSERT INTO calendar_feed_tokens (user_id, token) VALUES ($1, $2)
+					ON CONFLICT (user_id) DO NOTHING
+					RETURNING token)
+				SELECT token FROM ins
+				UNION ALL
+				SELECT token FROM calendar_feed_tokens WHERE user_id = $1
+				LIMIT 1
+			`, u.ID, token).Scan(&token)
+		}
+	}
+	if err != nil {
+		slog.Error("calendar feed token", "err", err)
+		return nil
+	}
+	l := subscribeLinks(f.base(r), token, feedName)
+	return &l
+}
+
+// Settings is the "copy link / create a new address" page. Most people never
+// need it: the one-click menu on the calendar page covers the common case.
+func (f *FeedHandler) Settings(w http.ResponseWriter, r *http.Request) {
+	links := f.linksFor(r)
+	if links == nil {
+		http.Error(w, "Calendar feed unavailable", http.StatusUnauthorized)
 		return
 	}
-
-	data := map[string]any{"HasFeed": token != ""}
-	if token != "" {
-		data["Links"] = subscribeLinks(f.base(r), token, feedName)
-	}
-	f.renderer.Render(w, r, http.StatusOK, "calendar_feed", data)
+	f.renderer.Render(w, r, http.StatusOK, "calendar_feed", map[string]any{"Links": links})
 }
 
 // Regenerate creates the feed on first use, and replaces the token afterwards.
@@ -170,20 +196,6 @@ func (f *FeedHandler) Regenerate(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO calendar_feed_tokens (user_id, token) VALUES ($1, $2)
 		ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, created_at = now()
 	`, u.ID, token); err != nil {
-		httpx.ServerError(w, err)
-		return
-	}
-	http.Redirect(w, r, "/calendar/feed", http.StatusSeeOther)
-}
-
-func (f *FeedHandler) Disable(w http.ResponseWriter, r *http.Request) {
-	u, ok := auth.UserFrom(r.Context())
-	if !ok {
-		http.Error(w, "Sign in required", http.StatusUnauthorized)
-		return
-	}
-	if _, err := f.db.Exec(r.Context(),
-		`DELETE FROM calendar_feed_tokens WHERE user_id = $1`, u.ID); err != nil {
 		httpx.ServerError(w, err)
 		return
 	}

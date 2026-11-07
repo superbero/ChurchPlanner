@@ -21,6 +21,7 @@ const maxReasonLen = 200
 type Handler struct {
 	db       *pgxpool.Pool
 	renderer *httpx.Renderer
+	feed     *FeedHandler
 }
 
 type Day struct {
@@ -123,6 +124,7 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		"NextMonth":   next.Format("1"),
 		"Days":        days,
 		"MyBlockouts": mine,
+		"FeedLinks":   h.feed.linksFor(r),
 	})
 }
 
