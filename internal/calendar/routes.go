@@ -3,6 +3,7 @@ package calendar
 import (
 	"embed"
 	"io/fs"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,18 +23,34 @@ func Templates() fs.FS {
 	return sub
 }
 
-type Module struct{ handler *Handler }
+type Module struct {
+	handler *Handler
+	feed    *FeedHandler
+}
 
 func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
-	return &Module{handler: &Handler{db: db, renderer: renderer}}
+	baseURL := os.Getenv("PUBLIC_BASE_URL")
+	return &Module{
+		handler: &Handler{db: db, renderer: renderer},
+		feed:    NewFeedHandler(db, renderer, NewPGFeedSource(db, baseURL), baseURL),
+	}
 }
 
 func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 	r.Get("/calendar", m.handler.Index)
+
+	// Public, token-authenticated: calendar apps cannot log in.
+	// Must stay OUTSIDE any session/auth middleware.
+	r.Get("/calendar/feed/{token}", m.feed.Serve)
+
 	r.Group(func(r chi.Router) {
 		r.Use(authn.RequireRoles(
 			auth.RoleManager, auth.RoleEditor, auth.RoleViewer, auth.RoleScheduledViewer))
 		r.Post("/calendar/blockouts", m.handler.AddBlockout)
 		r.Post("/calendar/blockouts/{id}/delete", m.handler.DeleteBlockout)
+
+		r.Get("/calendar/feed", m.feed.Settings)
+		r.Post("/calendar/feed/regenerate", m.feed.Regenerate)
+		r.Post("/calendar/feed/disable", m.feed.Disable)
 	})
 }
