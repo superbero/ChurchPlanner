@@ -32,7 +32,7 @@ func New(db *pgxpool.Pool, renderer *httpx.Renderer) *Module {
 	baseURL := os.Getenv("PUBLIC_BASE_URL")
 	feed := NewFeedHandler(db, renderer, NewPGFeedSource(db, baseURL), baseURL)
 	return &Module{
-		handler: &Handler{db: db, renderer: renderer, feed: feed},
+		handler: &Handler{db: db, renderer: renderer, feed: feed, people: NewPGPeople(db)},
 		feed:    feed,
 	}
 }
@@ -48,6 +48,8 @@ func (m *Module) Routes(r chi.Router, authn *auth.Authenticator) {
 		r.Use(authn.RequireRoles(
 			auth.RoleManager, auth.RoleEditor, auth.RoleViewer, auth.RoleScheduledViewer))
 		r.Post("/calendar/blockouts", m.handler.AddBlockout)
+		r.Get("/calendar/blockouts/{id}/edit", m.handler.EditBlockoutForm)
+		r.Post("/calendar/blockouts/{id}/edit", m.handler.EditBlockout)
 		r.Post("/calendar/blockouts/{id}/delete", m.handler.DeleteBlockout)
 
 		r.Get("/calendar/feed", m.feed.Settings)

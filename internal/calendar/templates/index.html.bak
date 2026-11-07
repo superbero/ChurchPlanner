@@ -1,0 +1,109 @@
+{{define "content"}}
+<header class="calendar-header">
+    <h1>{{.MonthName}}</h1>
+    <div class="calendar-nav">
+        <a href="/calendar?year={{.PrevYear}}&amp;month={{.PrevMonth}}" class="button-secondary">← Prev</a>
+        <a href="/calendar" class="button-secondary">Today</a>
+        <a href="/calendar?year={{.NextYear}}&amp;month={{.NextMonth}}" class="button-secondary">Next →</a>
+    </div>
+</header>
+<!-- Paste into index.html inside <header class="calendar-header">, after the calendar-nav div -->
+{{with .FeedLinks}}
+<details class="subscribe-menu">
+    <summary class="button">📅 Add to my calendar</summary>
+    <div class="subscribe-menu-body">
+        <p>Your services, always up to date in your own calendar app:</p>
+        <a class="button" href="{{.Google}}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+        <a class="button" href="{{.Outlook365}}" target="_blank" rel="noopener noreferrer">Outlook (work/school)</a>
+        <a class="button" href="{{.OutlookLive}}" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+        <a class="button" href="{{.Webcal}}">Apple Calendar / other</a>
+        <p><a href="/calendar/feed">Copy link / more options</a></p>
+    </div>
+</details>
+<style>
+    .subscribe-menu { position: relative; display: inline-block; }
+    .subscribe-menu > summary { cursor: pointer; list-style: none; }
+    .subscribe-menu > summary::-webkit-details-marker { display: none; }
+    .subscribe-menu-body {
+        position: absolute; right: 0; z-index: 20; min-width: 16rem; margin-top: .4rem;
+        padding: .75rem; display: flex; flex-direction: column; gap: .5rem;
+        background: Canvas; color: CanvasText;
+        border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+        border-radius: .5rem; box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    }
+</style>
+{{end}}
+
+<div class="calendar-grid">
+    <div class="cal-dow">Sun</div>
+    <div class="cal-dow">Mon</div>
+    <div class="cal-dow">Tue</div>
+    <div class="cal-dow">Wed</div>
+    <div class="cal-dow">Thu</div>
+    <div class="cal-dow">Fri</div>
+    <div class="cal-dow">Sat</div>
+
+    {{range .Days}}
+    <div class="cal-day {{if .IsOther}}cal-other{{end}} {{if .IsToday}}cal-today{{end}}">
+        <div class="cal-date">
+            {{if $.CanManagePlans}}<a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-add-hint" title="Add plan">+</a>{{end}}
+            {{if $.CanManagePlans}}
+            <a href="/plans/new?date={{.Date.Format "2006-01-02"}}" class="cal-day-num">{{.Date.Format "2"}}</a>
+            {{else}}
+            <span class="cal-day-num">{{.Date.Format "2"}}</span>
+            {{end}}
+        </div>
+
+        <div class="cal-events">
+            {{range .Plans}}
+            {{if $.CanOpenPlans}}
+            <a href="{{.URL}}" class="cal-event {{if not .Published}}cal-draft{{end}}">
+                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
+            </a>
+            {{else}}
+            <span class="cal-event">
+                <span class="cal-time">{{.TimeStr}}</span> {{.Title}}
+            </span>
+            {{end}}
+            {{end}}
+
+            {{range .Blockouts}}
+            <div class="cal-blockout" title="{{.Reason}}">
+                Unavailable{{if .Reason}}: {{.Reason}}{{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+
+<details class="add-blockout-panel">
+    <summary>🚫 Mark me as unavailable (Add Blockout)</summary>
+    <form method="post" action="/calendar/blockouts" class="inline-form">
+        <label>From <input type="date" name="starts_on" required></label>
+        <label>To <input type="date" name="ends_on" required></label>
+        <label>Reason <input type="text" name="reason" placeholder="Vacation, Out of town, etc."></label>
+        <button type="submit">Save Blockout</button>
+    </form>
+</details>
+
+<section class="my-blockouts">
+    <h2>Your unavailable dates</h2>
+    {{if .MyBlockouts}}
+    <ul>
+        {{range .MyBlockouts}}
+        <li>
+            {{.Starts.Format "2 Jan 2006"}} – {{.Ends.Format "2 Jan 2006"}}
+            {{if .Reason}}<span class="muted">· {{.Reason}}</span>{{end}}
+            <form method="post" action="/calendar/blockouts/{{.ID}}/delete" style="display:inline"
+                  onsubmit="return confirm('Remove this unavailable date?')">
+                <button class="link-btn" type="submit" aria-label="Remove unavailable dates">Remove</button>
+            </form>
+        </li>
+        {{end}}
+    </ul>
+    {{else}}
+    <p class="muted">No unavailable dates overlap this month.</p>
+    {{end}}
+</section>
+{{end}}

@@ -79,10 +79,13 @@
             {{end}}
             {{end}}
 
-            {{range .Blockouts}}
-            <div class="cal-blockout" title="{{.Reason}}">
-                Unavailable{{if .Reason}}: {{.Reason}}{{end}}
-            </div>
+            {{if gt (len .Blockouts) 3}}
+            <details class="cal-more">
+                <summary>{{len .Blockouts}} unavailable</summary>
+                {{range .Blockouts}}{{template "cal_blockout_chip" .}}{{end}}
+            </details>
+            {{else}}
+            {{range .Blockouts}}{{template "cal_blockout_chip" .}}{{end}}
             {{end}}
         </div>
     </div>
@@ -90,8 +93,15 @@
 </div>
 
 <details class="add-blockout-panel">
-    <summary>🚫 Mark me as unavailable (Add Blockout)</summary>
+    <summary>🚫 {{if .People}}Add unavailable dates{{else}}Mark me as unavailable{{end}}</summary>
     <form method="post" action="/calendar/blockouts" class="inline-form">
+        {{if .People}}
+        <label>Person
+            <select name="user_id">
+                {{range .People}}<option value="{{.ID}}" {{if eq .ID $.MeID}}selected{{end}}>{{.Name}}</option>{{end}}
+            </select>
+        </label>
+        {{end}}
         <label>From <input type="date" name="starts_on" required></label>
         <label>To <input type="date" name="ends_on" required></label>
         <label>Reason <input type="text" name="reason" maxlength="200" placeholder="Vacation, Out of town, etc."></label>
@@ -100,22 +110,44 @@
 </details>
 
 <section class="my-blockouts">
-    <h2>Your unavailable dates</h2>
-    {{if .MyBlockouts}}
-    <ul>
-        {{range .MyBlockouts}}
-        <li>
-            {{.Starts.Format "2 Jan 2006"}} – {{.Ends.Format "2 Jan 2006"}}
-            {{if .Reason}}<span class="muted">· {{.Reason}}</span>{{end}}
-            <form method="post" action="/calendar/blockouts/{{.ID}}/delete" style="display:inline"
-                  onsubmit="return confirm('Remove this unavailable date?')">
-                <button class="link-btn" type="submit" aria-label="Remove unavailable dates">Remove</button>
-            </form>
-        </li>
-        {{end}}
-    </ul>
+    <h2>{{if .CanSeeAllBlockouts}}Unavailable dates{{else}}Your unavailable dates{{end}} · {{.MonthName}}</h2>
+    {{if .BlockoutList}}
+    <div class="cal-table-wrap">
+    <table class="cal-blockout-table">
+        <thead>
+            <tr>
+                {{if .CanSeeAllBlockouts}}<th>Person</th>{{end}}
+                <th>Dates</th>
+                <th>Reason</th>
+                {{if .CanSeeAllBlockouts}}<th>Added by</th>{{end}}
+                <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .BlockoutList}}
+            <tr>
+                {{if $.CanSeeAllBlockouts}}<td>{{if .Mine}}You{{else}}{{.UserName}}{{end}}</td>{{end}}
+                <td>{{.Starts.Format "2 Jan 2006"}}{{if ne (.Starts.Format "2006-01-02") (.Ends.Format "2006-01-02")}} – {{.Ends.Format "2 Jan 2006"}}{{end}}</td>
+                <td>{{if .Reason}}{{.Reason}}{{else}}<span class="muted">–</span>{{end}}</td>
+                {{if $.CanSeeAllBlockouts}}<td class="muted">{{if .AddedBy}}{{.AddedBy}}{{end}}</td>{{end}}
+                <td class="cal-actions">
+                    {{if .CanEdit}}
+                    <a href="/calendar/blockouts/{{.ID}}/edit">Edit</a>
+                    <form method="post" action="/calendar/blockouts/{{.ID}}/delete" style="display:inline"
+                          onsubmit="return confirm('Remove these unavailable dates?')">
+                        <input type="hidden" name="year" value="{{$.Year}}">
+                        <input type="hidden" name="month" value="{{$.MonthNum}}">
+                        <button class="link-btn" type="submit">Remove</button>
+                    </form>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    </div>
     {{else}}
-    <p class="muted">No unavailable dates overlap this month.</p>
+    <p class="muted">No unavailable dates in {{.MonthName}}.</p>
     {{end}}
 </section>
 
@@ -159,6 +191,19 @@
     .cal-badge { font-size: .65rem; text-transform: uppercase; letter-spacing: .03em; opacity: .75; }
     .cal-blockout { font-size: .72rem; padding: .1rem .35rem; border-radius: .2rem; border-left: 3px solid #d97706;
         background: color-mix(in srgb, #d97706 14%, Canvas); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    a.cal-blockout { display: block; text-decoration: none; color: inherit; }
+    a.cal-blockout:hover, a.cal-blockout:focus-visible { background: color-mix(in srgb, #d97706 26%, Canvas); }
+    .cal-blockout-mine { border-left-width: 5px; font-weight: 600; }
+    .cal-more > summary { cursor: pointer; font-size: .72rem; padding: .1rem .35rem; border-left: 3px solid #d97706;
+        background: color-mix(in srgb, #d97706 14%, Canvas); border-radius: .2rem; list-style: none; }
+    .cal-more[open] > summary { margin-bottom: .2rem; }
+    .cal-table-wrap { overflow-x: auto; }
+    .cal-blockout-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .cal-blockout-table th, .cal-blockout-table td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--cal-line, rgba(128,128,128,.3)); white-space: nowrap; }
+    .cal-blockout-table td:nth-child(3) { white-space: normal; }
+    .cal-actions { display: flex; gap: .75rem; align-items: center; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
     .subscribe-menu { position: relative; display: inline-block; }
     .subscribe-menu > summary { cursor: pointer; list-style: none; }
@@ -208,3 +253,5 @@
 })();
 </script>
 {{end}}
+
+{{define "cal_blockout_chip"}}{{if .CanEdit}}<a href="/calendar/blockouts/{{.ID}}/edit" class="cal-blockout{{if .Mine}} cal-blockout-mine{{end}}" title="{{.UserName}}{{if .Reason}}: {{.Reason}}{{end}} (click to edit)">{{if .Mine}}You{{else}}{{.UserName}}{{end}}: {{if .Reason}}{{.Reason}}{{else}}unavailable{{end}}</a>{{else}}<div class="cal-blockout{{if .Mine}} cal-blockout-mine{{end}}" title="{{.Reason}}">{{if .Mine}}You{{else}}{{.UserName}}{{end}}: {{if .Reason}}{{.Reason}}{{else}}unavailable{{end}}</div>{{end}}{{end}}

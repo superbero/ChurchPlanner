@@ -1,0 +1,14 @@
+{{define "content"}}
+<h1>Edit unavailable dates</h1>
+<p class="muted">
+    {{if .Mine}}Your dates{{else}}{{.UserName}}{{end}}{{if .AddedBy}} · added by {{.AddedBy}}{{end}}
+</p>
+
+<form method="post" action="/calendar/blockouts/{{.ID}}/edit" class="inline-form">
+    <label>From <input type="date" name="starts_on" value="{{.StartsValue}}" required></label>
+    <label>To <input type="date" name="ends_on" value="{{.EndsValue}}" required></label>
+    <label>Reason <input type="text" name="reason" value="{{.Reason}}" maxlength="200" placeholder="Vacation, Out of town, etc."></label>
+    <button type="submit">Save changes</button>
+    <a href="{{.BackURL}}" class="button-secondary">Cancel</a>
+</form>
+{{end}}
