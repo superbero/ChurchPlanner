@@ -1,11 +1,13 @@
 package calendar
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +15,8 @@ import (
 	"github.com/yourchurch/churchplanner/internal/platform/auth"
 	"github.com/yourchurch/churchplanner/internal/platform/httpx"
 )
+
+const maxReasonLen = 200
 
 type Handler struct {
 	db       *pgxpool.Pool
@@ -31,6 +35,7 @@ type Plan struct {
 	ID        string
 	Title     string
 	TimeStr   string
+	URL       string // used by index.html when CanOpenPlans is true
 	Published bool
 }
 
@@ -40,8 +45,27 @@ type Blockout struct {
 	Reason   string
 }
 
+// MyBlockout feeds the "Your unavailable dates" list in index.html.
+type MyBlockout struct {
+	ID     string
+	Starts time.Time
+	Ends   time.Time
+	Reason string
+}
+
+// location returns the church's time zone.
+// TODO: load from an org setting; time.Local is whatever the container uses (often UTC).
+func (h *Handler) location() *time.Location { return time.Local }
+
+// canSeeDrafts reports whether the current user may see unpublished plans.
+// TODO: wire to your auth package (editor/admin, or team leader of that plan).
+// Returning true keeps today's behaviour, which shows drafts to everyone.
+func canSeeDrafts(ctx context.Context) bool { return true }
+
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
+	loc := h.location()
+	now := time.Now().In(loc)
+
 	year, month, err := requestedMonth(
 		r.URL.Query().Get("year"), r.URL.Query().Get("month"), now)
 	if err != nil {
@@ -49,92 +73,42 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	firstOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
+	firstOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
 	firstOfNext := firstOfMonth.AddDate(0, 1, 0)
+	gridStart, weeks := gridBounds(firstOfMonth, time.Sunday)
+	gridEnd := gridStart.AddDate(0, 0, weeks*7) // exclusive
 
-	// 1. Fetch plans
-	rows, err := h.db.Query(r.Context(), `
-		SELECT id, title, service_at, published
-		FROM plans
-		WHERE service_at >= $1 AND service_at < $2
-		ORDER BY service_at
-	`, firstOfMonth, firstOfNext)
+	plansByDay, err := h.plansBetween(r.Context(), gridStart, gridEnd, loc)
+	if err != nil {
+		httpx.ServerError(w, err)
+		return
+	}
+	blockoutsByDay, err := h.blockoutsBetween(r.Context(), gridStart, gridEnd)
 	if err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
 
-	plansByDay := make(map[int][]Plan)
-	for rows.Next() {
-		var p Plan
-		var date time.Time
-		if err := rows.Scan(&p.ID, &p.Title, &date, &p.Published); err != nil {
-			rows.Close()
+	var mine []MyBlockout
+	if u, ok := auth.UserFrom(r.Context()); ok {
+		mine, err = h.myBlockouts(r.Context(), u.ID, firstOfMonth, firstOfNext)
+		if err != nil {
 			httpx.ServerError(w, err)
 			return
 		}
-		p.TimeStr = date.Format("15:04")
-		plansByDay[date.Day()] = append(plansByDay[date.Day()], p)
-	}
-	rows.Close()
-
-	// 2. Fetch blockouts
-	brows, err := h.db.Query(r.Context(), `
-		SELECT b.id, u.name, b.starts_on, b.ends_on, b.reason
-		FROM user_blockouts b
-		JOIN users u ON u.id = b.user_id
-		WHERE b.starts_on < $2 AND b.ends_on >= $1
-	`, firstOfMonth, firstOfNext)
-	if err != nil {
-		httpx.ServerError(w, err)
-		return
 	}
 
-	blockoutsByDay := make(map[int][]Blockout)
-	for brows.Next() {
-		var id, name, reason string
-		var start, end time.Time
-		if err := brows.Scan(&id, &name, &start, &end, &reason); err != nil {
-			brows.Close()
-			httpx.ServerError(w, err)
-			return
-		}
-
-		curr := start
-		for !curr.After(end) {
-			if curr.Month() == firstOfMonth.Month() && curr.Year() == firstOfMonth.Year() {
-				blockoutsByDay[curr.Day()] = append(blockoutsByDay[curr.Day()], Blockout{
-					ID: id, UserName: name, Reason: reason,
-				})
-			}
-			curr = curr.AddDate(0, 0, 1)
-		}
-	}
-
-	brows.Close()
-
-	// 3. Build the grid
-	padding := int(firstOfMonth.Weekday())
-	gridStart := firstOfMonth.AddDate(0, 0, -padding)
-
-	var days []Day
-	for i := 0; i < 42; i++ {
+	todayKey := dateKey(now)
+	days := make([]Day, 0, weeks*7)
+	for i := 0; i < weeks*7; i++ {
 		d := gridStart.AddDate(0, 0, i)
-		isOther := d.Month() != firstOfMonth.Month()
-
-		var plans []Plan
-		var blockouts []Blockout
-		if !isOther {
-			plans = plansByDay[d.Day()]
-			blockouts = blockoutsByDay[d.Day()]
-		}
-
+		k := dateKey(d)
 		days = append(days, Day{
 			Date:      d,
-			IsToday:   d.Format("2006-01-02") == now.Format("2006-01-02"),
-			IsOther:   isOther,
-			Plans:     plans,
-			Blockouts: blockouts,
+			IsToday:   k == todayKey,
+			IsOther:   d.Month() != firstOfMonth.Month(),
+			Plans:     plansByDay[k],
+			Blockouts: blockoutsByDay[k],
 		})
 	}
 
@@ -142,13 +116,95 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	next := firstOfMonth.AddDate(0, 1, 0)
 
 	h.renderer.Render(w, r, http.StatusOK, "calendar_index", map[string]any{
-		"MonthName": firstOfMonth.Format("January 2006"),
-		"PrevYear":  prev.Year(),
-		"PrevMonth": prev.Format("1"),
-		"NextYear":  next.Year(),
-		"NextMonth": next.Format("1"),
-		"Days":      days,
+		"MonthName":   firstOfMonth.Format("January 2006"),
+		"PrevYear":    prev.Year(),
+		"PrevMonth":   prev.Format("1"),
+		"NextYear":    next.Year(),
+		"NextMonth":   next.Format("1"),
+		"Days":        days,
+		"MyBlockouts": mine,
 	})
+}
+
+func (h *Handler) plansBetween(ctx context.Context, from, to time.Time, loc *time.Location) (map[string][]Plan, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT id, title, service_at, published
+		FROM plans
+		WHERE service_at >= $1 AND service_at < $2
+		  AND ($3 OR published)
+		ORDER BY service_at
+	`, from, to, canSeeDrafts(ctx))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[string][]Plan)
+	for rows.Next() {
+		var p Plan
+		var at time.Time
+		if err := rows.Scan(&p.ID, &p.Title, &at, &p.Published); err != nil {
+			return nil, err
+		}
+		at = at.In(loc)
+		p.TimeStr = at.Format("15:04")
+		p.URL = "/plans/" + p.ID
+		out[dateKey(at)] = append(out[dateKey(at)], p)
+	}
+	return out, rows.Err()
+}
+
+func (h *Handler) blockoutsBetween(ctx context.Context, from, to time.Time) (map[string][]Blockout, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT b.id, u.name, b.starts_on, b.ends_on, b.reason
+		FROM user_blockouts b
+		JOIN users u ON u.id = b.user_id
+		WHERE b.starts_on < $2::date AND b.ends_on >= $1::date
+		ORDER BY u.name
+	`, dateKey(from), dateKey(to))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	lastDay := to.AddDate(0, 0, -1)
+	out := make(map[string][]Blockout)
+	for rows.Next() {
+		var id, name, reason string
+		var start, end time.Time
+		if err := rows.Scan(&id, &name, &start, &end, &reason); err != nil {
+			return nil, err
+		}
+		// Clamped to the visible grid, so a year-long blockout is cheap.
+		for _, day := range daysInRange(start, end, from, lastDay) {
+			k := dateKey(day)
+			out[k] = append(out[k], Blockout{ID: id, UserName: name, Reason: reason})
+		}
+	}
+	return out, rows.Err()
+}
+
+func (h *Handler) myBlockouts(ctx context.Context, userID any, from, to time.Time) ([]MyBlockout, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT id, starts_on, ends_on, reason
+		FROM user_blockouts
+		WHERE user_id = $1 AND starts_on < $3::date AND ends_on >= $2::date
+		ORDER BY starts_on
+	`, userID, dateKey(from), dateKey(to))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []MyBlockout
+	for rows.Next() {
+		var b MyBlockout
+		if err := rows.Scan(&b.ID, &b.Starts, &b.Ends, &b.Reason); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
 }
 
 func requestedMonth(yearValue, monthValue string, now time.Time) (int, int, error) {
@@ -173,13 +229,25 @@ func requestedMonth(yearValue, monthValue string, now time.Time) (int, int, erro
 }
 
 func (h *Handler) AddBlockout(w http.ResponseWriter, r *http.Request) {
-	u, _ := auth.UserFrom(r.Context())
-	startStr := r.FormValue("starts_on")
-	endStr := r.FormValue("ends_on")
-	reason := strings.TrimSpace(r.FormValue("reason"))
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "Sign in required", http.StatusUnauthorized)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad form", http.StatusBadRequest)
+		return
+	}
+	startStr := r.PostFormValue("starts_on")
+	endStr := r.PostFormValue("ends_on")
+	reason := strings.TrimSpace(r.PostFormValue("reason"))
 
 	if startStr == "" || endStr == "" {
 		http.Error(w, "Start and end dates required", http.StatusBadRequest)
+		return
+	}
+	if utf8.RuneCountInString(reason) > maxReasonLen {
+		http.Error(w, "Reason is too long", http.StatusBadRequest)
 		return
 	}
 
@@ -190,11 +258,10 @@ func (h *Handler) AddBlockout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.db.Exec(r.Context(), `
+	if _, err := h.db.Exec(r.Context(), `
 		INSERT INTO user_blockouts (user_id, starts_on, ends_on, reason)
 		VALUES ($1, $2, $3, $4)
-	`, u.ID, start, end, reason)
-	if err != nil {
+	`, u.ID, start, end, reason); err != nil {
 		httpx.ServerError(w, err)
 		return
 	}
@@ -203,13 +270,24 @@ func (h *Handler) AddBlockout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteBlockout(w http.ResponseWriter, r *http.Request) {
-	// We get the blockout ID from the URL, usually defined in routes.go as /calendar/blockouts/{id}/delete
-	// We need to import "github.com/go-chi/chi/v5" if it's not already there.
+	u, ok := auth.UserFrom(r.Context())
+	if !ok {
+		http.Error(w, "Sign in required", http.StatusUnauthorized)
+		return
+	}
 	id := chi.URLParam(r, "id")
 
-	_, err := h.db.Exec(r.Context(), `DELETE FROM user_blockouts WHERE id = $1`, id)
+	// Scoped to the owner: without "AND user_id" any signed-in user could
+	// delete anyone's blockout by guessing/iterating IDs.
+	// TODO: allow managers/admins to delete others' blockouts if you want that.
+	tag, err := h.db.Exec(r.Context(),
+		`DELETE FROM user_blockouts WHERE id = $1 AND user_id = $2`, id, u.ID)
 	if err != nil {
 		httpx.ServerError(w, err)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		http.NotFound(w, r)
 		return
 	}
 
