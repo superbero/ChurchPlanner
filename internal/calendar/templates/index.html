@@ -7,6 +7,32 @@
         <a href="/calendar?year={{.NextYear}}&amp;month={{.NextMonth}}" class="button-secondary">Next →</a>
     </div>
 </header>
+<!-- Paste into index.html inside <header class="calendar-header">, after the calendar-nav div -->
+{{with .FeedLinks}}
+<details class="subscribe-menu">
+    <summary class="button">📅 Add to my calendar</summary>
+    <div class="subscribe-menu-body">
+        <p>Your services, always up to date in your own calendar app:</p>
+        <a class="button" href="{{.Google}}" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+        <a class="button" href="{{.Outlook365}}" target="_blank" rel="noopener noreferrer">Outlook (work/school)</a>
+        <a class="button" href="{{.OutlookLive}}" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+        <a class="button" href="{{.Webcal}}">Apple Calendar / other</a>
+        <p><a href="/calendar/feed">Copy link / more options</a></p>
+    </div>
+</details>
+<style>
+    .subscribe-menu { position: relative; display: inline-block; }
+    .subscribe-menu > summary { cursor: pointer; list-style: none; }
+    .subscribe-menu > summary::-webkit-details-marker { display: none; }
+    .subscribe-menu-body {
+        position: absolute; right: 0; z-index: 20; min-width: 16rem; margin-top: .4rem;
+        padding: .75rem; display: flex; flex-direction: column; gap: .5rem;
+        background: Canvas; color: CanvasText;
+        border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+        border-radius: .5rem; box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    }
+</style>
+{{end}}
 
 <div class="calendar-grid">
     <div class="cal-dow">Sun</div>
